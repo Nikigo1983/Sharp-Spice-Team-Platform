@@ -1,0 +1,28 @@
+export const NOTIFICATION_TYPES = [
+  "team_chat",
+  "task_new",
+  "task_status",
+  "client_new",
+  "consultation_assigned",
+  "system",
+] as const;
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  author_name: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
+export type CreateNotificationInput = {
+  type: NotificationType;
+  title: string;
+  message: string;
+  author_name?: string | null;
+};

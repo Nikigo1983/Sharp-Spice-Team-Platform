@@ -1,0 +1,31 @@
+{
+  "name": "sharp-spice-team-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --use-system-ca ./node_modules/next/dist/bin/next dev",
+    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && node --use-system-ca ./node_modules/next/dist/bin/next dev",
+    "build": "node --use-system-ca ./node_modules/next/dist/bin/next build",
+    "start": "node --use-system-ca ./node_modules/next/dist/bin/next start",
+    "lint": "node --use-system-ca ./node_modules/next/dist/bin/next lint",
+    "auth:hash-password": "node scripts/hash-password.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.3",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@next/swc-wasm-nodejs": "npm:null@*"
+  }
+}

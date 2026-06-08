@@ -1,0 +1,31 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: #1a202c;
+  background: var(--bg-page);
+  color: #ffffff;
+  color: var(--white);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow: auto;
+  background: #1a202c;
+  background: var(--bg-page);
+}
+
+.contentFullHeight {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

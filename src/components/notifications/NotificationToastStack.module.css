@@ -1,0 +1,65 @@
+.stack {
+  position: fixed;
+  top: 5.5rem;
+  right: 1.5rem;
+  z-index: 350;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: min(360px, calc(100vw - 2rem));
+}
+
+.toast {
+  padding: 0.875rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(145, 13, 13, 0.45);
+  background: rgba(45, 55, 72, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35), 0 0 20px rgba(145, 13, 13, 0.18);
+  animation: toastIn 0.28s ease;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toastTitle {
+  font-family: Sora, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.toastAuthor {
+  margin-top: 0.25rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-200);
+}
+
+.toastMessage {
+  margin-top: 0.125rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--gray-300);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .stack {
+    top: auto;
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+  }
+}

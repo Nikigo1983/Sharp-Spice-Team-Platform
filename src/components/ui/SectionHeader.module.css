@@ -1,0 +1,33 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.text {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #ffffff;
+  color: var(--white);
+}
+
+.subtitle {
+  margin: 0.375rem 0 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: #cbd5e0;
+}
+
+.action {
+  flex-shrink: 0;
+}

@@ -1,0 +1,86 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700;800&display=swap");
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css");
+
+:root {
+  --accent-burgundy: #910d0d;
+  --accent-burgundy-dark: #6d0a0a;
+  --accent-burgundy-light: #b32424;
+
+  --primary-red: #910d0d;
+  --secondary-red: #b32424;
+
+  --bg-page: #1a202c;
+  --surface-hero: #0f141c;
+  --surface-services: #181f2e;
+  --surface-split: #151c28;
+  --surface-formula: #222c3c;
+  --surface-about: #101820;
+  --surface-contact: #1a2333;
+
+  --black: #1a202c;
+  --white: #ffffff;
+
+  --gray-100: #f7fafc;
+  --gray-300: #cbd5e0;
+  --gray-800: #2d3748;
+
+  --blue-relocation: #3b82f6;
+  --blue-relocation-light: #38bdf8;
+  --blue-relocation-dark: #0ea5e9;
+
+  --gradient-brand: linear-gradient(
+    135deg,
+    #6d0a0a 0%,
+    #910d0d 50%,
+    #b32424 100%
+  );
+  --gradient-dark: linear-gradient(135deg, #1a202c 0%, #171923 100%);
+  --gradient-hero: linear-gradient(
+    168deg,
+    #0f141c 0%,
+    #141b26 42%,
+    #1a202c 100%
+  );
+
+  --navbar-bg: rgba(26, 32, 44, 0.96);
+  --card-bg: rgba(26, 32, 44, 0.98);
+  --hero-glow: rgba(145, 13, 13, 0.12);
+
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-burgundy: rgba(145, 13, 13, 0.35);
+
+  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 16px 35px rgba(0, 0, 0, 0.22);
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+}
+
+html {
+  background: #1a202c;
+}
+
+.ss-body,
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #1a202c;
+  background: var(--bg-page);
+  color: #ffffff;
+  color: var(--white);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: Sora, sans-serif;
+}
+
+/* Размеры логотипа — в Logo.module.css (подложка + sm/md/lg) */

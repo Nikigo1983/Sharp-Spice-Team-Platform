@@ -1,0 +1,143 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.25rem;
+  border: 1px solid var(--gray-700);
+}
+
+.statusNew {
+  border-color: rgba(234, 179, 8, 0.22);
+}
+
+.statusInProgress {
+  border-color: rgba(145, 13, 13, 0.35);
+}
+
+.completed {
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--white);
+  flex: 1;
+  min-width: 0;
+}
+
+.titleDone {
+  text-decoration: line-through;
+  text-decoration-color: rgba(134, 239, 172, 0.6);
+  color: var(--gray-300);
+}
+
+.description {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--gray-200);
+}
+
+.textMuted {
+  color: var(--gray-400);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.meta dt {
+  font-family: Inter, sans-serif;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray-500);
+}
+
+.meta dd {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-200);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.statusActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.35);
+  border: 1px solid var(--border-soft);
+}
+
+.statusActionsLabel {
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.statusButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.statusBtnInProgress {
+  color: #fca5a5 !important;
+  border-color: rgba(145, 13, 13, 0.45) !important;
+}
+
+.statusBtnInProgress:hover:not(:disabled) {
+  background: rgba(145, 13, 13, 0.12) !important;
+}
+
+.statusBtnComplete {
+  color: #86efac !important;
+  border-color: rgba(34, 197, 94, 0.4) !important;
+}
+
+.statusBtnComplete:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}

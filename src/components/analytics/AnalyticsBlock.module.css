@@ -1,0 +1,49 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.35);
+  break-inside: avoid;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.subtitle {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+@media print {
+  .block {
+    page-break-inside: avoid;
+    border-color: #ccc;
+    background: #fff;
+  }
+
+  .title {
+    color: #111;
+  }
+}

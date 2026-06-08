@@ -1,0 +1,132 @@
+.triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0.375rem 0 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-300);
+}
+
+.close {
+  border: none;
+  background: transparent;
+  color: var(--gray-300);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.close:hover {
+  color: var(--white);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.preset {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: rgba(15, 20, 28, 0.5);
+  color: var(--gray-300);
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.preset:hover:not(:disabled) {
+  border-color: var(--border-burgundy);
+  color: var(--white);
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.input {
+  flex: 1;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 28, 0.6);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+}
+
+.reply {
+  min-height: 120px;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 28, 0.5);
+  border: 1px solid var(--border-soft);
+}
+
+.replyText {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--gray-100);
+}
+
+.loading,
+.hint {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-300);
+}

@@ -1,0 +1,292 @@
+import "server-only";
+
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import type { SessionUser } from "@/lib/auth/types";
+import type { CreateTeamChatMessageInput, TeamChatMessage } from "./types";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import * as sbChat from "@/lib/supabase/team-chat-repo";
+
+const STORE_PATH = path.join(process.cwd(), ".data", "team-chat-messages.json");
+const LAST_SEEN_PATH = path.join(
+  process.cwd(),
+  ".data",
+  "team-chat-last-seen.json",
+);
+
+type TeamChatStore = {
+  messages: TeamChatMessage[];
+};
+
+type LastSeenStore = {
+  users: Record<string, { lastSeenAt: string }>;
+};
+
+const MAX_MESSAGE_LENGTH = 5000;
+
+async function loadMessagesStore(): Promise<TeamChatStore> {
+  if (isSupabaseConfigured()) {
+    try {
+      return { messages: await sbChat.sbListAllTeamChatMessages() };
+    } catch (error) {
+      console.error("[team-chat] supabase load", error);
+      return { messages: [] };
+    }
+  }
+  return readMessagesStore();
+}
+
+async function readMessagesStore(): Promise<TeamChatStore> {
+  try {
+    const raw = await readFile(STORE_PATH, "utf8");
+    const data = JSON.parse(raw) as TeamChatStore;
+    if (!Array.isArray(data.messages)) return { messages: [] };
+    return data;
+  } catch {
+    return { messages: [] };
+  }
+}
+
+async function writeMessagesStore(store: TeamChatStore): Promise<void> {
+  await mkdir(path.dirname(STORE_PATH), { recursive: true });
+  store.messages.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+}
+
+async function readLastSeenStore(): Promise<LastSeenStore> {
+  try {
+    const raw = await readFile(LAST_SEEN_PATH, "utf8");
+    const data = JSON.parse(raw) as LastSeenStore;
+    if (!data?.users || typeof data.users !== "object") return { users: {} };
+    return data;
+  } catch {
+    return { users: {} };
+  }
+}
+
+async function writeLastSeenStore(store: LastSeenStore): Promise<void> {
+  await mkdir(path.dirname(LAST_SEEN_PATH), { recursive: true });
+  await writeFile(LAST_SEEN_PATH, JSON.stringify(store, null, 2), "utf8");
+}
+
+function validateText(text: string): string | null {
+  const normalized = text.trim();
+  if (!normalized) return null;
+  if (normalized.length > MAX_MESSAGE_LENGTH) return null;
+  return normalized;
+}
+
+export async function listTeamChatMessages(opts: {
+  limit: number;
+  beforeCreatedAt?: string;
+  afterCreatedAt?: string;
+  q?: string;
+}): Promise<{
+  messages: TeamChatMessage[];
+  hasMoreBefore: boolean;
+  latestCreatedAt: string | null;
+}> {
+  const store = await loadMessagesStore();
+  const limit = Math.max(1, Math.min(100, opts.limit));
+
+  const latestCreatedAt =
+    store.messages.length > 0
+      ? store.messages[store.messages.length - 1].created_at
+      : null;
+
+  let filtered = store.messages;
+
+  if (opts.q?.trim()) {
+    const q = opts.q.trim().toLowerCase();
+    filtered = filtered.filter((message) => {
+      const text = message.message_text.toLowerCase();
+      const name = message.user_name.toLowerCase();
+      return text.includes(q) || name.includes(q);
+    });
+  } else if (opts.beforeCreatedAt) {
+    const beforeCreatedAt = opts.beforeCreatedAt;
+    filtered = filtered.filter(
+      (message) => message.created_at < beforeCreatedAt,
+    );
+  } else if (opts.afterCreatedAt) {
+    const afterCreatedAt = opts.afterCreatedAt;
+    filtered = filtered.filter(
+      (message) => message.created_at > afterCreatedAt,
+    );
+  }
+
+  filtered.sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  if (opts.beforeCreatedAt && !opts.q?.trim()) {
+    const slice = filtered.slice(-limit);
+    return {
+      messages: slice,
+      hasMoreBefore: filtered.length > slice.length,
+      latestCreatedAt,
+    };
+  }
+
+  if (opts.afterCreatedAt && !opts.q?.trim()) {
+    return {
+      messages: filtered.slice(0, limit),
+      hasMoreBefore: false,
+      latestCreatedAt,
+    };
+  }
+
+  const slice = filtered.slice(-limit);
+  const hasMoreBefore =
+    !opts.beforeCreatedAt && !opts.afterCreatedAt && !opts.q?.trim()
+      ? store.messages.length > slice.length
+      : false;
+
+  return {
+    messages: slice,
+    hasMoreBefore,
+    latestCreatedAt,
+  };
+}
+
+export async function createTeamChatMessage(
+  input: CreateTeamChatMessageInput,
+  user: SessionUser,
+): Promise<TeamChatMessage> {
+  const text = validateText(input.text);
+  if (!text) {
+    throw new Error("Invalid message text");
+  }
+
+  const now = new Date().toISOString();
+  const message: TeamChatMessage = {
+    id: randomUUID(),
+    user_id: user.id,
+    user_name: user.name,
+    user_role: user.role,
+    message_text: text,
+    created_at: now,
+    updated_at: now,
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbChat.sbInsertTeamChatMessage(message);
+    } catch (error) {
+      console.error("[team-chat] supabase create", error);
+      throw error;
+    }
+  }
+
+  const store = await readMessagesStore();
+  store.messages.push(message);
+  await writeMessagesStore(store);
+  return message;
+}
+
+export function canDeleteTeamChatMessage(
+  message: TeamChatMessage,
+  user: SessionUser,
+): boolean {
+  return user.role === "owner" || message.user_id === user.id;
+}
+
+export async function deleteTeamChatMessage(
+  id: string,
+  user: SessionUser,
+): Promise<boolean> {
+  const store = await loadMessagesStore();
+  const message = store.messages.find((item) => item.id === id);
+  if (!message) return false;
+  if (!canDeleteTeamChatMessage(message, user)) return false;
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbChat.sbDeleteTeamChatMessage(id);
+    } catch (error) {
+      console.error("[team-chat] supabase delete", error);
+      return false;
+    }
+  }
+
+  const fileStore = await readMessagesStore();
+  fileStore.messages = fileStore.messages.filter((item) => item.id !== id);
+  await writeMessagesStore(fileStore);
+  return true;
+}
+
+export async function clearTeamChat(user: SessionUser): Promise<boolean> {
+  if (user.role !== "owner") return false;
+
+  if (isSupabaseConfigured()) {
+    try {
+      await sbChat.sbClearTeamChatMessages();
+      return true;
+    } catch (error) {
+      console.error("[team-chat] supabase clear", error);
+      return false;
+    }
+  }
+
+  const store = await readMessagesStore();
+  store.messages = [];
+  await writeMessagesStore(store);
+  return true;
+}
+
+export async function markTeamChatSeen(userId: string): Promise<string | null> {
+  const store = await loadMessagesStore();
+  const latestCreatedAt =
+    store.messages.length > 0
+      ? store.messages[store.messages.length - 1].created_at
+      : new Date().toISOString();
+
+  if (isSupabaseConfigured()) {
+    try {
+      await sbChat.sbSetTeamChatLastSeen(userId, latestCreatedAt);
+      return latestCreatedAt;
+    } catch (error) {
+      console.error("[team-chat] supabase last seen", error);
+      return latestCreatedAt;
+    }
+  }
+
+  const lastSeen = await readLastSeenStore();
+  lastSeen.users[userId] = { lastSeenAt: latestCreatedAt };
+  await writeLastSeenStore(lastSeen);
+  return latestCreatedAt;
+}
+
+export async function getTeamChatUnreadCount(userId: string): Promise<number> {
+  if (isSupabaseConfigured()) {
+    try {
+      const lastSeenAt = await sbChat.sbGetTeamChatLastSeen(userId);
+      if (!lastSeenAt) return 0;
+      const store = await loadMessagesStore();
+      return store.messages.filter(
+        (message) => message.created_at > lastSeenAt,
+      ).length;
+    } catch (error) {
+      console.error("[team-chat] supabase unread", error);
+      return 0;
+    }
+  }
+
+  const lastSeen = await readLastSeenStore();
+  const entry = lastSeen.users[userId];
+  if (!entry) return 0;
+
+  const store = await loadMessagesStore();
+  return store.messages.filter(
+    (message) => message.created_at > entry.lastSeenAt,
+  ).length;
+}
+
+export async function listLatestTeamChatForDashboard(
+  limit: number,
+): Promise<TeamChatMessage[]> {
+  const store = await loadMessagesStore();
+  const safeLimit = Math.max(1, Math.min(20, limit));
+  return store.messages
+    .slice(-safeLimit)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}

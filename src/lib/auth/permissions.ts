@@ -91,6 +91,7 @@ const MANAGER_NAV: NavItem[] = [
   NAV_TEAM_CHAT,
   NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,
+  NAV_TEAM,
   NAV_WEBSITE,
 ];
 
@@ -110,7 +111,7 @@ const OWNER_NAV: NavItem[] = [
   NAV_WEBSITE,
 ];
 
-const OWNER_ONLY_PREFIXES = ["/analytics", "/team", "/settings"];
+const OWNER_ONLY_PREFIXES = ["/analytics", "/settings"];
 
 export function getNavItemsForRole(role: UserRole): NavItem[] {
   return role === "owner" ? OWNER_NAV : MANAGER_NAV;

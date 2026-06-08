@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { listTeamUsers } from "@/lib/auth/users";
+import { getDeletedUserIds } from "@/lib/team/store";
 import type { CreateNotificationInput, Notification } from "./types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbNotifications from "@/lib/supabase/notifications-repo";
@@ -110,7 +111,9 @@ export async function createNotificationsForTeam(
   input: CreateNotificationInput,
   opts?: { excludeUserId?: string; onlyUserIds?: string[] },
 ): Promise<Notification[]> {
+  const deleted = new Set(await getDeletedUserIds());
   const users = listTeamUsers().filter((user) => {
+    if (deleted.has(user.id)) return false;
     if (opts?.excludeUserId && user.id === opts.excludeUserId) return false;
     if (opts?.onlyUserIds && !opts.onlyUserIds.includes(user.id)) return false;
     return true;

@@ -8,6 +8,7 @@ import {
   toSessionUser,
   verifyUserPassword,
 } from "@/lib/auth/users";
+import { isUserDeleted } from "@/lib/team/store";
 
 export type SignInState = {
   error?: string;
@@ -29,6 +30,12 @@ export async function signInAction(
   if (!user) {
     return {
       error: "Этот email не зарегистрирован. Обратитесь к администратору платформы.",
+    };
+  }
+
+  if (await isUserDeleted(user.id)) {
+    return {
+      error: "Доступ к платформе для этого аккаунта отключён. Обратитесь к администратору.",
     };
   }
 

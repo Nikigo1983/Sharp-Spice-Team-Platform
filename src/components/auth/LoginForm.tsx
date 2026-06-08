@@ -30,9 +30,9 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           name="email"
           className={styles.input}
           defaultValue={
-            isDev ? "veronika@sharpandspice.com" : undefined
+            isDev ? "virineya1983@gmail.com" : undefined
           }
-          placeholder="veronika@sharpandspice.com"
+          placeholder="virineya1983@gmail.com"
           autoComplete="email"
           required
           disabled={pending}

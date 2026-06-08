@@ -2,23 +2,23 @@ import styles from "./DemoCredentials.module.css";
 
 const DEMO_ACCOUNTS = [
   {
-    role: "Owner",
-    email: "veronika@sharpandspice.com",
+    role: "Вероника (owner)",
+    email: "virineya1983@gmail.com",
     password: "veronika-dev",
   },
   {
-    role: "Менеджер 1",
-    email: "manager1@sharpandspice.com",
+    role: "Злата",
+    email: "gujenova220371@gmail.com",
     password: "manager1-dev",
   },
   {
-    role: "Менеджер 2",
-    email: "manager2@sharpandspice.com",
+    role: "Юля",
+    email: "iuliia.zhdanovich@gmail.com",
     password: "manager2-dev",
   },
   {
-    role: "Менеджер 3",
-    email: "manager3@sharpandspice.com",
+    role: "Руслан",
+    email: "selischev.ruslan@gmail.com",
     password: "manager3-dev",
   },
 ] as const;

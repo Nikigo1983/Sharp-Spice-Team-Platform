@@ -10,6 +10,7 @@ import type {
   WorkspaceChatTurn,
   WorkspaceResponseMode,
 } from "@/lib/ai/workspace-assistant";
+import type { ClientContext } from "@/lib/ai/client-context";
 
 import type {
 
@@ -168,6 +169,44 @@ export function AiWorkspaceView() {
   const [mounted, setMounted] = useState(false);
   const [responseMode, setResponseMode] =
     useState<WorkspaceResponseMode>("brief");
+  const [clientsDiagnostic, setClientsDiagnostic] = useState<{
+    lastSyncedAt: string;
+    searchColumns?: {
+      clients: string[];
+      newClients: string[];
+    };
+    recentSearches?: Array<{
+      query: string;
+      at: string;
+      resultKind: string;
+      topScore: number;
+      matchCount: number;
+      matches: Array<{
+        name: string;
+        score: number;
+        source: string;
+        rowIndex: number;
+        matchedFields: string[];
+      }>;
+    }>;
+    clientsTable: {
+      label: string;
+      count: number;
+      source: string;
+      samples: Array<{ rowIndex: number; name: string; details: string }>;
+    };
+    newClientsTable: {
+      label: string;
+      count: number;
+      source: string;
+      samples: Array<{ rowIndex: number; name: string; details: string }>;
+    };
+  } | null>(null);
+  const [clientsDiagnosticLoading, setClientsDiagnosticLoading] =
+    useState(false);
+  const [pendingClientCandidates, setPendingClientCandidates] = useState<
+    ClientContext[]
+  >([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -194,6 +233,19 @@ export function AiWorkspaceView() {
   }, []);
 
 
+
+  const runClientsDiagnostic = useCallback(async () => {
+    setClientsDiagnosticLoading(true);
+    try {
+      const res = await fetch("/api/ai-workspace/clients-diagnostic");
+      if (!res.ok) throw new Error("fetch failed");
+      setClientsDiagnostic(await res.json());
+    } catch {
+      setClientsDiagnostic(null);
+    } finally {
+      setClientsDiagnosticLoading(false);
+    }
+  }, []);
 
   const persistChat = useCallback(
 
@@ -441,12 +493,21 @@ export function AiWorkspaceView() {
           const meta = JSON.parse(rawData) as {
             sources?: string[];
             demo?: boolean;
+            pendingClientCandidates?: ClientContext[];
+            needsClientSelection?: boolean;
           };
           streamSources = meta.sources ?? [];
           streamDemo = Boolean(meta.demo);
           metaReceived = true;
           setSources(streamSources);
           setDemo(streamDemo);
+          if (meta.needsClientSelection && meta.pendingClientCandidates) {
+            setPendingClientCandidates(meta.pendingClientCandidates);
+          } else if (meta.pendingClientCandidates?.length === 0) {
+            setPendingClientCandidates([]);
+          } else if (!meta.needsClientSelection) {
+            setPendingClientCandidates([]);
+          }
           setLoading(false);
           continue;
         }
@@ -551,6 +612,11 @@ export function AiWorkspaceView() {
 
           mode: responseMode,
 
+          pendingClientCandidates:
+            pendingClientCandidates.length > 0
+              ? pendingClientCandidates
+              : undefined,
+
         }),
 
       });
@@ -579,6 +645,10 @@ export function AiWorkspaceView() {
 
         demo?: boolean;
 
+        pendingClientCandidates?: ClientContext[];
+
+        needsClientSelection?: boolean;
+
       };
 
 
@@ -590,6 +660,12 @@ export function AiWorkspaceView() {
       setSources(data.sources ?? []);
 
       setDemo(Boolean(data.demo));
+
+      if (data.needsClientSelection && data.pendingClientCandidates) {
+        setPendingClientCandidates(data.pendingClientCandidates);
+      } else {
+        setPendingClientCandidates([]);
+      }
 
       const finalHistory: ChatEntry[] = [
 
@@ -836,23 +912,115 @@ export function AiWorkspaceView() {
 
             </div>
 
-            <div className={styles.sourceRow}>
-
-              {activeSources.map((source) => (
-
-                <span key={source} className={styles.sourceBadge}>
-
-                  {source}
-
-                </span>
-
-              ))}
-
+            <div className={styles.panelActions}>
+              <Button
+                type="button"
+                className={styles.sheetsCheckBtn}
+                onClick={() => void runClientsDiagnostic()}
+                disabled={clientsDiagnosticLoading}
+              >
+                {clientsDiagnosticLoading
+                  ? "Диагностика…"
+                  : "🔍 Диагностика клиентов"}
+              </Button>
+              <div className={styles.sourceRow}>
+                {activeSources.map((source) => (
+                  <span key={source} className={styles.sourceBadge}>
+                    {source}
+                  </span>
+                ))}
+              </div>
             </div>
-
           </header>
 
-
+          {clientsDiagnostic ? (
+            <div className={styles.sheetsHealth}>
+              <strong>Диагностика Google Sheets</strong>
+              <span>
+                Синхронизация:{" "}
+                {new Date(clientsDiagnostic.lastSyncedAt).toLocaleString(
+                  "ru-RU",
+                )}
+              </span>
+              <div className={styles.diagnosticBlock}>
+                <strong>
+                  {clientsDiagnostic.clientsTable.label}:{" "}
+                  {clientsDiagnostic.clientsTable.count} (
+                  {clientsDiagnostic.clientsTable.source})
+                </strong>
+                <ul className={styles.diagnosticList}>
+                  {clientsDiagnostic.clientsTable.samples.map((sample) => (
+                    <li key={`crm-${sample.rowIndex}-${sample.name}`}>
+                      строка {sample.rowIndex}: {sample.name}
+                      {sample.details ? ` — ${sample.details}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className={styles.diagnosticBlock}>
+                <strong>
+                  {clientsDiagnostic.newClientsTable.label}:{" "}
+                  {clientsDiagnostic.newClientsTable.count} (
+                  {clientsDiagnostic.newClientsTable.source})
+                </strong>
+                <ul className={styles.diagnosticList}>
+                  {clientsDiagnostic.newClientsTable.samples.map((sample) => (
+                    <li key={`fg-${sample.rowIndex}-${sample.name}`}>
+                      строка {sample.rowIndex}: {sample.name}
+                      {sample.details ? ` — ${sample.details}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {clientsDiagnostic.searchColumns ? (
+                <div className={styles.diagnosticBlock}>
+                  <strong>Поля поиска</strong>
+                  <div>
+                    Клиенты:{" "}
+                    {clientsDiagnostic.searchColumns.clients.join(", ")}
+                  </div>
+                  <div>
+                    Новые клиенты:{" "}
+                    {clientsDiagnostic.searchColumns.newClients.join(", ")}
+                  </div>
+                </div>
+              ) : null}
+              {clientsDiagnostic.recentSearches &&
+              clientsDiagnostic.recentSearches.length > 0 ? (
+                <div className={styles.diagnosticBlock}>
+                  <strong>Последние поиски (до 5)</strong>
+                  <ul className={styles.diagnosticList}>
+                    {clientsDiagnostic.recentSearches.map((entry) => (
+                      <li key={`${entry.at}-${entry.query}`}>
+                        «{entry.query}» — {entry.resultKind}, top score{" "}
+                        {entry.topScore}, совпадений {entry.matchCount}
+                        {entry.matches.length > 0 ? (
+                          <ul className={styles.diagnosticList}>
+                            {entry.matches.map((match) => (
+                              <li
+                                key={`${entry.at}-${match.rowIndex}-${match.name}`}
+                              >
+                                {match.name} — {match.source}, строка{" "}
+                                {match.rowIndex}, score {match.score}
+                                {match.matchedFields.length > 0
+                                  ? ` (${match.matchedFields.join("; ")})`
+                                  : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className={styles.diagnosticBlock}>
+                  <strong>Последние поиски</strong>
+                  <span> Пока нет — выполните запрос в чате.</span>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {demo ? (
 
@@ -888,7 +1056,8 @@ export function AiWorkspaceView() {
 
                 <p className={styles.welcomeText}>
 
-                  Спросите про клиентов, анкеты или документы из базы знаний.
+                  Клиенты — только из Google Sheets. Для отладки:{" "}
+                  <code>/debug_client Фамилия</code>
 
                 </p>
 
@@ -993,6 +1162,37 @@ export function AiWorkspaceView() {
                   </div>
 
                 ))}
+
+                {!loading && pendingClientCandidates.length > 0 ? (
+                  <div className={styles.clientSelectRow}>
+                    <span className={styles.clientSelectLabel}>
+                      Выберите клиента:
+                    </span>
+                    {pendingClientCandidates.map((candidate, index) => (
+                      <button
+                        key={`${candidate.source}-${candidate.rowIndex}-${candidate.name}`}
+                        type="button"
+                        className={styles.clientSelectBtn}
+                        disabled={loading}
+                        onClick={() =>
+                          void send(`Выбери ${index + 1}`)
+                        }
+                      >
+                        {index + 1}. {candidate.name} ({candidate.sourceLabel})
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className={styles.clientSelectMergeBtn}
+                      disabled={loading}
+                      onClick={() =>
+                        void send("Объединить как одного клиента")
+                      }
+                    >
+                      Объединить как одного клиента
+                    </button>
+                  </div>
+                ) : null}
 
                 {loading ? (
 

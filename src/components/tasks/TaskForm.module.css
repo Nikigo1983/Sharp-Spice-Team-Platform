@@ -46,6 +46,34 @@
   font-size: 0.875rem;
 }
 
+.hint {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-400);
+}
+
+.assigneeList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.assigneeItem {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--white);
+  cursor: pointer;
+}
+
+.assigneeItem input {
+  accent-color: var(--accent-burgundy);
+}
+
 .actions {
   display: flex;
   gap: 0.75rem;

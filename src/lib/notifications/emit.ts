@@ -26,15 +26,21 @@ export async function notifyTaskCreated(params: {
   actorId: string;
   actorName: string;
   taskTitle: string;
+  assigneeIds?: string[];
 }) {
+  const hasAssignees = Boolean(params.assigneeIds?.length);
+
   await createNotificationsForTeam(
     {
       type: "task_new",
-      title: "Новая задача",
+      title: hasAssignees ? "Вам назначена задача" : "Новая задача",
       author_name: params.actorName,
       message: params.taskTitle,
     },
-    { excludeUserId: params.actorId },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: hasAssignees ? params.assigneeIds : undefined,
+    },
   );
 }
 

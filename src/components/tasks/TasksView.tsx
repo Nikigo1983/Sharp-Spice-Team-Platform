@@ -12,16 +12,16 @@ import { TaskForm, taskToFormValues, type TaskFormValues } from "./TaskForm";
 import { Toast, type ToastMessage } from "./Toast";
 import styles from "./TasksView.module.css";
 
-type AuthorOption = { id: string; name: string };
+type TeamMemberOption = { id: string; name: string };
 
 type TasksViewProps = {
   user: SessionUser;
-  authors: AuthorOption[];
+  teamMembers: TeamMemberOption[];
 };
 
 type StatusFilter = "all" | TaskStatus;
 
-export function TasksView({ user, authors }: TasksViewProps) {
+export function TasksView({ user, teamMembers }: TasksViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -29,6 +29,7 @@ export function TasksView({ user, authors }: TasksViewProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [authorFilter, setAuthorFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -77,11 +78,19 @@ export function TasksView({ user, authors }: TasksViewProps) {
       if (authorFilter !== "all" && task.createdByUserId !== authorFilter) {
         return false;
       }
+      if (
+        assigneeFilter !== "all" &&
+        !task.assignees.some((assignee) => assignee.id === assigneeFilter)
+      ) {
+        return false;
+      }
       if (!q) return true;
-      const hay = `${task.title} ${task.description} ${task.createdByName}`.toLowerCase();
+      const assigneeNames = task.assignees.map((assignee) => assignee.name).join(" ");
+      const hay =
+        `${task.title} ${task.description} ${task.createdByName} ${assigneeNames}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [tasks, search, statusFilter, authorFilter]);
+  }, [tasks, search, statusFilter, authorFilter, assigneeFilter]);
 
   async function handleCreate(values: TaskFormValues) {
     const res = await fetch("/api/tasks", {
@@ -92,9 +101,13 @@ export function TasksView({ user, authors }: TasksViewProps) {
         description: values.description,
         dueDate: values.dueDate || null,
         status: values.status,
+        assigneeIds: values.assigneeIds,
       }),
     });
-    if (!res.ok) throw new Error("create failed");
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Не удалось сохранить задачу");
+    }
     setCreateOpen(false);
     setToast({ text: "Задача успешно создана." });
     await fetchTasks();
@@ -110,6 +123,7 @@ export function TasksView({ user, authors }: TasksViewProps) {
         description: values.description,
         dueDate: values.dueDate || null,
         status: values.status,
+        assigneeIds: values.assigneeIds,
       }),
     });
     if (!res.ok) throw new Error("update failed");
@@ -124,7 +138,16 @@ export function TasksView({ user, authors }: TasksViewProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "set_status", status }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      setToast({
+        text:
+          res.status === 403
+            ? "Недостаточно прав для смены статуса."
+            : "Не удалось обновить статус.",
+        type: "error",
+      });
+      return;
+    }
 
     if (status === "completed") {
       setToast({ text: "Задача отмечена выполненной." });
@@ -167,7 +190,7 @@ export function TasksView({ user, authors }: TasksViewProps) {
         <input
           type="search"
           className={styles.search}
-          placeholder="Поиск по названию, описанию, автору…"
+          placeholder="Поиск по названию, описанию, автору, исполнителю…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -186,10 +209,22 @@ export function TasksView({ user, authors }: TasksViewProps) {
           value={authorFilter}
           onChange={(e) => setAuthorFilter(e.target.value)}
         >
-          <option value="all">Все сотрудники</option>
-          {authors.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
+          <option value="all">Все авторы</option>
+          {teamMembers.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={styles.select}
+          value={assigneeFilter}
+          onChange={(e) => setAssigneeFilter(e.target.value)}
+        >
+          <option value="all">Все исполнители</option>
+          {teamMembers.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
             </option>
           ))}
         </select>
@@ -222,6 +257,7 @@ export function TasksView({ user, authors }: TasksViewProps) {
       {createOpen && (
         <Modal title="Новая задача" onClose={() => setCreateOpen(false)}>
           <TaskForm
+            teamMembers={teamMembers}
             submitLabel="Создать"
             onCancel={() => setCreateOpen(false)}
             onSubmit={handleCreate}
@@ -233,6 +269,7 @@ export function TasksView({ user, authors }: TasksViewProps) {
         <Modal title="Редактировать задачу" onClose={() => setEditTask(null)}>
           <TaskForm
             initial={taskToFormValues(editTask)}
+            teamMembers={teamMembers}
             submitLabel="Сохранить"
             onCancel={() => setEditTask(null)}
             onSubmit={handleUpdate}

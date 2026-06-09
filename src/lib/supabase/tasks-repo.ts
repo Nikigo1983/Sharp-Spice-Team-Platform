@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "./server";
+import { normalizeAssignees } from "@/lib/tasks/assignees";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 
 type TaskRow = {
@@ -10,6 +11,7 @@ type TaskRow = {
   status: TaskStatus;
   created_by_user_id: string;
   created_by_name: string;
+  assignees?: unknown;
   created_at: string;
   due_date: string | null;
   completed_at: string | null;
@@ -24,6 +26,7 @@ function mapRow(row: TaskRow): Task {
     status: row.status,
     createdByUserId: row.created_by_user_id,
     createdByName: row.created_by_name,
+    assignees: normalizeAssignees(row.assignees),
     createdAt: row.created_at,
     dueDate: row.due_date,
     completedAt: row.completed_at,
@@ -39,6 +42,7 @@ function mapTask(task: Task): TaskRow {
     status: task.status,
     created_by_user_id: task.createdByUserId,
     created_by_name: task.createdByName,
+    assignees: task.assignees,
     created_at: task.createdAt,
     due_date: task.dueDate,
     completed_at: task.completedAt,

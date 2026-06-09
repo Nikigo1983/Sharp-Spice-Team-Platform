@@ -8,6 +8,11 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   completed: "Выполнена",
 };
 
+export type TaskAssignee = {
+  id: string;
+  name: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -15,6 +20,7 @@ export type Task = {
   status: TaskStatus;
   createdByUserId: string;
   createdByName: string;
+  assignees: TaskAssignee[];
   createdAt: string;
   dueDate: string | null;
   completedAt: string | null;
@@ -33,6 +39,7 @@ export type CreateTaskInput = {
   description?: string;
   dueDate?: string | null;
   status?: TaskStatus;
+  assigneeIds?: string[];
 };
 
 export type UpdateTaskInput = {
@@ -40,4 +47,5 @@ export type UpdateTaskInput = {
   description?: string;
   dueDate?: string | null;
   status?: TaskStatus;
+  assigneeIds?: string[];
 };

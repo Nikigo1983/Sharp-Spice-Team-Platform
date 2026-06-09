@@ -145,20 +145,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const fetchNotifications = useCallback(
     async (opts?: { since?: string; initial?: boolean }) => {
-      const params = new URLSearchParams();
-      params.set("limit", "50");
-      if (opts?.since) {
-        params.set("since", opts.since);
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", "50");
+        if (opts?.since) {
+          params.set("since", opts.since);
+        }
+
+        const res = await fetch(`/api/notifications?${params.toString()}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          notifications: NotificationItem[];
+          unread: number;
+        };
+
+        applyNotifications(data.notifications, data.unread, !opts?.initial);
+      } catch {
+        // Сеть недоступна (например, dev-сервер перезапускался) — не ломаем UI.
       }
-
-      const res = await fetch(`/api/notifications?${params.toString()}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        notifications: NotificationItem[];
-        unread: number;
-      };
-
-      applyNotifications(data.notifications, data.unread, !opts?.initial);
     },
     [applyNotifications],
   );

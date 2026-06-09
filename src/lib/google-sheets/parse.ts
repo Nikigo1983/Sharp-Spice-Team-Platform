@@ -85,18 +85,27 @@ export function parseClientRows(rows: string[][]): Client[] {
 
 function findHeaderIndex(headers: string[], candidates: string[]): number {
   const normalizedCandidates = candidates.map(normalizeHeader);
-  return headers.findIndex((h) =>
-    h.length > 0 &&
-    normalizedCandidates.some(
-      (c) => h === c || (c.length > 3 && h.includes(c)),
-    ),
-  );
+  // Сначала точное совпадение, затем частичное — чтобы «дата подачи» не путалась с «дата подачи 2».
+  for (const candidate of normalizedCandidates) {
+    const exact = headers.findIndex((h) => h.length > 0 && h === candidate);
+    if (exact >= 0) return exact;
+  }
+  for (const candidate of normalizedCandidates) {
+    if (candidate.length <= 3) continue;
+    const partial = headers.findIndex((h) => h.length > 0 && h.includes(candidate));
+    if (partial >= 0) return partial;
+  }
+  return -1;
 }
 
-function pickFirstNonEmpty(values: Array<string | undefined | null>): string {
-  for (const v of values) {
-    const s = (v ?? "").trim();
-    if (s) return s;
+function pickCell(
+  row: string[],
+  headerIdx: number,
+  fallbackCol?: number,
+): string {
+  if (headerIdx >= 0) return (row[headerIdx] ?? "").trim();
+  if (fallbackCol !== undefined && fallbackCol >= 0) {
+    return (row[fallbackCol] ?? "").trim();
   }
   return "";
 }
@@ -109,28 +118,32 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
   if (rows.length < 2) return [];
 
   const headers = rows[0].map(normalizeHeader);
-  // Fallback to known External tab layout (A..M), if header text differs.
+  // Актуальная раскладка вкладки External (Google Sheets, gid=1431336126).
   const COL = {
     family: 0,
-    familyLatinOrExtra: 1,
+    familyLatin: 1,
     passport: 2,
     submittedAt: 3,
-    submittedAt2: 4,
-    expectedApproval: 5,
-    referent: 6,
-    bookingAddress: 7,
-    bookingRange: 8,
-    approvalAt: 9,
-    notes: 10,
-    residenceCardIssuedAt: 11,
-    appPassword: 12,
+    expectedApproval: 4,
+    referent: 5,
+    bookingAddress: 6,
+    bookingRange: 7,
+    approvalAt: 8,
+    notes: 9,
+    residenceCardIssuedAt: 10,
+    appPassword: 11,
+    partner: 12,
   } as const;
 
   const idxFamily = findHeaderIndex(headers, ["фамилия", "surname", "last name"]);
   const idxPassport = findHeaderIndex(headers, ["номер паспорта", "паспорт", "passport"]);
   const idxRef = findHeaderIndex(headers, ["имя референта", "референт", "менеджер", "manager"]);
 
-  const idxDateSubmit = findHeaderIndex(headers, ["дата подачи", "дата подачи клиента", "created at"]);
+  const idxDateSubmit = findHeaderIndex(headers, [
+    "дата подачи",
+    "дата подачи клиента",
+    "created at",
+  ]);
   const idxDateSubmit2 = findHeaderIndex(headers, ["дата подачи 2"]);
   const idxExpectedApproval = findHeaderIndex(headers, [
     "дата предпологаемого одобрения",
@@ -159,28 +172,13 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
   const country = "Хорватия";
 
   return rows.slice(1).flatMap((row, index) => {
-    const family =
-      pickFirstNonEmpty([
-        idxFamily >= 0 ? row[idxFamily] : "",
-        row[COL.family],
-      ]) || "";
-    const passport =
-      pickFirstNonEmpty([
-        idxPassport >= 0 ? row[idxPassport] : "",
-        row[COL.passport],
-      ]) || "";
+    const family = pickCell(row, idxFamily, COL.family);
+    const familyLatin = pickCell(row, -1, COL.familyLatin);
+    const passport = pickCell(row, idxPassport, COL.passport);
     if (!family && !passport) return [];
 
-    const notes =
-      pickFirstNonEmpty([
-        idxNotes >= 0 ? row[idxNotes] : "",
-        row[COL.notes],
-      ]) || "";
-    const approvalRaw =
-      pickFirstNonEmpty([
-        idxApproval >= 0 ? row[idxApproval] : "",
-        row[COL.approvalAt],
-      ]) || "";
+    const notes = pickCell(row, idxNotes, COL.notes);
+    const approvalRaw = pickCell(row, idxApproval, COL.approvalAt);
 
     const notesLc = notes.toLowerCase();
     const isApproved =
@@ -200,36 +198,25 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     else if (isPrepDocs) status = "В работе";
     else status = "Новый";
 
-    const createdAt =
-      pickFirstNonEmpty([
-        idxDateSubmit >= 0 ? row[idxDateSubmit] : "",
-        row[COL.submittedAt],
-        idxDateSubmit2 >= 0 ? row[idxDateSubmit2] : "",
-        row[COL.submittedAt2],
-      ]) || "—";
+    const createdAt = pickCell(row, idxDateSubmit, COL.submittedAt) || "—";
+
+    const submittedAt2Raw = pickCell(row, idxDateSubmit2);
+    const submittedAt2 =
+      idxDateSubmit2 >= 0 && submittedAt2Raw ? submittedAt2Raw : "—";
+
+    const expectedApprovalAt =
+      pickCell(row, idxExpectedApproval, COL.expectedApproval) || "—";
+
+    const referentName = pickCell(row, idxRef, COL.referent) || "—";
+    const bookingAddress =
+      pickCell(row, idxBookingAddress, COL.bookingAddress) || "—";
+    const bookingRange =
+      pickCell(row, idxBookingRange, COL.bookingRange) || "—";
 
     const lastActivity =
-      pickFirstNonEmpty([
-        idxBookingRange >= 0 ? row[idxBookingRange] : "",
-        row[COL.bookingRange],
-        idxApproval >= 0 ? row[idxApproval] : "",
-        row[COL.approvalAt],
-        idxDateSubmit2 >= 0 ? row[idxDateSubmit2] : "",
-        row[COL.submittedAt2],
-        idxDateSubmit >= 0 ? row[idxDateSubmit] : "",
-        row[COL.submittedAt],
-      ]) || "—";
-
-    const manager =
-      pickFirstNonEmpty([
-        idxRef >= 0 ? row[idxRef] : "",
-        row[COL.referent],
-      ]) || "";
-    const bookingAddress =
-      pickFirstNonEmpty([
-        idxBookingAddress >= 0 ? row[idxBookingAddress] : "",
-        row[COL.bookingAddress],
-      ]) || "";
+      bookingRange !== "—"
+        ? bookingRange
+        : approvalRaw || createdAt || "—";
 
     const clientId = passport || `ROW-${index + 2}`;
 
@@ -240,46 +227,24 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
         phone: "—",
         email: "—",
         country,
-        citizenship: "—",
+        citizenship: familyLatin || "—",
         direction,
         status,
-        manager: manager || "—",
+        manager: referentName !== "—" ? referentName : "—",
         lastActivity,
         createdAt,
         passportNumber: passport || "—",
-        submittedAt:
-          pickFirstNonEmpty([
-            idxDateSubmit >= 0 ? row[idxDateSubmit] : "",
-            row[COL.submittedAt],
-          ]) || "—",
-        submittedAt2: pickFirstNonEmpty([
-          idxDateSubmit2 >= 0 ? row[idxDateSubmit2] : "",
-          row[COL.submittedAt2],
-        ]) || "—",
-        expectedApprovalAt:
-          pickFirstNonEmpty([
-            idxExpectedApproval >= 0 ? row[idxExpectedApproval] : "",
-            row[COL.expectedApproval],
-          ]) || "—",
-        referentName: manager || "—",
-        bookingAddress: bookingAddress || "—",
-        bookingRange:
-          pickFirstNonEmpty([
-            idxBookingRange >= 0 ? row[idxBookingRange] : "",
-            row[COL.bookingRange],
-          ]) || "—",
+        submittedAt: createdAt,
+        submittedAt2,
+        expectedApprovalAt,
+        referentName,
+        bookingAddress,
+        bookingRange,
         approvalAt: approvalRaw || "—",
         notes: notes || "—",
         residenceCardIssuedAt:
-          pickFirstNonEmpty([
-            idxResidenceCard >= 0 ? row[idxResidenceCard] : "",
-            row[COL.residenceCardIssuedAt],
-          ]) || "—",
-        appPassword:
-          pickFirstNonEmpty([
-            idxAppPassword >= 0 ? row[idxAppPassword] : "",
-            row[COL.appPassword],
-          ]) || "—",
+          pickCell(row, idxResidenceCard, COL.residenceCardIssuedAt) || "—",
+        appPassword: pickCell(row, idxAppPassword, COL.appPassword) || "—",
         rowIndex: index + 2,
       },
     ];

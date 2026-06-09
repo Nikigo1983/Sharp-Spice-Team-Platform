@@ -89,9 +89,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const existing = await getTask(id);
-    const task = await setTaskStatus(id, body.status);
-    if (!task) {
+    if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const task = await setTaskStatus(id, body.status, session);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (existing && existing.status !== body.status) {
@@ -108,9 +112,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (body.action === "complete") {
     const existing = await getTask(id);
-    const task = await completeTask(id);
-    if (!task) {
+    if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const task = await completeTask(id, session);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (existing && existing.status !== "completed") {

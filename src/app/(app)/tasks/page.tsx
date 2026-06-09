@@ -9,7 +9,7 @@ export default async function TasksPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const authors = (await listTeamMembers()).map((u) => ({
+  const teamMembers = (await listTeamMembers()).map((u) => ({
     id: u.id,
     name: u.name,
   }));
@@ -17,7 +17,7 @@ export default async function TasksPage() {
   return (
     <AppShell sectionTitle="Задачи">
       <Suspense fallback={<p>Загрузка…</p>}>
-        <TasksView user={session} authors={authors} />
+        <TasksView user={session} teamMembers={teamMembers} />
       </Suspense>
     </AppShell>
   );

@@ -3,7 +3,13 @@
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { SessionUser } from "@/lib/auth/types";
+import { formatAssigneeNames } from "@/lib/tasks/assignees";
 import { formatTaskDate, formatTaskDateTime } from "@/lib/tasks/format";
+import {
+  canChangeTaskStatus,
+  canDeleteTask,
+  canEditTask,
+} from "@/lib/tasks/permissions";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import styles from "./TaskCard.module.css";
@@ -24,8 +30,9 @@ export function TaskCard({
   onDelete,
 }: TaskCardProps) {
   const isCompleted = task.status === "completed";
-  const canEdit = user.role === "owner" || task.createdByUserId === user.id;
-  const canDelete = canEdit;
+  const canEdit = canEditTask(task, user);
+  const canDelete = canDeleteTask(task, user);
+  const canChangeStatus = canChangeTaskStatus(task, user);
 
   return (
     <Card
@@ -66,6 +73,10 @@ export function TaskCard({
           <dd>{task.createdByName}</dd>
         </div>
         <div>
+          <dt>Исполнители</dt>
+          <dd>{formatAssigneeNames(task.assignees)}</dd>
+        </div>
+        <div>
           <dt>Создано</dt>
           <dd>{formatTaskDateTime(task.createdAt)}</dd>
         </div>
@@ -81,7 +92,7 @@ export function TaskCard({
         ) : null}
       </dl>
 
-      {!isCompleted ? (
+      {!isCompleted && canChangeStatus ? (
         <div className={styles.statusActions}>
           <span className={styles.statusActionsLabel}>Быстрый статус:</span>
           <div className={styles.statusButtons}>

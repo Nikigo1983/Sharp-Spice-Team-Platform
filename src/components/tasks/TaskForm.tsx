@@ -11,10 +11,14 @@ export type TaskFormValues = {
   description: string;
   dueDate: string;
   status: TaskStatus;
+  assigneeIds: string[];
 };
+
+type TeamMemberOption = { id: string; name: string };
 
 type TaskFormProps = {
   initial?: Partial<TaskFormValues>;
+  teamMembers: TeamMemberOption[];
   submitLabel: string;
   onSubmit: (values: TaskFormValues) => Promise<void>;
   onCancel: () => void;
@@ -25,10 +29,12 @@ const DEFAULT: TaskFormValues = {
   description: "",
   dueDate: "",
   status: "new",
+  assigneeIds: [],
 };
 
 export function TaskForm({
   initial,
+  teamMembers,
   submitLabel,
   onSubmit,
   onCancel,
@@ -50,8 +56,10 @@ export function TaskForm({
     setError("");
     try {
       await onSubmit(values);
-    } catch {
-      setError("Не удалось сохранить задачу");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Не удалось сохранить задачу";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -93,6 +101,36 @@ export function TaskForm({
         />
       </label>
 
+      <fieldset className={styles.field}>
+        <legend className={styles.label}>Исполнители</legend>
+        <p className={styles.hint}>
+          Можно выбрать одного или нескольких. Назначенные смогут менять статус
+          задачи.
+        </p>
+        <div className={styles.assigneeList}>
+          {teamMembers.map((member) => {
+            const checked = values.assigneeIds.includes(member.id);
+            return (
+              <label key={member.id} className={styles.assigneeItem}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    setValues((prev) => ({
+                      ...prev,
+                      assigneeIds: e.target.checked
+                        ? [...prev.assigneeIds, member.id]
+                        : prev.assigneeIds.filter((id) => id !== member.id),
+                    }));
+                  }}
+                />
+                <span>{member.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
       <label className={styles.field}>
         <span className={styles.label}>Статус</span>
         <select
@@ -130,5 +168,6 @@ export function taskToFormValues(task: Task): TaskFormValues {
     description: task.description,
     dueDate: task.dueDate ?? "",
     status: task.status,
+    assigneeIds: task.assignees.map((assignee) => assignee.id),
   };
 }

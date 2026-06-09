@@ -4,6 +4,7 @@ import {
   runWorkspaceAiStream,
   type WorkspaceChatTurn,
 } from "@/lib/ai/workspace-assistant";
+import type { ClientContext } from "@/lib/ai/client-context";
 import {
   getWorkspaceAiConfig,
   isWorkspaceResponseMode,
@@ -27,11 +28,13 @@ export async function POST(request: Request) {
     message?: string;
     history?: WorkspaceChatTurn[];
     mode?: string;
+    pendingClientCandidates?: ClientContext[];
   };
 
   const mode = parseMode(body.mode);
   const message = body.message ?? "";
   const history = body.history ?? [];
+  const pendingClientCandidates = body.pendingClientCandidates ?? null;
   const { stream } = getWorkspaceAiConfig();
 
   if (stream) {
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
             message,
             history,
             mode,
+            pendingClientCandidates,
           )) {
             if (typeof chunk === "string") {
               controller.enqueue(
@@ -67,6 +71,8 @@ export async function POST(request: Request) {
                 `event: meta\ndata: ${JSON.stringify({
                   sources: chunk.sources,
                   demo: chunk.demo,
+                  pendingClientCandidates: chunk.pendingClientCandidates,
+                  needsClientSelection: chunk.needsClientSelection,
                 })}\n\n`,
               ),
             );
@@ -99,7 +105,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runWorkspaceAi(message, history, mode);
+    const result = await runWorkspaceAi(
+      message,
+      history,
+      mode,
+      pendingClientCandidates,
+    );
     return NextResponse.json(result);
   } catch (error) {
     console.error("[api/ai-workspace]", error);

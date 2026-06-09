@@ -6,7 +6,11 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { TaskForm, type TaskFormValues } from "@/components/tasks/TaskForm";
 import styles from "./NewTaskPage.module.css";
 
-export function NewTaskPageView() {
+type NewTaskPageViewProps = {
+  teamMembers: { id: string; name: string }[];
+};
+
+export function NewTaskPageView({ teamMembers }: NewTaskPageViewProps) {
   const router = useRouter();
 
   async function handleCreate(values: TaskFormValues) {
@@ -18,9 +22,13 @@ export function NewTaskPageView() {
         description: values.description,
         dueDate: values.dueDate || null,
         status: values.status,
+        assigneeIds: values.assigneeIds,
       }),
     });
-    if (!res.ok) throw new Error("create failed");
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Не удалось сохранить задачу");
+    }
     router.push("/tasks?created=1");
   }
 
@@ -32,6 +40,7 @@ export function NewTaskPageView() {
       />
       <Card className={styles.card}>
         <TaskForm
+          teamMembers={teamMembers}
           submitLabel="Создать задачу"
           onCancel={() => router.push("/tasks")}
           onSubmit={handleCreate}

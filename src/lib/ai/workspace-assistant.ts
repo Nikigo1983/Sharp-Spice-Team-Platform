@@ -9,8 +9,40 @@ import {
   getWorkspaceAiConfig,
   type WorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
+import {
+  formatClientContextBlock,
+  formatClientNotFoundReply,
+  formatDebugClientReply,
+  formatMergedClientContextBlock,
+  formatMultipleClientsReply,
+  formatWeakMatchesReply,
+  isMergedClientContext,
+  type ClientContext,
+  type ResolvedClientContext,
+} from "@/lib/ai/client-context";
+import {
+  buildClientSearchQuery,
+  groupDuplicateClients,
+  isDebugClientCommand,
+  lookupAllClientMatches,
+  lookupClientsInSheets,
+  parseDebugClientQuery,
+  scanRawRowsForTokens,
+} from "@/lib/ai/client-lookup";
+import {
+  followUpToClientContext,
+  resolveClientSelectionFollowUp,
+} from "@/lib/ai/client-selection-followup";
+import { mergeClientContexts } from "@/lib/ai/client-deduplication";
 import { buildWorkspaceSystemPrompt } from "@/lib/ai/workspace-prompt";
 import { buildWorkspaceContext } from "@/lib/ai/workspace-context";
+import { findEmigrantDeskClientByQuery } from "@/lib/emigrant-desk/clients";
+import {
+  formatFormgridRowSummary,
+  listFormgridRowsSince,
+  parseRecentDaysFromQuery,
+} from "@/lib/google-sheets/formgrid-dates";
+import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
 import { listClients } from "@/lib/google-sheets/service";
 
 export type { WorkspaceResponseMode } from "@/lib/ai/workspace-config";
@@ -24,11 +56,15 @@ export type WorkspaceAiResult = {
   reply: string;
   sources: string[];
   demo: boolean;
+  pendingClientCandidates?: ClientContext[];
+  needsClientSelection?: boolean;
 };
 
 export type WorkspaceAiStreamMeta = {
   sources: string[];
   demo: boolean;
+  pendingClientCandidates?: ClientContext[];
+  needsClientSelection?: boolean;
 };
 
 export type WorkspaceAiStreamStatus = {
@@ -44,6 +80,9 @@ function buildSources(
   if (intent.needsClients && context.meta.clientsTotal > 0) {
     sources.push(`Клиенты (${context.meta.clientsTotal})`);
   }
+  if (intent.needsEmigrantDesk && context.meta.emigrantDeskTotal > 0) {
+    sources.push(`Emigrant Desk (${context.meta.emigrantDeskTotal})`);
+  }
   if (intent.needsFormgrid && context.meta.formgridRows > 0) {
     sources.push(`Анкеты Formgrid (${context.meta.formgridRows})`);
   }
@@ -53,15 +92,27 @@ function buildSources(
 function buildContextBlock(
   context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
   intent: ReturnType<typeof detectWorkspaceIntent>,
+  clientContext: ResolvedClientContext | null,
 ): string {
   const contextParts: string[] = [];
+
+  if (clientContext) {
+    const header = isMergedClientContext(clientContext)
+      ? "=== CLIENT CONTEXT (MERGED) ==="
+      : "=== CLIENT CONTEXT (Google Sheets) ===";
+    contextParts.push(`${header}\n${formatClientContextBlock(clientContext)}`);
+  }
+
   if (intent.needsKb) {
     contextParts.push(`=== KNOWLEDGE BASE ===\n${context.knowledgeBaseText}`);
   }
-  if (intent.needsClients) {
+  if (intent.needsClients && !clientContext) {
     contextParts.push(`=== КЛИЕНТЫ ===\n${context.clientsText}`);
   }
-  if (intent.needsFormgrid) {
+  if (intent.needsEmigrantDesk) {
+    contextParts.push(`=== EMIGRANT CROATIA DESK ===\n${context.emigrantDeskText}`);
+  }
+  if (intent.needsFormgrid && !clientContext) {
     contextParts.push(`=== FORMGRID ===\n${context.formgridText}`);
   }
   return contextParts.join("\n\n");
@@ -78,12 +129,16 @@ function buildChatMessages(
     content: turn.content,
   }));
 
+  const clientNote = contextBlock.includes("CLIENT CONTEXT")
+    ? "\n\nДля данных о клиенте используй только CLIENT CONTEXT из Google Sheets."
+    : "";
+
   return [
     { role: "system", content: buildWorkspaceSystemPrompt(mode) },
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -101,15 +156,23 @@ async function prepareWorkspaceRequest(
   userMessage: string,
   history: WorkspaceChatTurn[],
   mode: WorkspaceResponseMode,
+  pendingClientCandidates: ClientContext[] | null = null,
 ): Promise<
   | { kind: "empty" }
-  | { kind: "direct"; reply: string; sources: string[] }
+  | {
+      kind: "direct";
+      reply: string;
+      sources: string[];
+      pendingClientCandidates?: ClientContext[];
+      needsClientSelection?: boolean;
+    }
   | {
       kind: "ai";
       messages: ChatMessage[];
       sources: string[];
       context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
       trimmed: string;
+      clientContext: ResolvedClientContext | null;
     }
 > {
   const trimmed = userMessage.trim();
@@ -117,15 +180,113 @@ async function prepareWorkspaceRequest(
     return { kind: "empty" };
   }
 
-  const intent = detectWorkspaceIntent(trimmed);
+  if (isDebugClientCommand(trimmed)) {
+    const debugQuery = parseDebugClientQuery(trimmed) || trimmed;
+    const searchQuery = buildClientSearchQuery(debugQuery);
+    const [matches, rawHits] = await Promise.all([
+      lookupAllClientMatches(debugQuery),
+      scanRawRowsForTokens(debugQuery),
+    ]);
+    const dedupGroups = groupDuplicateClients(matches);
+    const dedupInfo = dedupGroups.map((group) => ({
+      parts: group.parts,
+      mergeReasons: group.mergeReasons,
+      mergedName: group.merged.name,
+    }));
+    let debugReply = formatDebugClientReply(
+      debugQuery,
+      matches,
+      searchQuery.morphology,
+      rawHits,
+      dedupInfo,
+    );
+    const mergedGroups = dedupGroups.filter((group) => group.parts.length > 1);
+    if (mergedGroups.length > 0) {
+      debugReply += `\n\n**Merged context preview:**\n\n${mergedGroups
+        .map((group) => formatMergedClientContextBlock(group.merged))
+        .join("\n\n---\n\n")}`;
+    }
+    return {
+      kind: "direct",
+      reply: debugReply,
+      sources: ["Клиенты", "Новые клиенты"],
+    };
+  }
 
-  if (intent.fastClientLookup) {
+  const followUp = resolveClientSelectionFollowUp(
+    trimmed,
+    pendingClientCandidates,
+    history,
+  );
+
+  const intent = detectWorkspaceIntent(trimmed);
+  let clientContext: ResolvedClientContext | null = null;
+
+  if (followUp) {
+    clientContext = followUpToClientContext(followUp);
+  } else {
+    const clientLookup = await lookupClientsInSheets(trimmed);
+    if (clientLookup.kind === "not_found") {
+      return {
+        kind: "direct",
+        reply: formatClientNotFoundReply(),
+        sources: ["Клиенты", "Новые клиенты"],
+        pendingClientCandidates: [],
+      };
+    }
+    if (clientLookup.kind === "multiple") {
+      return {
+        kind: "direct",
+        reply: formatMultipleClientsReply(clientLookup.clients),
+        sources: ["Клиенты", "Новые клиенты"],
+        pendingClientCandidates: clientLookup.pendingParts,
+        needsClientSelection: true,
+      };
+    }
+    if (clientLookup.kind === "weak") {
+      return {
+        kind: "direct",
+        reply: formatWeakMatchesReply(clientLookup.clients),
+        sources: ["Клиенты", "Новые клиенты"],
+        pendingClientCandidates: clientLookup.clients.flatMap((client) =>
+          isMergedClientContext(client) ? client.parts : [client],
+        ),
+      };
+    }
+    if (clientLookup.kind === "single") {
+      clientContext = clientLookup.client;
+    }
+  }
+
+  if (intent.fastClientLookup && !clientContext) {
     const direct = await tryDirectBookingAnswer(trimmed);
     if (direct) {
       return {
         kind: "direct",
         reply: direct,
         sources: ["Клиенты"],
+      };
+    }
+  }
+
+  if (intent.needsEmigrantDesk && /статус/iu.test(trimmed)) {
+    const direct = await tryDirectEmigrantStatusAnswer(trimmed);
+    if (direct) {
+      return {
+        kind: "direct",
+        reply: direct,
+        sources: ["Emigrant Desk"],
+      };
+    }
+  }
+
+  if (intent.needsFormgrid) {
+    const direct = await tryDirectFormgridRecentAnswer(trimmed);
+    if (direct) {
+      return {
+        kind: "direct",
+        reply: direct,
+        sources: ["Анкеты Formgrid"],
       };
     }
   }
@@ -137,14 +298,24 @@ async function prepareWorkspaceRequest(
     console.error("[workspace-ai] context build failed", error);
     context = {
       clientsText: "Клиенты: не удалось загрузить таблицу.",
+      emigrantDeskText: "Emigrant Croatia Desk: не удалось загрузить статусы дел.",
       formgridText: "Formgrid: не удалось загрузить анкеты.",
       knowledgeBaseText: "Knowledge Base: не удалось загрузить Drive.",
-      meta: { clientsTotal: 0, formgridRows: 0 },
+      meta: { clientsTotal: 0, emigrantDeskTotal: 0, formgridRows: 0 },
     };
   }
 
-  const sources = buildSources(context, intent);
-  const contextBlock = buildContextBlock(context, intent);
+  const sources = clientContext
+    ? [
+        isMergedClientContext(clientContext)
+          ? "Клиенты + Новые клиенты"
+          : clientContext.sourceLabel,
+        ...buildSources(context, intent).filter(
+          (source) => !/^Клиенты|^Анкеты Formgrid/i.test(source),
+        ),
+      ]
+    : buildSources(context, intent);
+  const contextBlock = buildContextBlock(context, intent, clientContext);
   const messages = buildChatMessages(trimmed, contextBlock, history, mode);
 
   return {
@@ -153,6 +324,7 @@ async function prepareWorkspaceRequest(
     sources,
     context,
     trimmed,
+    clientContext,
   };
 }
 
@@ -160,8 +332,14 @@ export async function runWorkspaceAi(
   userMessage: string,
   history: WorkspaceChatTurn[] = [],
   mode: WorkspaceResponseMode = "brief",
+  pendingClientCandidates: ClientContext[] | null = null,
 ): Promise<WorkspaceAiResult> {
-  const prepared = await prepareWorkspaceRequest(userMessage, history, mode);
+  const prepared = await prepareWorkspaceRequest(
+    userMessage,
+    history,
+    mode,
+    pendingClientCandidates,
+  );
 
   if (prepared.kind === "empty") {
     return {
@@ -177,6 +355,8 @@ export async function runWorkspaceAi(
       reply: prepared.reply,
       sources: prepared.sources,
       demo: false,
+      pendingClientCandidates: prepared.pendingClientCandidates,
+      needsClientSelection: prepared.needsClientSelection,
     };
   }
 
@@ -200,10 +380,16 @@ export async function* runWorkspaceAiStream(
   userMessage: string,
   history: WorkspaceChatTurn[] = [],
   mode: WorkspaceResponseMode = "brief",
+  pendingClientCandidates: ClientContext[] | null = null,
 ): AsyncGenerator<string | WorkspaceAiStreamMeta | WorkspaceAiStreamStatus> {
   yield { status: "context" };
 
-  const prepared = await prepareWorkspaceRequest(userMessage, history, mode);
+  const prepared = await prepareWorkspaceRequest(
+    userMessage,
+    history,
+    mode,
+    pendingClientCandidates,
+  );
 
   if (prepared.kind === "empty") {
     yield {
@@ -218,6 +404,8 @@ export async function* runWorkspaceAiStream(
     yield {
       sources: prepared.sources,
       demo: false,
+      pendingClientCandidates: prepared.pendingClientCandidates,
+      needsClientSelection: prepared.needsClientSelection,
     };
     yield prepared.reply;
     return;
@@ -246,6 +434,60 @@ export async function* runWorkspaceAiStream(
     };
     yield buildDemoReply(prepared.trimmed, prepared.context);
   }
+}
+
+async function tryDirectFormgridRecentAnswer(
+  message: string,
+): Promise<string | null> {
+  const days = parseRecentDaysFromQuery(message);
+  if (days === null) return null;
+  if (!/анкет|formgrid|заявк|новые\s+клиент/i.test(message)) return null;
+
+  const table = await getFormgridLeadsTable();
+  if (table.rows.length === 0) return null;
+
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - days);
+
+  const recent = listFormgridRowsSince(table.headers, table.rows, since);
+  if (recent.length === 0) {
+    return `За последние **${days}** дн. в анкете Formgrid новых заявок нет.`;
+  }
+
+  const lines = recent.map((row) =>
+    `- ${formatFormgridRowSummary(table.headers, row)}`,
+  );
+
+  return [
+    `За последние **${days}** дн. в анкете Formgrid — **${recent.length}** заявок:`,
+    ...lines,
+  ].join("\n");
+}
+
+async function tryDirectEmigrantStatusAnswer(
+  message: string,
+): Promise<string | null> {
+  const client = await findEmigrantDeskClientByQuery(message);
+  if (!client) return null;
+
+  const name = [client.firstName, client.lastName].filter(Boolean).join(" ");
+  const status = client.currentStatus?.trim() || "не указан";
+  const parts = [
+    `**${name || client.email}** в Emigrant Croatia Desk: статус дела — **${status}**.`,
+  ];
+
+  if (client.caseNumber) {
+    parts.push(`№ дела / паспорт в кабинете: ${client.caseNumber}.`);
+  }
+  if (client.statusUpdatedAt) {
+    parts.push(`Статус обновлён: ${client.statusUpdatedAt.slice(0, 10)}.`);
+  }
+  if (client.consulate) {
+    parts.push(`Консульство: ${client.consulate}.`);
+  }
+
+  return parts.join(" ");
 }
 
 async function tryDirectBookingAnswer(message: string): Promise<string | null> {
@@ -394,5 +636,12 @@ function buildDemoReply(
     return `В анкетах Formgrid **${context.meta.formgridRows}** строк. Откройте раздел «Эмиграция» или уточните, какую анкету разобрать.\n\n${modelHint}`;
   }
 
-  return `Контекст собран (Клиенты: ${context.meta.clientsTotal}, Formgrid: ${context.meta.formgridRows}), но ответ от AI не получен.\n\n${modelHint}`;
+  if (
+    lower.includes("статус") &&
+    (lower.includes("emigrant") || lower.includes("кабинет") || lower.includes("дело"))
+  ) {
+    return `В Emigrant Croatia Desk сейчас **${context.meta.emigrantDeskTotal}** клиентов со статусами дел. Уточните имя клиента.\n\n${modelHint}`;
+  }
+
+  return `Контекст собран (Клиенты: ${context.meta.clientsTotal}, Emigrant Desk: ${context.meta.emigrantDeskTotal}, Formgrid: ${context.meta.formgridRows}), но ответ от AI не получен.\n\n${modelHint}`;
 }

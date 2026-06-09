@@ -31,11 +31,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Title required" }, { status: 400 });
   }
 
-  const task = await createTask(body, session);
-  await notifyTaskCreated({
-    actorId: session.id,
-    actorName: session.name,
-    taskTitle: task.title,
-  });
-  return NextResponse.json({ task });
+  try {
+    const task = await createTask(body, session);
+    await notifyTaskCreated({
+      actorId: session.id,
+      actorName: session.name,
+      taskTitle: task.title,
+      assigneeIds: task.assignees.map((assignee) => assignee.id),
+    });
+    return NextResponse.json({ task });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create task";
+    if (message.includes("assignees")) {
+      return NextResponse.json(
+        {
+          error:
+            "В Supabase не хватает колонки assignees. Выполните миграцию 002_task_assignees.sql в SQL Editor.",
+        },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

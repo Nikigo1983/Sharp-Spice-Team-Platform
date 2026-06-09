@@ -1,3 +1,5 @@
+import { extractPersonNameTokens } from "@/lib/ai/name-matching";
+
 export type WorkspaceQueryIntent = {
   /** Букинг/адрес конкретного клиента — ответ из таблицы без AI */
   fastClientLookup: boolean;
@@ -5,18 +7,20 @@ export type WorkspaceQueryIntent = {
   /** Полный текст документов (медленно) */
   needsKbFullText: boolean;
   needsClients: boolean;
+  needsEmigrantDesk: boolean;
   needsFormgrid: boolean;
 };
 
 export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
   const lower = query.toLowerCase();
 
-  const hasClientName = /(?:клиент[а-я]*|у)\s+[а-яё\-]{3,}/iu.test(query);
+  const hasClientName =
+    extractPersonNameTokens(query).length > 0 ||
+    /(?:клиент[а-я]*|у)\s+[а-яё\-]{3,}/iu.test(query);
   const fastClientLookup =
     hasClientName &&
     (lower.includes("букинг") ||
       lower.includes("адрес") ||
-      lower.includes("паспорт") ||
       lower.includes("статус"));
 
   const needsFormgrid =
@@ -38,9 +42,22 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     lower.includes("drive") ||
     lower.includes("pdf");
 
+  const needsEmigrantDesk =
+    lower.includes("emigrant") ||
+    lower.includes("кабинет") ||
+    lower.includes("статус дела") ||
+    lower.includes("статус клиента") ||
+    lower.includes("текущий статус") ||
+    lower.includes("внж одобрен") ||
+    lower.includes("виза d") ||
+    lower.includes("дело №") ||
+    lower.includes("дело no") ||
+    (lower.includes("статус") && lower.includes("клиент"));
+
   const needsClients =
     !needsKb ||
     needsFormgrid ||
+    needsEmigrantDesk ||
     fastClientLookup ||
     lower.includes("клиент") ||
     lower.includes("букинг") ||
@@ -62,6 +79,7 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     needsKb: needsKb && !fastClientLookup,
     needsKbFullText,
     needsClients: needsClients || !needsFormgrid,
+    needsEmigrantDesk: needsEmigrantDesk || needsClients,
     needsFormgrid,
   };
 }

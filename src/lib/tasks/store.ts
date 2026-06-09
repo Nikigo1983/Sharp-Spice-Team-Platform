@@ -4,13 +4,21 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SessionUser } from "@/lib/auth/types";
+import { normalizeAssignees } from "./assignees";
+import {
+  canChangeTaskStatus,
+  canDeleteTask,
+  canEditTask,
+} from "./permissions";
 import type {
   CreateTaskInput,
   Task,
+  TaskAssignee,
   TaskStats,
   TaskStatus,
   UpdateTaskInput,
 } from "./types";
+import { listTeamMembers } from "@/lib/team/store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbTasks from "@/lib/supabase/tasks-repo";
 
@@ -20,12 +28,21 @@ type TaskStore = {
   tasks: Task[];
 };
 
+function normalizeTask(task: Task): Task {
+  return {
+    ...task,
+    assignees: normalizeAssignees(task.assignees),
+  };
+}
+
 async function readStore(): Promise<TaskStore> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
     const data = JSON.parse(raw) as TaskStore;
     if (!Array.isArray(data.tasks)) return { tasks: [] };
-    return data;
+    return {
+      tasks: data.tasks.map((task) => normalizeTask(task)),
+    };
   } catch {
     return { tasks: [] };
   }
@@ -45,6 +62,19 @@ function isOverdue(task: Task): boolean {
   if (task.status === "completed" || !task.dueDate) return false;
   return task.dueDate < todayIsoDate();
 }
+
+async function resolveAssignees(ids?: string[]): Promise<TaskAssignee[]> {
+  if (!ids?.length) return [];
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  const members = await listTeamMembers();
+  const byId = new Map(members.map((member) => [member.id, member]));
+  return uniqueIds
+    .map((id) => byId.get(id))
+    .filter((member): member is NonNullable<typeof member> => Boolean(member))
+    .map((member) => ({ id: member.id, name: member.name }));
+}
+
+export { canChangeTaskStatus, canDeleteTask, canEditTask };
 
 export async function listTasks(): Promise<Task[]> {
   if (isSupabaseConfigured()) {
@@ -82,6 +112,8 @@ export async function createTask(
   const now = new Date().toISOString();
   const status: TaskStatus = input.status ?? "new";
 
+  const assignees = await resolveAssignees(input.assigneeIds);
+
   const task: Task = {
     id: randomUUID(),
     title: input.title.trim(),
@@ -89,6 +121,7 @@ export async function createTask(
     status,
     createdByUserId: user.id,
     createdByName: user.name,
+    assignees,
     createdAt: now,
     dueDate: input.dueDate?.trim() || null,
     completedAt: status === "completed" ? now : null,
@@ -133,6 +166,11 @@ export async function updateTask(
     completedAt = null;
   }
 
+  const assignees =
+    input.assigneeIds !== undefined
+      ? await resolveAssignees(input.assigneeIds)
+      : current.assignees;
+
   const updated: Task = {
     ...current,
     title: input.title?.trim() ?? current.title,
@@ -145,6 +183,7 @@ export async function updateTask(
         ? input.dueDate?.trim() || null
         : current.dueDate,
     status: nextStatus,
+    assignees,
     completedAt,
     updatedAt: now,
   };
@@ -169,11 +208,13 @@ export async function updateTask(
 export async function setTaskStatus(
   id: string,
   status: TaskStatus,
+  user: SessionUser,
 ): Promise<Task | null> {
   const current = isSupabaseConfigured()
     ? await sbTasks.sbGetTask(id)
     : (await readStore()).tasks.find((t) => t.id === id) ?? null;
   if (!current) return null;
+  if (!canChangeTaskStatus(current, user)) return null;
   if (current.status === status) return current;
 
   const now = new Date().toISOString();
@@ -201,8 +242,11 @@ export async function setTaskStatus(
   return updated;
 }
 
-export async function completeTask(id: string): Promise<Task | null> {
-  return setTaskStatus(id, "completed");
+export async function completeTask(
+  id: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  return setTaskStatus(id, "completed", user);
 }
 
 export async function deleteTask(
@@ -243,10 +287,3 @@ export async function getTaskStats(): Promise<TaskStats> {
   };
 }
 
-export function canEditTask(task: Task, user: SessionUser): boolean {
-  return user.role === "owner" || task.createdByUserId === user.id;
-}
-
-export function canDeleteTask(task: Task, user: SessionUser): boolean {
-  return user.role === "owner" || task.createdByUserId === user.id;
-}

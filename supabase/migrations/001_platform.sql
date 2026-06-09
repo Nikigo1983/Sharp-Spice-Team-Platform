@@ -13,7 +13,8 @@ create table if not exists tasks (
   created_at timestamptz not null default now(),
   due_date date,
   completed_at timestamptz,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  assignees jsonb not null default '[]'::jsonb
 );
 
 create index if not exists tasks_updated_at_idx on tasks (updated_at desc);

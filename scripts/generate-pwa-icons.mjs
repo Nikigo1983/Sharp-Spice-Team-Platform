@@ -9,39 +9,43 @@ const src = path.join(root, "new_logo2.jpg");
 const outDir = path.join(root, "public", "icons");
 
 const ICON_BG = "#FFFFFF";
-/** Лёгкое скругление углов (~14%), как у стандартных иконок Windows 11 */
-const CORNER_RADIUS_RATIO = 0.14;
+/** Серый фон углов — совпадает с типичным фоном рабочего стола Windows */
+const DESKTOP_BG = "#9a9a9a";
+/** Скругление как у иконок Windows 11 (~20%) */
+const CORNER_RADIUS_RATIO = 0.2;
 
-function roundedRectMask(size) {
+function roundedRectSvg(size, fill) {
   const radius = Math.round(size * CORNER_RADIUS_RATIO);
   return Buffer.from(
     `<svg width="${size}" height="${size}">
-      <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="white"/>
+      <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="${fill}"/>
     </svg>`,
   );
 }
 
 async function buildRoundedSquareIcon(size) {
-  const logoSize = Math.round(size * 0.72);
+  const logoSize = Math.round(size * 0.58);
   const logo = await sharp(src)
     .resize(logoSize, logoSize, { fit: "contain", background: ICON_BG })
     .png()
     .toBuffer();
 
-  const filled = await sharp({
+  const grayBase = await sharp({
     create: {
       width: size,
       height: size,
       channels: 4,
-      background: ICON_BG,
+      background: DESKTOP_BG,
     },
   })
-    .composite([{ input: logo, gravity: "center" }])
     .png()
     .toBuffer();
 
-  return sharp(filled)
-    .composite([{ input: roundedRectMask(size), blend: "dest-in" }])
+  return sharp(grayBase)
+    .composite([
+      { input: roundedRectSvg(size, ICON_BG), blend: "over" },
+      { input: logo, gravity: "center" },
+    ])
     .png()
     .toBuffer();
 }
@@ -83,4 +87,16 @@ for (const [size, filename, builder] of tasks) {
   const buffer = await builder(size);
   await sharp(buffer).toFile(path.join(outDir, filename));
   console.log(`created ${filename}`);
+}
+
+const faviconTargets = [
+  path.join(root, "public", "favicon.jpg"),
+  path.join(root, "src", "app", "icon.jpg"),
+  path.join(root, "src", "app", "apple-icon.jpg"),
+];
+
+const faviconBuffer = await buildRoundedSquareIcon(192);
+for (const target of faviconTargets) {
+  await sharp(faviconBuffer).jpeg({ quality: 92 }).toFile(target);
+  console.log(`updated ${path.relative(root, target)}`);
 }

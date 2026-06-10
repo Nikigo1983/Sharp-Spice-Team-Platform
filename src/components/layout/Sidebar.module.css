@@ -1,9 +1,11 @@
 .sidebar {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   width: 260px;
   min-width: 260px;
   height: 100vh;
+  overflow: hidden;
   padding: 0.625rem 0.875rem 1.25rem;
   background: #2d3748;
   background: var(--gray-800);

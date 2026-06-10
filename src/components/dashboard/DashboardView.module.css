@@ -137,6 +137,32 @@
   box-shadow: var(--shadow-card), 0 0 24px var(--hero-glow);
 }
 
+.statLink {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.statCardClickable {
+  cursor: pointer;
+}
+
+.statLink:hover .statCardClickable {
+  border-color: var(--border-burgundy);
+  box-shadow: var(--shadow-card), 0 0 24px var(--hero-glow);
+}
+
+.statCardOverdue {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.statLink:hover .statCardOverdue {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: var(--shadow-card), 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
 .statIconWrap {
   display: flex;
   align-items: center;

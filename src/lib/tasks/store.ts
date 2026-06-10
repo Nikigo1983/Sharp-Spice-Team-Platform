@@ -5,6 +5,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SessionUser } from "@/lib/auth/types";
 import { normalizeAssignees } from "./assignees";
+import { isTaskOverdue } from "./overdue";
 import {
   canChangeTaskStatus,
   canDeleteTask,
@@ -52,15 +53,6 @@ async function writeStore(store: TaskStore): Promise<void> {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   store.tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
-}
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isOverdue(task: Task): boolean {
-  if (task.status === "completed" || !task.dueDate) return false;
-  return task.dueDate < todayIsoDate();
 }
 
 async function resolveAssignees(ids?: string[]): Promise<TaskAssignee[]> {
@@ -283,7 +275,7 @@ export async function getTaskStats(): Promise<TaskStats> {
     total: tasks.length,
     inProgress: tasks.filter((t) => t.status === "in_progress").length,
     completed: tasks.filter((t) => t.status === "completed").length,
-    overdue: tasks.filter((t) => isOverdue(t)).length,
+    overdue: tasks.filter((t) => isTaskOverdue(t)).length,
   };
 }
 

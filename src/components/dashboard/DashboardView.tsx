@@ -12,6 +12,7 @@ type StatItem = {
   value: string;
   hint: string;
   icon: string;
+  href?: string;
 };
 
 type QuickAction = {
@@ -78,30 +79,34 @@ export function DashboardView({
 }: DashboardViewProps) {
   const platformStats = buildPlatformStats(dashboardStats);
 
-  const taskStatItems = [
+  const taskStatItems: StatItem[] = [
     {
       label: "Всего задач",
       value: String(taskStats.total),
       hint: "в командном списке",
       icon: "fa-solid fa-list-check",
+      href: "/tasks",
     },
     {
       label: "В работе",
       value: String(taskStats.inProgress),
       hint: "активные",
       icon: "fa-solid fa-spinner",
+      href: "/tasks?status=in_progress",
     },
     {
       label: "Выполнено",
       value: String(taskStats.completed),
       hint: "закрытые",
       icon: "fa-solid fa-circle-check",
+      href: "/tasks?status=completed",
     },
     {
       label: "Просрочено",
       value: String(taskStats.overdue),
-      hint: "требуют внимания",
+      hint: taskStats.overdue > 0 ? "нажмите, чтобы открыть" : "требуют внимания",
       icon: "fa-solid fa-clock",
+      href: taskStats.overdue > 0 ? "/tasks?overdue=1" : "/tasks",
     },
   ];
 
@@ -133,9 +138,19 @@ export function DashboardView({
         </div>
         <div className={styles.statsGridWrap}>
           <ul className={styles.statsGrid}>
-            {taskStatItems.map((stat) => (
-              <li key={stat.label}>
-                <Card className={styles.statCard}>
+            {taskStatItems.map((stat) => {
+              const card = (
+                <Card
+                  className={[
+                    styles.statCard,
+                    stat.href ? styles.statCardClickable : "",
+                    stat.label === "Просрочено" && taskStats.overdue > 0
+                      ? styles.statCardOverdue
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
                   <div className={styles.statIconWrap} aria-hidden>
                     <i className={stat.icon} />
                   </div>
@@ -145,8 +160,20 @@ export function DashboardView({
                     <span className={styles.statHint}>{stat.hint}</span>
                   </div>
                 </Card>
-              </li>
-            ))}
+              );
+
+              return (
+                <li key={stat.label}>
+                  {stat.href ? (
+                    <Link href={stat.href} className={styles.statLink}>
+                      {card}
+                    </Link>
+                  ) : (
+                    card
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </section>

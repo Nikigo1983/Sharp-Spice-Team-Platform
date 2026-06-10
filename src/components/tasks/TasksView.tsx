@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { SessionUser } from "@/lib/auth/types";
+import { isTaskOverdue } from "@/lib/tasks/overdue";
+import { formatTaskDate } from "@/lib/tasks/format";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TaskCard } from "./TaskCard";
+import { TaskDetailModal } from "./TaskDetailModal";
 import { TaskForm, taskToFormValues, type TaskFormValues } from "./TaskForm";
 import { Toast, type ToastMessage } from "./Toast";
 import styles from "./TasksView.module.css";
@@ -20,6 +23,7 @@ type TasksViewProps = {
 };
 
 type StatusFilter = "all" | TaskStatus;
+type QuickFilter = "all" | "overdue" | "created_by_me" | "completed";
 
 export function TasksView({ user, teamMembers }: TasksViewProps) {
   const router = useRouter();
@@ -30,10 +34,13 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [authorFilter, setAuthorFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [viewTask, setViewTask] = useState<Task | null>(null);
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -57,6 +64,27 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     const created = searchParams.get("created");
     const completed = searchParams.get("completed");
     const deleted = searchParams.get("deleted");
+    const overdue = searchParams.get("overdue");
+    const status = searchParams.get("status");
+    const createdByMe = searchParams.get("created_by_me");
+    const taskId = searchParams.get("task");
+
+    if (overdue === "1") {
+      setQuickFilter("overdue");
+    } else if (createdByMe === "1") {
+      setQuickFilter("created_by_me");
+    } else if (status === "completed") {
+      setQuickFilter("completed");
+      setStatusFilter("completed");
+    } else if (status === "in_progress") {
+      setStatusFilter("in_progress");
+      setQuickFilter("all");
+    }
+
+    if (taskId) {
+      setFocusTaskId(taskId);
+    }
+
     if (created === "1") {
       setToast({ text: "Задача успешно создана." });
       router.replace("/tasks");
@@ -69,9 +97,43 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     }
   }, [searchParams, router]);
 
+  useEffect(() => {
+    if (!focusTaskId || tasks.length === 0) return;
+    const task = tasks.find((item) => item.id === focusTaskId);
+    if (task) {
+      setViewTask(task);
+      setFocusTaskId(null);
+    }
+  }, [focusTaskId, tasks]);
+
+  const overdueTasks = useMemo(
+    () => tasks.filter((task) => isTaskOverdue(task)),
+    [tasks],
+  );
+
+  const assignedByMeCompleted = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          task.createdByUserId === user.id &&
+          task.status === "completed" &&
+          !task.assignees.some((assignee) => assignee.id === user.id),
+      ),
+    [tasks, user.id],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tasks.filter((task) => {
+      if (quickFilter === "overdue" && !isTaskOverdue(task)) {
+        return false;
+      }
+      if (quickFilter === "created_by_me" && task.createdByUserId !== user.id) {
+        return false;
+      }
+      if (quickFilter === "completed" && task.status !== "completed") {
+        return false;
+      }
       if (statusFilter !== "all" && task.status !== statusFilter) {
         return false;
       }
@@ -90,7 +152,28 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         `${task.title} ${task.description} ${task.createdByName} ${assigneeNames}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [tasks, search, statusFilter, authorFilter, assigneeFilter]);
+  }, [tasks, search, statusFilter, authorFilter, assigneeFilter, quickFilter, user.id]);
+
+  function applyQuickFilter(filter: QuickFilter) {
+    setQuickFilter(filter);
+    if (filter === "completed") {
+      setStatusFilter("completed");
+    } else if (filter === "all") {
+      setStatusFilter("all");
+    } else if (filter !== "overdue") {
+      setStatusFilter("all");
+    }
+  }
+
+  function openTask(task: Task) {
+    setViewTask(task);
+    router.replace(`/tasks?task=${encodeURIComponent(task.id)}`, { scroll: false });
+  }
+
+  function closeTaskView() {
+    setViewTask(null);
+    router.replace("/tasks", { scroll: false });
+  }
 
   async function handleCreate(values: TaskFormValues) {
     const res = await fetch("/api/tasks", {
@@ -157,6 +240,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       setToast({ text: "Статус задачи обновлён." });
     }
 
+    setViewTask(null);
     await fetchTasks();
   }
 
@@ -170,6 +254,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       return;
     }
     setDeleteTask(null);
+    setViewTask(null);
     setToast({ text: "Задача удалена." });
     await fetchTasks();
   }
@@ -186,6 +271,96 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         }
       />
 
+      {!loading && overdueTasks.length > 0 ? (
+        <Card className={styles.overdueAlert}>
+          <div className={styles.overdueAlertHeader}>
+            <strong>
+              Просрочено задач: {overdueTasks.length}
+            </strong>
+            {quickFilter !== "overdue" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => applyQuickFilter("overdue")}
+              >
+                Показать только просроченные
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => applyQuickFilter("all")}
+              >
+                Показать все
+              </Button>
+            )}
+          </div>
+          <ul className={styles.overdueList}>
+            {overdueTasks.map((task) => (
+              <li key={task.id}>
+                <button
+                  type="button"
+                  className={styles.overdueLink}
+                  onClick={() => openTask(task)}
+                >
+                  <span className={styles.overdueTitle}>{task.title}</span>
+                  <span className={styles.overdueMeta}>
+                    Срок: {formatTaskDate(task.dueDate)} · {task.createdByName}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {!loading && assignedByMeCompleted.length > 0 ? (
+        <Card className={styles.completedAlert}>
+          <p className={styles.completedAlertText}>
+            Выполнено задач, которые вы поставили другим:{" "}
+            <strong>{assignedByMeCompleted.length}</strong>
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => applyQuickFilter("created_by_me")}
+          >
+            Показать назначенные мной
+          </Button>
+        </Card>
+      ) : null}
+
+      <div className={styles.quickFilters}>
+        <button
+          type="button"
+          className={[styles.quickFilter, quickFilter === "all" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("all")}
+        >
+          Все
+        </button>
+        <button
+          type="button"
+          className={[styles.quickFilter, quickFilter === "overdue" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("overdue")}
+        >
+          Просроченные{overdueTasks.length > 0 ? ` (${overdueTasks.length})` : ""}
+        </button>
+        <button
+          type="button"
+          className={[styles.quickFilter, quickFilter === "created_by_me" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("created_by_me")}
+        >
+          Назначенные мной
+        </button>
+        <button
+          type="button"
+          className={[styles.quickFilter, quickFilter === "completed" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("completed")}
+        >
+          Выполненные
+        </button>
+      </div>
+
       <div className={styles.toolbar}>
         <input
           type="search"
@@ -197,7 +372,15 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         <select
           className={styles.select}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          onChange={(e) => {
+            const value = e.target.value as StatusFilter;
+            setStatusFilter(value);
+            if (value === "completed") {
+              setQuickFilter("completed");
+            } else if (quickFilter === "completed") {
+              setQuickFilter("all");
+            }
+          }}
         >
           <option value="all">Все статусы</option>
           <option value="new">Новые</option>
@@ -245,6 +428,8 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
               <TaskCard
                 task={task}
                 user={user}
+                highlighted={viewTask?.id === task.id || isTaskOverdue(task)}
+                onOpen={openTask}
                 onStatusChange={(t, status) => void handleStatusChange(t, status)}
                 onEdit={setEditTask}
                 onDelete={setDeleteTask}
@@ -264,6 +449,17 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           />
         </Modal>
       )}
+
+      {viewTask ? (
+        <TaskDetailModal
+          task={viewTask}
+          user={user}
+          onClose={closeTaskView}
+          onEdit={setEditTask}
+          onDelete={setDeleteTask}
+          onStatusChange={(t, status) => void handleStatusChange(t, status)}
+        />
+      ) : null}
 
       {editTask && (
         <Modal title="Редактировать задачу" onClose={() => setEditTask(null)}>

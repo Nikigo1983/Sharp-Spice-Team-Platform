@@ -1,0 +1,201 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--gray-700);
+}
+
+.modalOverdue {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.12);
+}
+
+.modalCompleted {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.headerMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.titleDone {
+  text-decoration: line-through;
+  text-decoration-color: rgba(134, 239, 172, 0.65);
+  color: var(--gray-300);
+}
+
+.overdueTag,
+.completedTag {
+  align-self: flex-start;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.overdueTag {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.completedTag {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.completedNotice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: #bbf7d0;
+}
+
+.close {
+  border: none;
+  background: transparent;
+  color: var(--gray-400);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.close:hover {
+  color: var(--white);
+}
+
+.description {
+  margin: 0 0 1rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--gray-200);
+  white-space: pre-wrap;
+}
+
+.noDescription {
+  margin: 0 0 1rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  font-style: italic;
+}
+
+.textMuted {
+  color: var(--gray-400);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.875rem;
+  margin: 0 0 1.25rem;
+}
+
+.meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.meta dt {
+  font-family: Inter, sans-serif;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gray-500);
+}
+
+.meta dd {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-200);
+}
+
+.dueOverdue {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.statusActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.35);
+  border: 1px solid var(--border-soft);
+}
+
+.statusActionsLabel {
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.statusButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

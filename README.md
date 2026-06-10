@@ -34,8 +34,8 @@
 |------|------------|
 | `public/manifest.json` | Манифест приложения (название, цвета, иконки) |
 | `public/sw.js` | Service worker для установки и базового кэша |
-| `public/icons/icon-192x192.png` | Круглая иконка 192×192 |
-| `public/icons/icon-512x512.png` | Круглая иконка 512×512 |
+| `public/icons/icon-192x192.png` | Иконка 192×192 (белый фон, слегка скруглённые углы) |
+| `public/icons/icon-512x512.png` | Иконка 512×512 (белый фон, слегка скруглённые углы) |
 | `public/icons/icon-maskable-192x192.png` | Maskable-иконка 192×192 |
 | `public/icons/icon-maskable-512x512.png` | Maskable-иконка 512×512 |
 | `scripts/generate-pwa-icons.mjs` | Скрипт пересборки иконок (`npm run pwa:icons`) |

@@ -10,6 +10,7 @@ import {
   canChangeTaskStatus,
   canDeleteTask,
   canEditTask,
+  isTaskCreator,
 } from "./permissions";
 import type {
   CreateTaskInput,
@@ -66,7 +67,7 @@ async function resolveAssignees(ids?: string[]): Promise<TaskAssignee[]> {
     .map((member) => ({ id: member.id, name: member.name }));
 }
 
-export { canChangeTaskStatus, canDeleteTask, canEditTask };
+export { canChangeTaskStatus, canDeleteTask, canEditTask, isTaskCreator };
 
 export async function listTasks(): Promise<Task[]> {
   if (isSupabaseConfigured()) {
@@ -144,9 +145,7 @@ export async function updateTask(
     : (await readStore()).tasks.find((t) => t.id === id) ?? null;
   if (!current) return null;
 
-  const canEdit =
-    user.role === "owner" || current.createdByUserId === user.id;
-  if (!canEdit) return null;
+  if (!canEditTask(current, user)) return null;
 
   const nextStatus = input.status ?? current.status;
   const now = new Date().toISOString();
@@ -250,9 +249,7 @@ export async function deleteTask(
     : (await readStore()).tasks.find((t) => t.id === id) ?? null;
   if (!task) return false;
 
-  const canDelete =
-    user.role === "owner" || task.createdByUserId === user.id;
-  if (!canDelete) return false;
+  if (!canDeleteTask(task, user)) return false;
 
   if (isSupabaseConfigured()) {
     try {

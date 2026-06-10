@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { SessionUser } from "@/lib/auth/types";
+import { isTaskCreator } from "@/lib/tasks/permissions";
 import { isTaskOverdue } from "@/lib/tasks/overdue";
 import { formatTaskDate } from "@/lib/tasks/format";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
@@ -115,7 +116,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     () =>
       tasks.filter(
         (task) =>
-          task.createdByUserId === user.id &&
+          isTaskCreator(task, user) &&
           task.status === "completed" &&
           !task.assignees.some((assignee) => assignee.id === user.id),
       ),
@@ -128,7 +129,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       if (quickFilter === "overdue" && !isTaskOverdue(task)) {
         return false;
       }
-      if (quickFilter === "created_by_me" && task.createdByUserId !== user.id) {
+      if (quickFilter === "created_by_me" && !isTaskCreator(task, user)) {
         return false;
       }
       if (quickFilter === "completed" && task.status !== "completed") {
@@ -250,7 +251,13 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       method: "DELETE",
     });
     if (!res.ok) {
-      setToast({ text: "Не удалось удалить задачу", type: "error" });
+      setToast({
+        text:
+          res.status === 403
+            ? "Удалить задачу может только тот, кто её назначил, или владелец платформы."
+            : "Не удалось удалить задачу",
+        type: "error",
+      });
       return;
     }
     setDeleteTask(null);

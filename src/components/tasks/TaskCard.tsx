@@ -11,6 +11,7 @@ import {
   canDeleteTask,
   canEditTask,
   isTaskAssignee,
+  isTaskCreator,
 } from "@/lib/tasks/permissions";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TaskStatusBadge } from "./TaskStatusBadge";
@@ -37,7 +38,7 @@ export function TaskCard({
 }: TaskCardProps) {
   const isCompleted = task.status === "completed";
   const overdue = isTaskOverdue(task);
-  const createdByMe = task.createdByUserId === user.id;
+  const createdByMe = isTaskCreator(task, user);
   const assignedToMe = isTaskAssignee(task, user.id);
   const canEdit = canEditTask(task, user);
   const canDelete = canDeleteTask(task, user);

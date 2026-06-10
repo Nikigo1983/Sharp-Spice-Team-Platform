@@ -64,7 +64,7 @@ export function Sidebar({ role }: { role: UserRole }) {
     <aside className={styles.sidebar}>
       <Logo
         href="/dashboard"
-        size="lg"
+        size="sidebar"
         priority
         className={styles.brand}
       />

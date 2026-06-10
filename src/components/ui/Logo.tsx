@@ -12,7 +12,7 @@ const LOGO_DIMENSIONS: Record<
   sm: { width: 104, height: 32 },
   md: { width: 180, height: 44 },
   lg: { width: 220, height: 64 },
-  sidebar: { width: 236, height: 96 },
+  sidebar: { width: 252, height: 108 },
 };
 
 export type LogoProps = {

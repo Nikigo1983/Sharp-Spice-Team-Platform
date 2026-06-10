@@ -1,4 +1,4 @@
-const CACHE_NAME = "sharp-spice-pwa-v4";
+const CACHE_NAME = "sharp-spice-pwa-v5";
 
 const PRECACHE_URLS = [
   "/manifest.json",

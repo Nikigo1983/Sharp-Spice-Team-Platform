@@ -48,7 +48,7 @@ Chrome при установке на Windows кэширует иконку. П�
 | `public/icons/icon-512x512.png` | Иконка 512×512 (белый фон, слегка скруглённые углы) |
 | `public/icons/icon-maskable-192x192.png` | Maskable-иконка 192×192 |
 | `public/icons/icon-maskable-512x512.png` | Maskable-иконка 512×512 |
-| `scripts/generate-pwa-icons.mjs` | Скрипт пересборки иконок (`npm run pwa:icons`) |
+| `scripts/generate-pwa-icons.mjs` | Скрипт пересборки иконок из `logo_15.jpg` (`npm run pwa:icons`) |
 | `src/components/pwa/ServiceWorkerRegister.tsx` | Регистрация service worker в браузере |
 
 ## Разработка

@@ -1,6 +1,6 @@
-const CACHE_NAME = "sharp-spice-pwa-v3";
+const CACHE_NAME = "sharp-spice-pwa-v4";
+
 const PRECACHE_URLS = [
-  "/",
   "/manifest.json",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
@@ -11,7 +11,17 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.all(
+        PRECACHE_URLS.map(async (url) => {
+          try {
+            await cache.add(url);
+          } catch (error) {
+            console.warn("[sw] precache skipped:", url, error);
+          }
+        }),
+      );
+    }),
   );
   self.skipWaiting();
 });
@@ -42,7 +52,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/api/")) {
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/sw.js" ||
+    url.pathname === "/manifest.json"
+  ) {
+    return;
+  }
+
+  if (request.mode === "navigate") {
     return;
   }
 

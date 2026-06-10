@@ -1,8 +1,9 @@
 {
+  "id": "/",
   "name": "Sharp & Spice",
   "short_name": "Sharp & Spice",
   "description": "Corporate AI Workspace for Sharp & Spice",
-  "start_url": "/",
+  "start_url": "/login",
   "scope": "/",
   "display": "standalone",
   "background_color": "#1A202C",

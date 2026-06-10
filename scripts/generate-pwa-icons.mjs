@@ -9,49 +9,53 @@ const src = path.join(root, "logo_15.jpg");
 const outDir = path.join(root, "public", "icons");
 
 const ICON_BG = "#FFFFFF";
-/** Серый фон углов — совпадает с типичным фоном рабочего стола Windows */
-const DESKTOP_BG = "#9a9a9a";
-/** Скругление как у иконок Windows 11 (~20%) */
-const CORNER_RADIUS_RATIO = 0.2;
+/** Скругление как у иконок Windows 11 (~18%) */
+const CORNER_RADIUS_RATIO = 0.18;
 
-function roundedRectSvg(size, fill) {
+async function loadTrimmedLogo() {
+  return sharp(src).trim({ threshold: 12 }).png().toBuffer();
+}
+
+function roundedRectMask(size) {
   const radius = Math.round(size * CORNER_RADIUS_RATIO);
   return Buffer.from(
     `<svg width="${size}" height="${size}">
-      <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="${fill}"/>
+      <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="white"/>
     </svg>`,
   );
 }
 
 async function buildRoundedSquareIcon(size) {
-  const logoSize = Math.round(size * 0.58);
-  const logo = await sharp(src)
+  const trimmed = await loadTrimmedLogo();
+  const logoSize = Math.round(size * 0.86);
+
+  const logo = await sharp(trimmed)
     .resize(logoSize, logoSize, { fit: "contain", background: ICON_BG })
     .png()
     .toBuffer();
 
-  const grayBase = await sharp({
+  const filled = await sharp({
     create: {
       width: size,
       height: size,
       channels: 4,
-      background: DESKTOP_BG,
+      background: ICON_BG,
     },
   })
+    .composite([{ input: logo, gravity: "center" }])
     .png()
     .toBuffer();
 
-  return sharp(grayBase)
-    .composite([
-      { input: roundedRectSvg(size, ICON_BG), blend: "over" },
-      { input: logo, gravity: "center" },
-    ])
+  return sharp(filled)
+    .composite([{ input: roundedRectMask(size), blend: "dest-in" }])
+    .flatten({ background: ICON_BG })
     .png()
     .toBuffer();
 }
 
 async function buildMaskableIcon(size) {
-  const logoSize = Math.round(size * 0.56);
+  const trimmed = await loadTrimmedLogo();
+  const logoSize = Math.round(size * 0.72);
 
   return sharp({
     create: {
@@ -63,7 +67,7 @@ async function buildMaskableIcon(size) {
   })
     .composite([
       {
-        input: await sharp(src)
+        input: await sharp(trimmed)
           .resize(logoSize, logoSize, { fit: "contain", background: ICON_BG })
           .png()
           .toBuffer(),

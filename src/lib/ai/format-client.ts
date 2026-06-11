@@ -1,3 +1,7 @@
+import {
+  formatStatusForAiContext,
+  sanitizeCrmClientStatus,
+} from "@/lib/ai/client-status";
 import type { Client } from "@/lib/google-sheets/types";
 
 /** Поля клиента для AI — все колонки таблицы «Клиенты Хорватия». */
@@ -8,7 +12,7 @@ export function formatClientForAi(client: Client): string {
       ? `Паспорт: ${client.passportNumber}`
       : "",
     `Направление: ${client.direction}`,
-    `Статус: ${client.status}`,
+    `Статус: ${formatStatusForAiContext(sanitizeCrmClientStatus(client.status), "clients")}`,
     client.manager && client.manager !== "—"
       ? `Менеджер/референт: ${client.manager}`
       : "",
@@ -44,5 +48,9 @@ export function formatClientOneLiner(client: Client): string {
     client.bookingRange && client.bookingRange !== "—"
       ? client.bookingRange
       : "даты не указаны";
-  return `- ${client.name} | паспорт ${client.passportNumber ?? "—"} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${client.status}`;
+  const status = formatStatusForAiContext(
+    sanitizeCrmClientStatus(client.status),
+    "clients",
+  );
+  return `- ${client.name} | паспорт ${client.passportNumber ?? "—"} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
 }

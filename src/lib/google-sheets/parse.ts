@@ -1,3 +1,9 @@
+import {
+  deriveCroatiaExternalStatus,
+  formatStatusForAiContext,
+  logClientStatusDebug,
+  sanitizeCrmClientStatus,
+} from "@/lib/ai/client-status";
 import type { Client, ClientDocument, ClientNote, ClientSurvey } from "./types";
 
 const CLIENT_HEADER_MAP: Record<string, keyof Client> = {
@@ -72,7 +78,7 @@ export function parseClientRows(rows: string[][]): Client[] {
     country: row.country || "—",
     citizenship: row.citizenship || "—",
     direction: row.direction || "—",
-    status: row.status || "—",
+    status: sanitizeCrmClientStatus(row.status),
     manager: row.manager || "—",
     lastActivity: row.lastActivity || "—",
     createdAt: row.createdAt || "—",
@@ -180,23 +186,16 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     const notes = pickCell(row, idxNotes, COL.notes);
     const approvalRaw = pickCell(row, idxApproval, COL.approvalAt);
 
-    const notesLc = notes.toLowerCase();
-    const isApproved =
-      Boolean(approvalRaw) ||
-      /одобрено|одобрено.*внж|внж|временн(ое|ая) проживани|временное/i.test(notes);
+    const { status, derivation } = deriveCroatiaExternalStatus(notes, approvalRaw);
+    const familyName = family || "—";
 
-    const isWaiting = /лист ожидания|очеред/i.test(notesLc);
-
-    const isPrepDocs =
-      /дозапрос|допзапрос|пошлин|документ|букинг|запрос|проверка|отправл/i.test(
-        notesLc,
-      );
-
-    let status: Client["status"];
-    if (isApproved) status = "Завершён";
-    else if (isWaiting) status = "Консультация";
-    else if (isPrepDocs) status = "В работе";
-    else status = "Новый";
+    logClientStatusDebug({
+      name: familyName,
+      source: "Клиенты",
+      rawStatus: status,
+      finalStatus: formatStatusForAiContext(status, "clients"),
+      derivation,
+    });
 
     const createdAt = pickCell(row, idxDateSubmit, COL.submittedAt) || "—";
 
@@ -223,7 +222,7 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     return [
       {
         id: clientId,
-        name: family || "—",
+        name: familyName,
         phone: "—",
         email: "—",
         country,

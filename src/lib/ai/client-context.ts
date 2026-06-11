@@ -6,6 +6,12 @@ import {
   formatFormgridRowDetailed,
   getFormgridClientFields,
 } from "@/lib/google-sheets/formgrid-lookup";
+import {
+  FORMGRID_LEAD_STATUS,
+  formatStatusForAiContext,
+  logClientStatusDebug,
+  sanitizeCrmClientStatus,
+} from "@/lib/ai/client-status";
 import type { Client } from "@/lib/google-sheets/types";
 
 export type ClientDebugScanHit = {
@@ -89,6 +95,16 @@ export function crmClientToContext(
       : "",
   ].filter(Boolean);
 
+  const rawStatus = sanitizeCrmClientStatus(client.status);
+  const finalStatus = formatStatusForAiContext(rawStatus, "clients");
+
+  logClientStatusDebug({
+    name: client.name,
+    source: "Клиенты",
+    rawStatus,
+    finalStatus,
+  });
+
   return {
     source: "clients",
     sourceLabel: "Клиенты",
@@ -98,7 +114,7 @@ export function crmClientToContext(
     email: client.email !== "—" ? client.email : "",
     country: client.country !== "—" ? client.country : "",
     direction: client.direction !== "—" ? client.direction : "",
-    status: client.status !== "—" ? client.status : "",
+    status: finalStatus,
     manager: client.manager !== "—" ? client.manager : "",
     lastActivity: client.lastActivity !== "—" ? client.lastActivity : "",
     surveyData: surveyParts.join("\n"),
@@ -109,7 +125,8 @@ export function crmClientToContext(
       name: client.name,
       passport: client.passportNumber ?? "",
       manager: client.manager ?? "",
-      status: client.status ?? "",
+      status: rawStatus,
+      statusForAi: finalStatus,
       bookingAddress: client.bookingAddress ?? "",
       bookingRange: client.bookingRange ?? "",
     },
@@ -141,7 +158,7 @@ export function formgridRowToContext(
     email: fields.email,
     country: "",
     direction: "Хорватия",
-    status: "Новая заявка",
+    status: FORMGRID_LEAD_STATUS,
     manager: "",
     lastActivity: fields.submittedAt,
     surveyData: formatFormgridRowDetailed(headers, row),

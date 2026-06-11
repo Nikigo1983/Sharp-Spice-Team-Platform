@@ -3,7 +3,8 @@ import type { DashboardStats } from "@/lib/dashboard/stats";
 import type { SessionUser } from "@/lib/auth/types";
 import type { TaskStats } from "@/lib/tasks/types";
 import type { TeamChatMessage } from "@/lib/team-chat/types";
-import { formatTeamChatDateTime } from "@/lib/team-chat/format";
+import { DashboardTeamMessages } from "@/components/dashboard/DashboardTeamMessages";
+import { TeamOnlineBar } from "@/components/presence/TeamOnlineBar";
 import { Card } from "@/components/ui/Card";
 import styles from "./DashboardView.module.css";
 
@@ -189,26 +190,8 @@ export function DashboardView({
           </Link>
         </div>
 
-        <ul className={styles.chatList}>
-          {teamRecentMessages.slice(0, 5).map((message) => (
-            <li key={message.id} className={styles.chatItem}>
-              <Card className={styles.chatCard}>
-                <div className={styles.chatMetaRow}>
-                  <span className={styles.chatAuthor}>{message.user_name}</span>
-                  <span className={styles.chatTime}>
-                    {formatTeamChatDateTime(message.created_at)}
-                  </span>
-                </div>
-                <p className={styles.chatText}>{message.message_text}</p>
-              </Card>
-            </li>
-          ))}
-          {teamRecentMessages.length === 0 ? (
-            <li className={styles.chatEmpty}>
-              <p>Пока нет сообщений.</p>
-            </li>
-          ) : null}
-        </ul>
+        <TeamOnlineBar />
+        <DashboardTeamMessages messages={teamRecentMessages} />
       </section>
 
       <section className={styles.section} aria-labelledby="stats-heading">

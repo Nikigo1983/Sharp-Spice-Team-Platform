@@ -305,6 +305,12 @@
   color: var(--white);
 }
 
+.chatAuthorRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .chatTime {
   font-family: Inter, sans-serif;
   font-size: 0.8125rem;

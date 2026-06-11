@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
+import { runFormgridNotificationWatchIfDue } from "@/lib/notifications/formgrid-watch";
 import {
   getUnreadCount,
   listNotificationsForUser,
@@ -15,7 +16,8 @@ export async function GET(request: Request) {
   const since = searchParams.get("since") ?? undefined;
   const limit = Number(searchParams.get("limit") ?? "50");
 
-  const [notifications, unread] = await Promise.all([
+  const [, notifications, unread] = await Promise.all([
+    runFormgridNotificationWatchIfDue(),
     listNotificationsForUser(session.id, { limit, since }),
     getUnreadCount(session.id),
   ]);

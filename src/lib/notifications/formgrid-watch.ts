@@ -2,13 +2,20 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { LeadsTableResult } from "@/lib/google-sheets/formgrid-leads";
+import {
+  getFormgridLeadsTable,
+  type LeadsTableResult,
+} from "@/lib/google-sheets/formgrid-leads";
 import { notifyConsultationAssigned, notifyNewClient } from "./emit";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAppState, setAppState } from "@/lib/supabase/app-state";
 
 const STORE_PATH = path.join(process.cwd(), ".data", "formgrid-known-leads.json");
+const LAST_RUN_PATH = path.join(process.cwd(), ".data", "formgrid-watch-last-run.json");
 const APP_STATE_KEY = "formgrid_known_leads";
+const LAST_RUN_STATE_KEY = "formgrid_watch_last_run";
+/** Не чаще одного раза в 30 с при опросе /api/notifications. */
+const WATCH_THROTTLE_MS = 30_000;
 
 type KnownLeadsStore = {
   initialized: boolean;
@@ -94,6 +101,43 @@ function isConsultationLead(headers: string[], row: string[]): boolean {
   if (statusIdx < 0) return false;
   const value = row[statusIdx]?.toLowerCase() ?? "";
   return value.includes("консультац");
+}
+
+async function getLastWatchRunAt(): Promise<number> {
+  if (isSupabaseConfigured()) {
+    return (await getAppState<number>(LAST_RUN_STATE_KEY)) ?? 0;
+  }
+  try {
+    const raw = await readFile(LAST_RUN_PATH, "utf8");
+    const data = JSON.parse(raw) as { at?: number };
+    return typeof data.at === "number" ? data.at : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function setLastWatchRunAt(at: number): Promise<void> {
+  if (isSupabaseConfigured()) {
+    await setAppState(LAST_RUN_STATE_KEY, at);
+    return;
+  }
+  await mkdir(path.dirname(LAST_RUN_PATH), { recursive: true });
+  await writeFile(LAST_RUN_PATH, JSON.stringify({ at }, null, 2), "utf8");
+}
+
+/** Фоновая проверка новых анкет (колокольчик), с троттлингом. */
+export async function runFormgridNotificationWatchIfDue(): Promise<void> {
+  const lastRun = await getLastWatchRunAt();
+  const now = Date.now();
+  if (now - lastRun < WATCH_THROTTLE_MS) return;
+
+  try {
+    const table = await getFormgridLeadsTable();
+    await processFormgridLeadsForNotifications(table);
+    await setLastWatchRunAt(now);
+  } catch (error) {
+    console.error("[formgrid-watch] background watch failed", error);
+  }
 }
 
 export async function processFormgridLeadsForNotifications(

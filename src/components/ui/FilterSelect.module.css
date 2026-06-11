@@ -1,0 +1,146 @@
+.wrap {
+  position: relative;
+  min-width: 168px;
+}
+
+.trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--gray-600);
+  background: linear-gradient(
+    180deg,
+    rgba(45, 55, 72, 0.95) 0%,
+    rgba(26, 32, 44, 0.98) 100%
+  );
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.trigger:hover {
+  border-color: rgba(145, 13, 13, 0.55);
+}
+
+.triggerOpen,
+.trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent-burgundy);
+  box-shadow: 0 0 0 3px rgba(145, 13, 13, 0.18);
+}
+
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--gray-400);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.trigger:hover .chevron,
+.triggerOpen .chevron {
+  color: var(--accent-burgundy-light);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--gray-800);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  max-height: 280px;
+  overflow-y: auto;
+  animation: menuIn 0.16s ease;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gray-100);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.option:hover {
+  background: rgba(145, 13, 13, 0.14);
+  color: var(--white);
+}
+
+.optionSelected {
+  background: rgba(145, 13, 13, 0.22);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.optionLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  flex-shrink: 0;
+  color: var(--accent-burgundy-light);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    width: 100%;
+    min-width: 0;
+  }
+}

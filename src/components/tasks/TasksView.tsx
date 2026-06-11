@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useNotificationsOptional } from "@/components/notifications/notification-context";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { FilterSelect } from "@/components/ui/FilterSelect";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { SessionUser } from "@/lib/auth/types";
 import { isTaskCreator } from "@/lib/tasks/permissions";
@@ -131,6 +132,38 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         (item) => item.type === "task_completed" && !item.is_read,
       ),
     [notificationsCtx?.notifications],
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "all", label: "Все статусы" },
+      { value: "new", label: "Новые" },
+      { value: "in_progress", label: "В работе" },
+      { value: "completed", label: "Выполненные" },
+    ],
+    [],
+  );
+
+  const authorOptions = useMemo(
+    () => [
+      { value: "all", label: "Все авторы" },
+      ...teamMembers.map((member) => ({
+        value: member.id,
+        label: member.name,
+      })),
+    ],
+    [teamMembers],
+  );
+
+  const assigneeOptions = useMemo(
+    () => [
+      { value: "all", label: "Все исполнители" },
+      ...teamMembers.map((member) => ({
+        value: member.id,
+        label: member.name,
+      })),
+    ],
+    [teamMembers],
   );
 
   const filtered = useMemo(() => {
@@ -431,48 +464,34 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          className={styles.select}
-          value={statusFilter}
-          onChange={(e) => {
-            const value = e.target.value as StatusFilter;
-            setStatusFilter(value);
-            if (value === "completed") {
-              setQuickFilter("completed");
-            } else if (quickFilter === "completed") {
-              setQuickFilter("all");
-            }
-          }}
-        >
-          <option value="all">Все статусы</option>
-          <option value="new">Новые</option>
-          <option value="in_progress">В работе</option>
-          <option value="completed">Выполненные</option>
-        </select>
-        <select
-          className={styles.select}
-          value={authorFilter}
-          onChange={(e) => setAuthorFilter(e.target.value)}
-        >
-          <option value="all">Все авторы</option>
-          {teamMembers.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.select}
-          value={assigneeFilter}
-          onChange={(e) => setAssigneeFilter(e.target.value)}
-        >
-          <option value="all">Все исполнители</option>
-          {teamMembers.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
-          ))}
-        </select>
+        <div className={styles.filters}>
+          <FilterSelect
+            ariaLabel="Фильтр по статусу"
+            value={statusFilter}
+            options={statusOptions}
+            onChange={(value) => {
+              const next = value as StatusFilter;
+              setStatusFilter(next);
+              if (next === "completed") {
+                setQuickFilter("completed");
+              } else if (quickFilter === "completed") {
+                setQuickFilter("all");
+              }
+            }}
+          />
+          <FilterSelect
+            ariaLabel="Фильтр по автору"
+            value={authorFilter}
+            options={authorOptions}
+            onChange={setAuthorFilter}
+          />
+          <FilterSelect
+            ariaLabel="Фильтр по исполнителю"
+            value={assigneeFilter}
+            options={assigneeOptions}
+            onChange={setAssigneeFilter}
+          />
+        </div>
       </div>
 
       {loading ? (

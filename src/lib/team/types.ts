@@ -5,4 +5,6 @@ export type TeamMember = {
   email: string;
   name: string;
   role: UserRole;
+  isOnline?: boolean;
+  lastActiveAt?: string | null;
 };

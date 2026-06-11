@@ -66,6 +66,12 @@
   color: var(--white);
 }
 
+.messageUserRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .messageTime {
   margin-top: 0.25rem;
   font-family: Inter, sans-serif;

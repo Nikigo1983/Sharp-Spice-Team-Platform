@@ -33,6 +33,12 @@
   color: var(--white);
 }
 
+.nameRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .meta {
   margin: 0;
   font-family: Inter, sans-serif;

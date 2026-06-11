@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
 import { ROLE_LABELS, type SessionUser } from "@/lib/auth/types";
+import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type { TeamMember } from "@/lib/team/types";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,33 +17,41 @@ type TeamViewProps = {
 
 export function TeamView({ user }: TeamViewProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [onlineCount, setOnlineCount] = useState(0);
   const [canDelete, setCanDelete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const fetchMembers = useCallback(async () => {
-    setLoading(true);
+  const fetchMembers = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetch("/api/team");
       if (!res.ok) throw new Error("fetch failed");
       const data = (await res.json()) as {
         members?: TeamMember[];
         canDelete?: boolean;
+        onlineCount?: number;
       };
       setMembers(data.members ?? []);
+      setOnlineCount(data.onlineCount ?? 0);
       setCanDelete(Boolean(data.canDelete));
     } catch {
       setMembers([]);
+      setOnlineCount(0);
       setCanDelete(false);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void fetchMembers();
+    const interval = setInterval(() => {
+      void fetchMembers({ silent: true });
+    }, PRESENCE_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, [fetchMembers]);
 
   const confirmDelete = async () => {
@@ -70,7 +80,11 @@ export function TeamView({ user }: TeamViewProps) {
     <div className={styles.wrap}>
       <SectionHeader
         title="Team"
-        subtitle="Список пользователей платформы"
+        subtitle={
+          onlineCount > 0
+            ? `Список пользователей платформы · ${onlineCount} в сети`
+            : "Список пользователей платформы"
+        }
       />
 
       {canDelete ? (
@@ -98,7 +112,10 @@ export function TeamView({ user }: TeamViewProps) {
                 <Card className={styles.row}>
                   <div className={styles.main}>
                     <p className={styles.name}>
-                      {member.name}
+                      <span className={styles.nameRow}>
+                        {member.name}
+                        <OnlineIndicator online={Boolean(member.isOnline)} />
+                      </span>
                       {isSelf ? (
                         <span className={styles.you}> (это вы)</span>
                       ) : null}

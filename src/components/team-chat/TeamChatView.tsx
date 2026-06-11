@@ -8,7 +8,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
 import type { SessionUser } from "@/lib/auth/types";
+import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
+import type { PresenceMap } from "@/lib/presence/types";
 import type { TeamChatMessage } from "@/lib/team-chat/types";
 import { formatTeamChatDateTime } from "@/lib/team-chat/format";
 import { Button } from "@/components/ui/Button";
@@ -51,6 +54,7 @@ export function TeamChatView({
     null,
   );
   const [clearOpen, setClearOpen] = useState(false);
+  const [presence, setPresence] = useState<PresenceMap>({});
 
   const isOwner = user.role === "owner";
 
@@ -80,6 +84,25 @@ export function TeamChatView({
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
+  }, []);
+
+  useEffect(() => {
+    async function fetchPresence() {
+      try {
+        const res = await fetch("/api/presence");
+        if (!res.ok) return;
+        const data = (await res.json()) as { presence?: PresenceMap };
+        setPresence(data.presence ?? {});
+      } catch {
+        // ignore
+      }
+    }
+
+    void fetchPresence();
+    const interval = setInterval(() => {
+      void fetchPresence();
+    }, PRESENCE_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   async function fetchInitialOrReset() {
@@ -332,7 +355,14 @@ export function TeamChatView({
             <div key={message.id} className={styles.messageWrap}>
               <Card className={styles.messageCard}>
                 <div className={styles.messageTop}>
-                  <div className={styles.messageUser}>{message.user_name}</div>
+                  <div className={styles.messageUser}>
+                    <span className={styles.messageUserRow}>
+                      {message.user_name}
+                      <OnlineIndicator
+                        online={Boolean(presence[message.user_id]?.isOnline)}
+                      />
+                    </span>
+                  </div>
                   {showDelete ? (
                     <Button
                       type="button"

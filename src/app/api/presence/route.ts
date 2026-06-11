@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getPresenceMap } from "@/lib/presence/store";
-import { canDeleteTeamMembers } from "@/lib/team/permissions";
 import { listTeamMembers } from "@/lib/team/store";
 
 export async function GET() {
@@ -12,16 +11,8 @@ export async function GET() {
 
   const members = await listTeamMembers();
   const presence = await getPresenceMap(members.map((member) => member.id));
-  const enrichedMembers = members.map((member) => ({
-    ...member,
-    isOnline: presence[member.id]?.isOnline ?? false,
-    lastActiveAt: presence[member.id]?.lastActiveAt || null,
-  }));
-  const onlineCount = enrichedMembers.filter((member) => member.isOnline).length;
+  const onlineCount = Object.values(presence).filter((entry) => entry.isOnline)
+    .length;
 
-  return NextResponse.json({
-    members: enrichedMembers,
-    canDelete: canDeleteTeamMembers(session),
-    onlineCount,
-  });
+  return NextResponse.json({ presence, onlineCount });
 }

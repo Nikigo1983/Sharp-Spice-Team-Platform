@@ -151,6 +151,48 @@ export function formgridRowToContext(
   };
 }
 
+export type ClientCandidateScenario =
+  | "multiple"
+  | "weak"
+  | "not_found"
+  | "structured";
+
+export function formatClientCandidatesForAi(
+  clients: ResolvedClientContext[],
+  scenario: ClientCandidateScenario = "multiple",
+): string {
+  const intro =
+    scenario === "not_found"
+      ? "Точного совпадения в таблицах нет. Ближайшие кандидаты (fuzzy-поиск):"
+      : scenario === "weak"
+        ? "Точных совпадений нет. Похожие записи:"
+        : scenario === "structured"
+          ? "Результаты структурированного поиска (по фильтрам запроса):"
+          : "Найдено несколько подходящих клиентов:";
+
+  const lines = clients.map((client, index) => {
+    const mergedNote =
+      isMergedClientContext(client) && client.parts.length > 1
+        ? ` (объединено: ${client.parts.map((p) => p.sourceLabel).join(" + ")})`
+        : "";
+    const details = [
+      `${index + 1}. **${client.name}** — ${client.sourceLabel}, строка ${client.rowIndex}${mergedNote}`,
+      client.score ? `   релевантность: ${client.score}` : "",
+      client.email ? `   email: ${client.email}` : "",
+      client.phone ? `   телефон: ${client.phone}` : "",
+      client.status ? `   статус: ${client.status}` : "",
+      client.manager ? `   менеджер: ${client.manager}` : "",
+      client.country ? `   страна: ${client.country}` : "",
+      client.matchedFields.length > 0
+        ? `   совпадения: ${client.matchedFields.slice(0, 4).join("; ")}`
+        : "",
+    ].filter(Boolean);
+    return details.join("\n");
+  });
+
+  return `${intro}\n\n${lines.join("\n\n")}`;
+}
+
 export function formatClientContextBlock(client: ResolvedClientContext): string {
   if (isMergedClientContext(client)) {
     return formatMergedClientContextBlock(client);

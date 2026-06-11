@@ -11,22 +11,23 @@ import {
   type WorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
 import {
+  formatClientCandidatesForAi,
   formatClientContextBlock,
-  formatClientNotFoundReply,
   formatDebugClientReply,
   formatMergedClientContextBlock,
-  formatMultipleClientsReply,
-  formatWeakMatchesReply,
   isMergedClientContext,
+  type ClientCandidateScenario,
   type ClientContext,
   type ResolvedClientContext,
 } from "@/lib/ai/client-context";
+import { formatClientSearchIntentForAi } from "@/lib/ai/client-search-intent";
 import {
   buildClientSearchQuery,
   groupDuplicateClients,
   isDebugClientCommand,
   lookupAllClientMatches,
-  lookupClientsInSheets,
+  lookupClientsWithAiSearch,
+  lookupFuzzyClientCandidates,
   parseDebugClientQuery,
   scanRawRowsForTokens,
 } from "@/lib/ai/client-lookup";
@@ -97,8 +98,17 @@ function buildContextBlock(
   context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
   intent: ReturnType<typeof detectWorkspaceIntent>,
   clientContext: ResolvedClientContext | null,
+  clientCandidates: ResolvedClientContext[] | null = null,
+  candidateScenario: ClientCandidateScenario | null = null,
+  clientSearchIntentNote: string | null = null,
 ): string {
   const contextParts: string[] = [];
+
+  if (clientSearchIntentNote) {
+    contextParts.push(
+      `=== CLIENT SEARCH INTENT ===\n${clientSearchIntentNote}`,
+    );
+  }
 
   if (clientContext) {
     const header = isMergedClientContext(clientContext)
@@ -107,13 +117,27 @@ function buildContextBlock(
     contextParts.push(`${header}\n${formatClientContextBlock(clientContext)}`);
   }
 
+  if (clientCandidates && clientCandidates.length > 0 && candidateScenario) {
+    const header =
+      candidateScenario === "not_found"
+        ? "=== CLIENT CANDIDATES (fuzzy, точного совпадения нет) ==="
+        : candidateScenario === "weak"
+          ? "=== CLIENT CANDIDATES (похожие совпадения) ==="
+          : candidateScenario === "structured"
+            ? "=== CLIENT CANDIDATES (структурированный поиск) ==="
+            : "=== CLIENT CANDIDATES (найдено несколько) ===";
+    contextParts.push(
+      `${header}\n${formatClientCandidatesForAi(clientCandidates, candidateScenario)}`,
+    );
+  }
+
   if (intent.needsKb) {
     contextParts.push(`=== KNOWLEDGE BASE ===\n${context.knowledgeBaseText}`);
   }
   if (intent.needsEmigrantDrive) {
     contextParts.push(`=== ЭМИГРАНТ (документы клиентов) ===\n${context.emigrantDriveText}`);
   }
-  if (intent.needsClients && !clientContext) {
+  if (intent.needsClients && !clientContext && !clientCandidates?.length) {
     contextParts.push(`=== КЛИЕНТЫ ===\n${context.clientsText}`);
   }
   if (intent.needsEmigrantDesk) {
@@ -142,13 +166,19 @@ function buildChatMessages(
   const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)")
     ? "\n\nДля запросов про папку ЭМИГРАНТ используй блок «ЭМИГРАНТ (документы клиентов)». Отсутствие в таблицах Клиенты не означает отсутствие в Drive."
     : "";
+  const candidatesNote = contextBlock.includes("CLIENT CANDIDATES")
+    ? "\n\nЕсли в CLIENT CANDIDATES есть варианты — объясни различия и помоги выбрать. При fuzzy-поиске начни с «Точного совпадения не найдено. Возможно, вы имели в виду…». При структурированном поиске — кратко резюмируй список и выдели самых релевантных. Не отвечай сухим «клиент не найден», если кандидаты есть."
+    : "";
+  const structuredNote = contextBlock.includes("CLIENT SEARCH INTENT")
+    ? "\n\nПоиск выполнен по распознанным фильтрам (CLIENT SEARCH INTENT). Отвечай по найденным CLIENT CONTEXT / CLIENT CANDIDATES."
+    : "";
 
   return [
     { role: "system", content: buildWorkspaceSystemPrompt(mode) },
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}${candidatesNote}${structuredNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -159,36 +189,6 @@ function getCompletionOptions(): ChatCompletionOptions {
     temperature: workspaceConfig.temperature,
     maxTokens: workspaceConfig.maxTokens,
     model: workspaceConfig.model,
-  };
-}
-
-function workspaceAiDebugHooks(stream: boolean): ChatCompletionOptions["debugHooks"] {
-  return {
-    onBeforeRequest: ({ model, temperature, max_tokens }) => {
-      console.log("==================================");
-      console.log("AI WORKSPACE DEBUG");
-      console.log(`Model: ${model}`);
-      console.log(`Temperature: ${temperature}`);
-      console.log(`Max Tokens: ${max_tokens ?? "—"}`);
-      console.log(`Stream: ${stream}`);
-      console.log("==================================");
-    },
-    onResponse: ({ model }) => {
-      console.log("==================================");
-      console.log("AI RESPONSE RECEIVED");
-      console.log(`Model used: ${model}`);
-      console.log("==================================");
-    },
-  };
-}
-
-function withWorkspaceDebug(
-  options: ChatCompletionOptions,
-  stream: boolean,
-): ChatCompletionOptions {
-  return {
-    ...options,
-    debugHooks: workspaceAiDebugHooks(stream),
   };
 }
 
@@ -213,6 +213,8 @@ async function prepareWorkspaceRequest(
       context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
       trimmed: string;
       clientContext: ResolvedClientContext | null;
+      pendingClientCandidates?: ClientContext[];
+      needsClientSelection?: boolean;
     }
 > {
   const trimmed = userMessage.trim();
@@ -261,45 +263,41 @@ async function prepareWorkspaceRequest(
 
   const intent = detectWorkspaceIntent(trimmed);
   let clientContext: ResolvedClientContext | null = null;
+  let clientCandidates: ResolvedClientContext[] | null = null;
+  let candidateScenario: ClientCandidateScenario | null = null;
+  let pendingForUi: ClientContext[] | undefined;
+  let needsClientSelection = false;
+  let clientSearchIntentNote: string | null = null;
 
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
   } else {
-    const clientLookup = await lookupClientsInSheets(trimmed);
-    if (
-      clientLookup.kind === "not_found" &&
-      !intent.emigrantDrivePrimary &&
-      !intent.needsEmigrantDrive &&
-      !intent.needsKb
-    ) {
-      return {
-        kind: "direct",
-        reply: formatClientNotFoundReply(),
-        sources: ["Клиенты", "Новые клиенты"],
-        pendingClientCandidates: [],
-      };
-    }
-    if (clientLookup.kind === "multiple") {
-      return {
-        kind: "direct",
-        reply: formatMultipleClientsReply(clientLookup.clients),
-        sources: ["Клиенты", "Новые клиенты"],
-        pendingClientCandidates: clientLookup.pendingParts,
-        needsClientSelection: true,
-      };
-    }
-    if (clientLookup.kind === "weak") {
-      return {
-        kind: "direct",
-        reply: formatWeakMatchesReply(clientLookup.clients),
-        sources: ["Клиенты", "Новые клиенты"],
-        pendingClientCandidates: clientLookup.clients.flatMap((client) =>
-          isMergedClientContext(client) ? client.parts : [client],
-        ),
-      };
-    }
+    const aiSearch = await lookupClientsWithAiSearch(trimmed);
+    const clientLookup = aiSearch.lookup;
+    clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
+
     if (clientLookup.kind === "single") {
       clientContext = clientLookup.client;
+    } else if (clientLookup.kind === "multiple") {
+      clientCandidates = clientLookup.clients;
+      candidateScenario = aiSearch.usedStructuredSearch ? "structured" : "multiple";
+      pendingForUi = clientLookup.pendingParts;
+      needsClientSelection = clientLookup.clients.length > 1;
+    } else if (clientLookup.kind === "weak") {
+      clientCandidates = clientLookup.clients;
+      candidateScenario = "weak";
+      pendingForUi = clientLookup.clients.flatMap((client) =>
+        isMergedClientContext(client) ? client.parts : [client],
+      );
+    } else if (clientLookup.kind === "not_found") {
+      const fuzzy = await lookupFuzzyClientCandidates(trimmed, 10);
+      if (fuzzy.length > 0) {
+        clientCandidates = fuzzy;
+        candidateScenario = "not_found";
+        pendingForUi = fuzzy.flatMap((client) =>
+          isMergedClientContext(client) ? client.parts : [client],
+        );
+      }
     }
   }
 
@@ -365,8 +363,17 @@ async function prepareWorkspaceRequest(
           (source) => !/^Клиенты|^Анкеты Formgrid/i.test(source),
         ),
       ]
-    : buildSources(context, intent);
-  const contextBlock = buildContextBlock(context, intent, clientContext);
+    : clientCandidates?.length
+      ? [`Клиенты (кандидаты: ${clientCandidates.length})`, ...buildSources(context, intent)]
+      : buildSources(context, intent);
+  const contextBlock = buildContextBlock(
+    context,
+    intent,
+    clientContext,
+    clientCandidates,
+    candidateScenario,
+    clientSearchIntentNote,
+  );
   const messages = buildChatMessages(trimmed, contextBlock, history, mode);
 
   return {
@@ -376,6 +383,8 @@ async function prepareWorkspaceRequest(
     context,
     trimmed,
     clientContext,
+    pendingClientCandidates: pendingForUi,
+    needsClientSelection,
   };
 }
 
@@ -411,20 +420,27 @@ export async function runWorkspaceAi(
     };
   }
 
-  const completionOptions = withWorkspaceDebug(getCompletionOptions(), false);
   const aiReply = await createChatCompletion(
     prepared.messages,
-    completionOptions,
+    getCompletionOptions(),
   );
 
   if (aiReply) {
-    return { reply: aiReply, sources: prepared.sources, demo: false };
+    return {
+      reply: aiReply,
+      sources: prepared.sources,
+      demo: false,
+      pendingClientCandidates: prepared.pendingClientCandidates,
+      needsClientSelection: prepared.needsClientSelection,
+    };
   }
 
   return {
     reply: buildDemoReply(prepared.trimmed, prepared.context),
     sources: prepared.sources,
     demo: true,
+    pendingClientCandidates: prepared.pendingClientCandidates,
+    needsClientSelection: prepared.needsClientSelection,
   };
 }
 
@@ -466,16 +482,16 @@ export async function* runWorkspaceAiStream(
   yield {
     sources: prepared.sources,
     demo: false,
+    pendingClientCandidates: prepared.pendingClientCandidates,
+    needsClientSelection: prepared.needsClientSelection,
   };
 
   yield { status: "generating" };
 
-  const completionOptions = withWorkspaceDebug(getCompletionOptions(), true);
-
   let hasContent = false;
   for await (const chunk of streamChatCompletion(
     prepared.messages,
-    completionOptions,
+    getCompletionOptions(),
   )) {
     hasContent = true;
     yield chunk;

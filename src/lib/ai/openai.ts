@@ -6,21 +6,10 @@ export type ChatMessage = {
   content: string;
 };
 
-export type ChatCompletionDebugHooks = {
-  onBeforeRequest?: (payload: {
-    model: string;
-    temperature: number;
-    max_tokens?: number;
-    stream: boolean;
-  }) => void;
-  onResponse?: (payload: { model: string }) => void;
-};
-
 export type ChatCompletionOptions = {
   temperature?: number;
   maxTokens?: number;
   model?: string;
-  debugHooks?: ChatCompletionDebugHooks;
 };
 
 export { getAiRuntimeConfig, isAiConfigured, getAiSetupHint } from "@/lib/ai/config";
@@ -101,39 +90,6 @@ function buildRequestBody(
   return JSON.stringify(payload);
 }
 
-function parseRequestPayload(body: string): {
-  model: string;
-  temperature: number;
-  max_tokens?: number;
-  stream: boolean;
-} {
-  const payload = JSON.parse(body) as {
-    model: string;
-    temperature: number;
-    max_tokens?: number;
-    stream: boolean;
-  };
-  return payload;
-}
-
-function emitBeforeRequest(
-  body: string,
-  options?: ChatCompletionOptions,
-): void {
-  options?.debugHooks?.onBeforeRequest?.(parseRequestPayload(body));
-}
-
-function emitResponseModel(
-  model: string | undefined,
-  config: NonNullable<ReturnType<typeof getAiRuntimeConfig>>,
-  options: ChatCompletionOptions | undefined,
-): void {
-  if (!options?.debugHooks?.onResponse) return;
-  options.debugHooks.onResponse({
-    model: model?.trim() || resolveModel(config, options),
-  });
-}
-
 export async function createChatCompletion(
   messages: ChatMessage[],
   options?: ChatCompletionOptions,
@@ -143,7 +99,6 @@ export async function createChatCompletion(
 
   const headers = buildRequestHeaders(config);
   const body = buildRequestBody(config, messages, options, false);
-  emitBeforeRequest(body, options);
   const maxAttempts = 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -156,10 +111,8 @@ export async function createChatCompletion(
 
       if (response.ok) {
         const data = (await response.json()) as {
-          model?: string;
           choices?: { message?: { content?: string } }[];
         };
-        emitResponseModel(data.model, config, options);
         return data.choices?.[0]?.message?.content?.trim() ?? null;
       }
 
@@ -213,7 +166,6 @@ export async function* streamChatCompletion(
 
   const headers = buildRequestHeaders(config);
   const body = buildRequestBody(config, messages, options, true);
-  emitBeforeRequest(body, options);
 
   const response = await fetchWithTlsFallback(config.completionsUrl, {
     method: "POST",
@@ -234,7 +186,6 @@ export async function* streamChatCompletion(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let responseModelLogged = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -252,20 +203,11 @@ export async function* streamChatCompletion(
       if (!data || data === "[DONE]") continue;
 
       try {
-        const payload = JSON.parse(data) as { model?: string };
-        if (!responseModelLogged && payload.model) {
-          emitResponseModel(payload.model, config, options);
-          responseModelLogged = true;
-        }
-        const delta = extractStreamDelta(payload);
+        const delta = extractStreamDelta(JSON.parse(data));
         if (delta) yield delta;
       } catch {
         // ignore malformed chunks
       }
     }
-  }
-
-  if (!responseModelLogged) {
-    emitResponseModel(undefined, config, options);
   }
 }

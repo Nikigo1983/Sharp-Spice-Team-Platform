@@ -77,7 +77,7 @@ function lastAssistantListedCandidates(
   for (let i = history.length - 1; i >= 0; i--) {
     const turn = history[i];
     if (turn.role !== "assistant") continue;
-    return /найдено несколько клиентов|уточните,\s*кого выбрать/i.test(
+    return /найдено несколько клиентов|уточните,\s*кого выбрать|точного совпадения не найдено|возможно,\s*вы имели в виду|похожие записи|выберите клиента/i.test(
       turn.content,
     );
   }

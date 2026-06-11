@@ -3,6 +3,7 @@ import "server-only";
 import {
   crmClientToContext,
   formgridRowToContext,
+  isMergedClientContext,
   type ClientContext,
   type ClientDebugScanHit,
   type MergedClientContext,
@@ -22,11 +23,20 @@ import {
   extractLeadingCandidateName,
   scoreClientRecord,
   SCORE_AUTO,
+  SCORE_FUZZY,
   SCORE_MIN,
   SCORE_STRONG,
   SCORE_VIABLE,
   type SearchField,
 } from "@/lib/ai/client-search";
+import {
+  analyzeClientSearchIntent,
+  EMPTY_CLIENT_SEARCH_INTENT,
+  hasStructuredSearchFilters,
+  isClientContextualQuery,
+  type ClientSearchIntent,
+} from "@/lib/ai/client-search-intent";
+import { executeStructuredClientSearch } from "@/lib/ai/structured-client-search";
 import { isEmigrantDrivePrimaryQuery } from "@/lib/ai/query-intent";
 import {
   getRecentClientSearches,
@@ -270,12 +280,76 @@ export function isClientRelatedQuery(query: string): boolean {
 export function needsClientLookup(query: string): boolean {
   if (isDebugClientCommand(query)) return true;
   if (isEmigrantDrivePrimaryQuery(query)) return false;
+  if (isClientContextualQuery(query)) return true;
 
   const searchQuery = buildClientSearchQuery(query);
   if (searchQuery.tokens.length > 0) return true;
   if (searchQuery.email) return true;
   if (searchQuery.phone) return true;
   return false;
+}
+
+export type ClientAiSearchResult = {
+  lookup: ClientLookupResult;
+  intent: ClientSearchIntent;
+  usedStructuredSearch: boolean;
+};
+
+function structuredToLookupResult(
+  clients: ResolvedClientContext[],
+  query: string,
+  candidates: ClientContext[],
+): ClientLookupResult {
+  if (clients.length === 0) {
+    return { kind: "not_found", query };
+  }
+  if (clients.length === 1) {
+    return { kind: "single", client: clients[0], query };
+  }
+  return {
+    kind: "multiple",
+    clients,
+    pendingParts: candidates.slice(0, 12),
+    query,
+  };
+}
+
+/** AI Client Search: анализ запроса → структурированный поиск по всем колонкам. */
+export async function lookupClientsWithAiSearch(
+  query: string,
+): Promise<ClientAiSearchResult> {
+  const trimmed = query.trim();
+
+  if (!needsClientLookup(trimmed)) {
+    return {
+      lookup: { kind: "skip" },
+      intent: EMPTY_CLIENT_SEARCH_INTENT,
+      usedStructuredSearch: false,
+    };
+  }
+
+  const intent = await analyzeClientSearchIntent(trimmed);
+  const useStructured =
+    hasStructuredSearchFilters(intent) || isClientContextualQuery(trimmed);
+
+  if (useStructured) {
+    const structuredMatches = await executeStructuredClientSearch(intent, trimmed, 10);
+    if (structuredMatches.length > 0) {
+      const rawCandidates = structuredMatches.flatMap((client) =>
+        isMergedClientContext(client) ? client.parts : [client],
+      );
+      const lookup = structuredToLookupResult(
+        structuredMatches,
+        trimmed,
+        rawCandidates,
+      );
+      logSearchResult(trimmed, lookup, rawCandidates);
+      return { lookup, intent, usedStructuredSearch: true };
+    }
+  }
+
+  const lookup = await lookupClientsInSheets(trimmed);
+  return { lookup, intent, usedStructuredSearch: false };
 }
 
 async function collectClientMatches(
@@ -374,6 +448,22 @@ export async function lookupAllClientMatches(
   query: string,
 ): Promise<ClientContext[]> {
   return collectClientMatches(query.trim(), SCORE_MIN);
+}
+
+/** Fuzzy-поиск: топ кандидатов для AI, когда точного match нет. */
+export async function lookupFuzzyClientCandidates(
+  query: string,
+  limit = 10,
+): Promise<ResolvedClientContext[]> {
+  const trimmed = query.trim();
+  if (!needsClientLookup(trimmed)) return [];
+
+  const searchQueryText = isDebugClientCommand(trimmed)
+    ? parseDebugClientQuery(trimmed) || trimmed
+    : trimmed;
+
+  const matches = await collectClientMatches(searchQueryText, SCORE_FUZZY);
+  return deduplicateToResolved(matches).slice(0, limit);
 }
 
 export async function lookupClientsInSheets(

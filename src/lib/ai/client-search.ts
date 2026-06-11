@@ -570,5 +570,7 @@ export function scoreClientRecord(
 export const SCORE_AUTO = 80;
 export const SCORE_STRONG = 65;
 export const SCORE_VIABLE = 35;
+/** Fuzzy-поиск для передачи кандидатов в AI. */
+export const SCORE_FUZZY = 15;
 /** Минимальный порог — ниже не показываем. */
 export const SCORE_MIN = SCORE_VIABLE;

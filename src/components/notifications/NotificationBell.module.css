@@ -150,6 +150,30 @@
   opacity: 0.82;
 }
 
+.itemSuccess {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.itemSuccess:hover {
+  border-color: rgba(74, 222, 128, 0.85);
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.itemSuccessUnread {
+  border-color: rgba(74, 222, 128, 0.75);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25), 0 0 20px rgba(34, 197, 94, 0.18);
+}
+
+.itemTypeSuccess {
+  color: #86efac;
+}
+
+.itemMessageSuccess {
+  color: #bbf7d0;
+  font-weight: 600;
+}
+
 .itemTop {
   display: flex;
   align-items: center;

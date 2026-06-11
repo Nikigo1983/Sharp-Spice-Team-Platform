@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useNotificationsOptional } from "@/components/notifications/notification-context";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -29,6 +30,7 @@ type QuickFilter = "all" | "overdue" | "created_by_me" | "completed";
 export function TasksView({ user, teamMembers }: TasksViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const notificationsCtx = useNotificationsOptional();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -121,6 +123,14 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           !task.assignees.some((assignee) => assignee.id === user.id),
       ),
     [tasks, user.id],
+  );
+
+  const unreadCompletedNotifications = useMemo(
+    () =>
+      (notificationsCtx?.notifications ?? []).filter(
+        (item) => item.type === "task_completed" && !item.is_read,
+      ),
+    [notificationsCtx?.notifications],
   );
 
   const filtered = useMemo(() => {
@@ -277,6 +287,51 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           </Button>
         }
       />
+
+      {unreadCompletedNotifications.length > 0 ? (
+        <Card className={styles.completedNotificationAlert}>
+          <div className={styles.completedNotificationHeader}>
+            <strong>
+              ✅ Выполнено задач, которые вы назначили:{" "}
+              {unreadCompletedNotifications.length}
+            </strong>
+            <Button
+              type="button"
+              variant="ghost"
+              className={styles.completedNotificationDismiss}
+              onClick={() => {
+                void (async () => {
+                  for (const item of unreadCompletedNotifications) {
+                    await notificationsCtx?.markRead(item.id);
+                  }
+                })();
+              }}
+            >
+              Прочитать все
+            </Button>
+          </div>
+          <ul className={styles.completedNotificationList}>
+            {unreadCompletedNotifications.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={styles.completedNotificationItem}
+                  onClick={() => void notificationsCtx?.markRead(item.id)}
+                >
+                  <span className={styles.completedNotificationTitle}>
+                    {item.message}
+                  </span>
+                  {item.author_name ? (
+                    <span className={styles.completedNotificationMeta}>
+                      Исполнитель: {item.author_name}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {!loading && overdueTasks.length > 0 ? (
         <Card className={styles.overdueAlert}>

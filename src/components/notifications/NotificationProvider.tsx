@@ -20,7 +20,7 @@ import {
   NotificationContext,
   type NotificationItem,
 } from "./notification-context";
-import { NOTIFICATION_TYPE_ICONS } from "./constants";
+import { NOTIFICATION_TYPE_ICONS, isSuccessNotification } from "./constants";
 import styles from "./NotificationToastStack.module.css";
 
 const TOAST_AUTO_DISMISS_MS = 12_000;
@@ -63,6 +63,7 @@ function ToastCard({
   onOpen: () => void;
 }) {
   const href = getNotificationHref(notification.type);
+  const isSuccess = isSuccessNotification(notification.type);
 
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, TOAST_AUTO_DISMISS_MS);
@@ -72,7 +73,9 @@ function ToastCard({
   return (
     <button
       type="button"
-      className={styles.toast}
+      className={[styles.toast, isSuccess ? styles.toastSuccess : ""]
+        .filter(Boolean)
+        .join(" ")}
       role="status"
       onClick={() => {
         onOpen();

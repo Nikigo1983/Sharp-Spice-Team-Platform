@@ -6,6 +6,7 @@ const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
   "team_chat",
   "task_new",
   "task_status",
+  "task_completed",
   "client_new",
   "consultation_assigned",
 ]);
@@ -22,6 +23,7 @@ export function getNotificationSection(
       return "team-chat";
     case "task_new":
     case "task_status":
+    case "task_completed":
       return "tasks";
     case "client_new":
     case "consultation_assigned":
@@ -37,6 +39,7 @@ export function getNotificationHref(type: NotificationType): string | null {
       return "/team-chat";
     case "task_new":
     case "task_status":
+    case "task_completed":
       return "/tasks";
     case "client_new":
     case "consultation_assigned":

@@ -65,6 +65,56 @@ export async function notifyTaskStatusChanged(params: {
   );
 }
 
+export async function notifyTaskCompleted(params: {
+  actorId: string;
+  actorName: string;
+  taskTitle: string;
+  creatorUserId: string;
+}) {
+  if (params.creatorUserId === params.actorId) return;
+
+  await createNotificationsForTeam(
+    {
+      type: "task_completed",
+      title: "Задача выполнена",
+      author_name: params.actorName,
+      message: params.taskTitle,
+    },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: [params.creatorUserId],
+    },
+  );
+}
+
+export async function notifyTaskStatusUpdate(params: {
+  actorId: string;
+  actorName: string;
+  taskTitle: string;
+  previousStatus: TaskStatus;
+  newStatus: TaskStatus;
+  creatorUserId: string;
+}) {
+  if (params.newStatus === params.previousStatus) return;
+
+  if (params.newStatus === "completed") {
+    await notifyTaskCompleted({
+      actorId: params.actorId,
+      actorName: params.actorName,
+      taskTitle: params.taskTitle,
+      creatorUserId: params.creatorUserId,
+    });
+    return;
+  }
+
+  await notifyTaskStatusChanged({
+    actorId: params.actorId,
+    actorName: params.actorName,
+    taskTitle: params.taskTitle,
+    status: params.newStatus,
+  });
+}
+
 export async function notifyNewClient(params: {
   clientName: string;
   source?: string;

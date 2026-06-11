@@ -64,6 +64,75 @@
   color: #fca5a5;
 }
 
+.completedNotificationAlert {
+  padding: 1rem 1.125rem;
+  border-color: rgba(74, 222, 128, 0.8);
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 28px rgba(34, 197, 94, 0.22);
+}
+
+.completedNotificationHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-family: Inter, sans-serif;
+  color: #dcfce7;
+}
+
+.completedNotificationDismiss {
+  color: #bbf7d0 !important;
+}
+
+.completedNotificationList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.completedNotificationItem {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(74, 222, 128, 0.55);
+  background: rgba(20, 83, 45, 0.45);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.completedNotificationItem:hover {
+  background: rgba(34, 197, 94, 0.35);
+  border-color: #4ade80;
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.25);
+}
+
+.completedNotificationTitle {
+  font-family: Sora, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #f0fdf4;
+}
+
+.completedNotificationMeta {
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: #bbf7d0;
+}
+
 .completedAlert {
   display: flex;
   flex-wrap: wrap;

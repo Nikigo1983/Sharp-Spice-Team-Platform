@@ -7,6 +7,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<
   team_chat: "Сообщение в чате",
   task_new: "Новая задача",
   task_status: "Статус задачи",
+  task_completed: "Задача выполнена",
   client_new: "Новый клиент",
   consultation_assigned: "Консультация",
   system: "Системное",
@@ -17,10 +18,15 @@ export const NOTIFICATION_TYPE_ICONS: Record<NotificationItem["type"], string> =
     team_chat: "💬",
     task_new: "📋",
     task_status: "📋",
+    task_completed: "✅",
     client_new: "👤",
     consultation_assigned: "📅",
     system: "🔔",
   };
+
+export function isSuccessNotification(type: NotificationItem["type"]): boolean {
+  return type === "task_completed";
+}
 
 export function formatNotificationTime(iso: string): string {
   const datePart = iso.slice(0, 10);

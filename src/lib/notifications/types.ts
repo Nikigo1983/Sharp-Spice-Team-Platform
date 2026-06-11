@@ -2,6 +2,7 @@ export const NOTIFICATION_TYPES = [
   "team_chat",
   "task_new",
   "task_status",
+  "task_completed",
   "client_new",
   "consultation_assigned",
   "system",

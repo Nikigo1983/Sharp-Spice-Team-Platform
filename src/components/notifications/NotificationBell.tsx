@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   NOTIFICATION_TYPE_ICONS,
   NOTIFICATION_TYPE_LABELS,
   formatNotificationTime,
+  isSuccessNotification,
 } from "./constants";
+import { getNotificationHref } from "@/lib/notifications/navigation";
 import { useNotificationsOptional } from "./notification-context";
 import styles from "./NotificationBell.module.css";
 
 export function NotificationBell() {
+  const router = useRouter();
   const ctx = useNotificationsOptional();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -38,9 +42,20 @@ export function NotificationBell() {
   const notifications = ctx?.notifications ?? [];
   const loading = ctx?.loading ?? false;
 
-  async function handleOpenItem(id: string, isRead: boolean) {
-    if (!ctx || isRead) return;
-    await ctx.markRead(id);
+  async function handleOpenItem(
+    id: string,
+    isRead: boolean,
+    type: (typeof notifications)[number]["type"],
+  ) {
+    if (!ctx) return;
+    if (!isRead) {
+      await ctx.markRead(id);
+    }
+    const href = getNotificationHref(type);
+    if (href) {
+      setOpen(false);
+      router.push(href);
+    }
   }
 
   return (
@@ -87,18 +102,33 @@ export function NotificationBell() {
             ) : notifications.length === 0 ? (
               <p className={styles.empty}>Пока нет уведомлений.</p>
             ) : (
-              notifications.map((item) => (
+              notifications.map((item) => {
+                const isSuccess = isSuccessNotification(item.type);
+                return (
                 <button
                   key={item.id}
                   type="button"
                   className={[
                     styles.item,
                     item.is_read ? styles.itemRead : styles.itemUnread,
-                  ].join(" ")}
-                  onClick={() => void handleOpenItem(item.id, item.is_read)}
+                    isSuccess ? styles.itemSuccess : "",
+                    isSuccess && !item.is_read ? styles.itemSuccessUnread : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() =>
+                    void handleOpenItem(item.id, item.is_read, item.type)
+                  }
                 >
                   <div className={styles.itemTop}>
-                    <span className={styles.itemType}>
+                    <span
+                      className={[
+                        styles.itemType,
+                        isSuccess ? styles.itemTypeSuccess : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
                       {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
                       {NOTIFICATION_TYPE_LABELS[item.type]}
                     </span>
@@ -110,9 +140,19 @@ export function NotificationBell() {
                   {item.author_name ? (
                     <p className={styles.itemAuthor}>{item.author_name}</p>
                   ) : null}
-                  <p className={styles.itemMessage}>{item.message}</p>
+                  <p
+                    className={[
+                      styles.itemMessage,
+                      isSuccess ? styles.itemMessageSuccess : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {item.message}
+                  </p>
                 </button>
-              ))
+              );
+              })
             )}
           </div>
         </div>

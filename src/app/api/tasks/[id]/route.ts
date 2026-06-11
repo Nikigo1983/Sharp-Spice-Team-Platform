@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { notifyTaskStatusChanged } from "@/lib/notifications/emit";
+import { notifyTaskStatusUpdate } from "@/lib/notifications/emit";
 import { completeTask, deleteTask, getTask, setTaskStatus, updateTask } from "@/lib/tasks/store";
 import type { TaskStatus, UpdateTaskInput } from "@/lib/tasks/types";
 import { TASK_STATUSES } from "@/lib/tasks/types";
@@ -41,11 +41,13 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   if (body.status && existing && body.status !== existing.status) {
-    await notifyTaskStatusChanged({
+    await notifyTaskStatusUpdate({
       actorId: session.id,
       actorName: session.name,
       taskTitle: task.title,
-      status: task.status,
+      previousStatus: existing.status,
+      newStatus: task.status,
+      creatorUserId: existing.createdByUserId,
     });
   }
 
@@ -99,11 +101,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (existing && existing.status !== body.status) {
-      await notifyTaskStatusChanged({
+      await notifyTaskStatusUpdate({
         actorId: session.id,
         actorName: session.name,
         taskTitle: task.title,
-        status: task.status,
+        previousStatus: existing.status,
+        newStatus: task.status,
+        creatorUserId: existing.createdByUserId,
       });
     }
 
@@ -122,11 +126,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     if (existing && existing.status !== "completed") {
-      await notifyTaskStatusChanged({
+      await notifyTaskStatusUpdate({
         actorId: session.id,
         actorName: session.name,
         taskTitle: task.title,
-        status: "completed",
+        previousStatus: existing.status,
+        newStatus: "completed",
+        creatorUserId: existing.createdByUserId,
       });
     }
 

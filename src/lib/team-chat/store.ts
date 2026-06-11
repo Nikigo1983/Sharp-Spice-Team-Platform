@@ -4,7 +4,20 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SessionUser } from "@/lib/auth/types";
-import type { CreateTeamChatMessageInput, TeamChatMessage } from "./types";
+import {
+  getTeamChatAudioApiPath,
+  MAX_TEAM_CHAT_AUDIO_BYTES,
+  normalizeTeamChatAudioContentType,
+  saveTeamChatAudio,
+  deleteTeamChatAudio,
+  clearAllTeamChatAudio,
+} from "./audio-storage";
+import type {
+  CreateTeamChatMessageInput,
+  CreateVoiceTeamChatMessageInput,
+  TeamChatMessage,
+} from "./types";
+import { VOICE_MESSAGE_SEARCH_LABEL } from "./types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbChat from "@/lib/supabase/team-chat-repo";
 
@@ -37,12 +50,25 @@ async function loadMessagesStore(): Promise<TeamChatStore> {
   return readMessagesStore();
 }
 
+function normalizeTeamChatMessage(message: TeamChatMessage): TeamChatMessage {
+  return {
+    ...message,
+    message_type: message.message_type === "voice" ? "voice" : "text",
+    audio_url: message.audio_url ?? null,
+    audio_duration_ms: message.audio_duration_ms ?? null,
+  };
+}
+
 async function readMessagesStore(): Promise<TeamChatStore> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
     const data = JSON.parse(raw) as TeamChatStore;
     if (!Array.isArray(data.messages)) return { messages: [] };
-    return data;
+    return {
+      messages: data.messages.map((message) =>
+        normalizeTeamChatMessage(message),
+      ),
+    };
   } catch {
     return { messages: [] };
   }
@@ -100,7 +126,10 @@ export async function listTeamChatMessages(opts: {
   if (opts.q?.trim()) {
     const q = opts.q.trim().toLowerCase();
     filtered = filtered.filter((message) => {
-      const text = message.message_text.toLowerCase();
+      const text =
+        message.message_type === "voice"
+          ? VOICE_MESSAGE_SEARCH_LABEL
+          : message.message_text.toLowerCase();
       const name = message.user_name.toLowerCase();
       return text.includes(q) || name.includes(q);
     });
@@ -163,7 +192,10 @@ export async function createTeamChatMessage(
     user_id: user.id,
     user_name: user.name,
     user_role: user.role,
+    message_type: "text",
     message_text: text,
+    audio_url: null,
+    audio_duration_ms: null,
     created_at: now,
     updated_at: now,
   };
@@ -173,6 +205,57 @@ export async function createTeamChatMessage(
       return await sbChat.sbInsertTeamChatMessage(message);
     } catch (error) {
       console.error("[team-chat] supabase create", error);
+      throw error;
+    }
+  }
+
+  const store = await readMessagesStore();
+  store.messages.push(message);
+  await writeMessagesStore(store);
+  return message;
+}
+
+export async function createVoiceTeamChatMessage(
+  input: CreateVoiceTeamChatMessageInput,
+  user: SessionUser,
+  audioBuffer: Buffer,
+  contentType: string,
+): Promise<TeamChatMessage> {
+  const normalizedType = normalizeTeamChatAudioContentType(contentType);
+  if (!normalizedType) {
+    throw new Error("Invalid audio type");
+  }
+  if (!audioBuffer.length) {
+    throw new Error("Empty audio");
+  }
+  if (audioBuffer.length > MAX_TEAM_CHAT_AUDIO_BYTES) {
+    throw new Error("Audio too large");
+  }
+
+  const durationMs = Math.max(0, Math.round(input.durationMs));
+  const now = new Date().toISOString();
+  const message: TeamChatMessage = {
+    id: randomUUID(),
+    user_id: user.id,
+    user_name: user.name,
+    user_role: user.role,
+    message_type: "voice",
+    message_text: "",
+    audio_url: null,
+    audio_duration_ms: durationMs,
+    created_at: now,
+    updated_at: now,
+  };
+  message.audio_url = getTeamChatAudioApiPath(message.id);
+
+  await saveTeamChatAudio(message.id, audioBuffer, normalizedType);
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbChat.sbInsertTeamChatMessage(message);
+    } catch (error) {
+      await deleteTeamChatAudio(message.id);
+      console.error("[team-chat] supabase create voice", error);
       throw error;
     }
   }
@@ -201,7 +284,11 @@ export async function deleteTeamChatMessage(
 
   if (isSupabaseConfigured()) {
     try {
-      return await sbChat.sbDeleteTeamChatMessage(id);
+      const ok = await sbChat.sbDeleteTeamChatMessage(id);
+      if (ok && message.message_type === "voice") {
+        await deleteTeamChatAudio(id);
+      }
+      return ok;
     } catch (error) {
       console.error("[team-chat] supabase delete", error);
       return false;
@@ -211,6 +298,9 @@ export async function deleteTeamChatMessage(
   const fileStore = await readMessagesStore();
   fileStore.messages = fileStore.messages.filter((item) => item.id !== id);
   await writeMessagesStore(fileStore);
+  if (message.message_type === "voice") {
+    await deleteTeamChatAudio(id);
+  }
   return true;
 }
 
@@ -220,6 +310,7 @@ export async function clearTeamChat(user: SessionUser): Promise<boolean> {
   if (isSupabaseConfigured()) {
     try {
       await sbChat.sbClearTeamChatMessages();
+      await clearAllTeamChatAudio();
       return true;
     } catch (error) {
       console.error("[team-chat] supabase clear", error);
@@ -230,6 +321,7 @@ export async function clearTeamChat(user: SessionUser): Promise<boolean> {
   const store = await readMessagesStore();
   store.messages = [];
   await writeMessagesStore(store);
+  await clearAllTeamChatAudio();
   return true;
 }
 

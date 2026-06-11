@@ -7,9 +7,13 @@ export async function notifyTeamChatMessage(params: {
   senderId: string;
   senderName: string;
   text: string;
+  isVoice?: boolean;
 }) {
-  const preview =
-    params.text.length > 200 ? `${params.text.slice(0, 200)}…` : params.text;
+  const preview = params.isVoice
+    ? "🎤 Голосовое сообщение"
+    : params.text.length > 200
+      ? `${params.text.slice(0, 200)}…`
+      : params.text;
 
   await createNotificationsForTeam(
     {

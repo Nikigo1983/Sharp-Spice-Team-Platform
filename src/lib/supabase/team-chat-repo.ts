@@ -8,7 +8,10 @@ type MessageRow = {
   user_id: string;
   user_name: string;
   user_role: string;
+  message_type?: string | null;
   message_text: string;
+  audio_url?: string | null;
+  audio_duration_ms?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -19,7 +22,13 @@ function mapMessage(row: MessageRow): TeamChatMessage {
     user_id: row.user_id,
     user_name: row.user_name,
     user_role: row.user_role as TeamChatMessage["user_role"],
+    message_type:
+      row.message_type === "voice"
+        ? "voice"
+        : "text",
     message_text: row.message_text,
+    audio_url: row.audio_url ?? null,
+    audio_duration_ms: row.audio_duration_ms ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -45,7 +54,10 @@ export async function sbInsertTeamChatMessage(
       user_id: message.user_id,
       user_name: message.user_name,
       user_role: message.user_role,
+      message_type: message.message_type,
       message_text: message.message_text,
+      audio_url: message.audio_url,
+      audio_duration_ms: message.audio_duration_ms,
       created_at: message.created_at,
       updated_at: message.updated_at,
     })

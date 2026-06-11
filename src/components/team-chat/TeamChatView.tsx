@@ -13,8 +13,10 @@ import type { SessionUser } from "@/lib/auth/types";
 import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type { PresenceMap } from "@/lib/presence/types";
 import type { TeamChatMessage } from "@/lib/team-chat/types";
-import { formatTeamChatDateTime } from "@/lib/team-chat/format";
+import { formatTeamChatDateTime, formatVoiceDuration } from "@/lib/team-chat/format";
 import { Button } from "@/components/ui/Button";
+import { useVoiceRecorder } from "./useVoiceRecorder";
+import { VoiceMessageAudio } from "./VoiceMessageAudio";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
@@ -49,6 +51,7 @@ export function TeamChatView({
 
   const [composerText, setComposerText] = useState("");
   const [sending, setSending] = useState(false);
+  const voiceRecorder = useVoiceRecorder();
 
   const [deleteTarget, setDeleteTarget] = useState<TeamChatMessage | null>(
     null,
@@ -232,6 +235,66 @@ export function TeamChatView({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  async function handleSendVoice() {
+    setError(null);
+    voiceRecorder.clearError();
+
+    const recording = await voiceRecorder.stopAndGetBlob();
+    if (!recording) {
+      setError("Не удалось записать голосовое сообщение.");
+      return;
+    }
+
+    voiceRecorder.setUploading(true);
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", recording.blob, "voice-message.webm");
+      formData.append("duration_ms", String(Math.round(recording.durationMs)));
+
+      const res = await fetch("/api/team-chat/voice", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(data?.error ?? "Не удалось отправить голосовое сообщение.");
+        return;
+      }
+
+      const data = (await res.json()) as { message: TeamChatMessage };
+      setMessages((prev) => [...prev, data.message]);
+      setLatestCreatedAt(data.message.created_at);
+      setToast({ text: "Голосовое сообщение отправлено." });
+
+      const el = listRef.current;
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight;
+        });
+      }
+    } finally {
+      voiceRecorder.setUploading(false);
+      setSending(false);
+    }
+  }
+
+  async function handleToggleVoiceRecording() {
+    setError(null);
+    voiceRecorder.clearError();
+
+    if (voiceRecorder.state === "recording") {
+      await handleSendVoice();
+      return;
+    }
+
+    if (voiceRecorder.state !== "idle" || sending) return;
+    await voiceRecorder.startRecording();
+  }
+
   async function handleSend() {
     setError(null);
     const text = composerText.trim();
@@ -377,7 +440,14 @@ export function TeamChatView({
                 <div className={styles.messageTime}>
                   {formatTeamChatDateTime(message.created_at)}
                 </div>
-                <p className={styles.messageText}>{message.message_text}</p>
+                {message.message_type === "voice" && message.audio_url ? (
+                  <VoiceMessageAudio
+                    src={message.audio_url}
+                    durationMs={message.audio_duration_ms}
+                  />
+                ) : (
+                  <p className={styles.messageText}>{message.message_text}</p>
+                )}
               </Card>
             </div>
           );
@@ -389,31 +459,76 @@ export function TeamChatView({
       </div>
 
       <div className={styles.composer}>
-        <textarea
-          className={styles.composerInput}
-          placeholder="Введите текст сообщения…"
-          value={composerText}
-          maxLength={5000}
-          rows={2}
-          onChange={(e) => setComposerText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-        />
-        <div className={styles.composerActions}>
-          <Button
-            type="button"
-            disabled={sending}
-            onClick={() => void handleSend()}
-          >
-            {sending ? "…" : "Отправить"}
-          </Button>
-        </div>
+        {voiceRecorder.state === "recording" ? (
+          <div className={styles.recordingBar}>
+            <span className={styles.recordingDot} aria-hidden />
+            <span className={styles.recordingLabel}>
+              Запись {formatVoiceDuration(voiceRecorder.elapsedMs)}
+            </span>
+            <div className={styles.recordingActions}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={sending}
+                onClick={() => voiceRecorder.cancelRecording()}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="button"
+                disabled={sending}
+                onClick={() => void handleSendVoice()}
+              >
+                Отправить
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <textarea
+              className={styles.composerInput}
+              placeholder="Введите текст сообщения…"
+              value={composerText}
+              maxLength={5000}
+              rows={2}
+              disabled={sending || voiceRecorder.state === "uploading"}
+              onChange={(e) => setComposerText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void handleSend();
+                }
+              }}
+            />
+            <div className={styles.composerActions}>
+              <Button
+                type="button"
+                variant="secondary"
+                className={styles.micBtn}
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onClick={() => void handleToggleVoiceRecording()}
+                aria-label="Записать голосовое сообщение"
+                title="Голосовое сообщение"
+              >
+                🎤
+              </Button>
+              <Button
+                type="button"
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onClick={() => void handleSend()}
+              >
+                {sending || voiceRecorder.state === "uploading"
+                  ? "…"
+                  : "Отправить"}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
+      {voiceRecorder.error ? (
+        <p className={styles.error}>{voiceRecorder.error}</p>
+      ) : null}
       {error ? <p className={styles.error}>{error}</p> : null}
 
       {deleteTarget ? (

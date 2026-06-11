@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
 import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type { PresenceMap } from "@/lib/presence/types";
-import { formatTeamChatDateTime } from "@/lib/team-chat/format";
+import { formatTeamChatDateTime, formatVoiceDuration } from "@/lib/team-chat/format";
 import type { TeamChatMessage } from "@/lib/team-chat/types";
 import { Card } from "@/components/ui/Card";
 import styles from "./DashboardView.module.css";
@@ -53,7 +53,15 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
                 {formatTeamChatDateTime(message.created_at)}
               </span>
             </div>
-            <p className={styles.chatText}>{message.message_text}</p>
+            <p className={styles.chatText}>
+              {message.message_type === "voice"
+                ? `🎤 Голосовое сообщение${
+                    message.audio_duration_ms != null
+                      ? ` · ${formatVoiceDuration(message.audio_duration_ms)}`
+                      : ""
+                  }`
+                : message.message_text}
+            </p>
           </Card>
         </li>
       ))}

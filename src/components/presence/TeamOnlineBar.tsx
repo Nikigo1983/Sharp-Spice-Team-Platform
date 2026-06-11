@@ -64,31 +64,46 @@ export function TeamOnlineBar({ variant = "default" }: TeamOnlineBarProps) {
   }
 
   const content = (
-    <>
+    <div className={prominent ? styles.inner : styles.innerCompact}>
       <div className={styles.header}>
         <div className={styles.headerMain}>
           <span className={styles.liveDot} aria-hidden />
-          <span className={styles.label}>
-            {prominent ? "Сейчас в сети" : "В сети"}
-          </span>
+          <div className={styles.headerText}>
+            <span className={styles.label}>
+              {prominent ? "Сейчас в сети" : "В сети"}
+            </span>
+            {prominent ? (
+              <span className={styles.subtitle}>
+                Команда на платформе прямо сейчас
+              </span>
+            ) : null}
+          </div>
           <span className={styles.count}>{onlineMembers.length}</span>
         </div>
-        <Link href="/team" className={styles.link}>
+        <Link
+          href="/team"
+          className={prominent ? styles.linkButton : styles.link}
+        >
           Все в Team
         </Link>
       </div>
 
-      <ul className={styles.list}>
-        {onlineMembers.map((member) => (
-          <li key={member.id}>
-            <span className={styles.chip}>
-              <OnlineIndicator online title={`${member.name} в сети`} />
-              <span className={styles.chipName}>{member.name}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </>
+      <div className={prominent ? styles.membersPanel : undefined}>
+        {prominent ? (
+          <p className={styles.membersLabel}>Участники онлайн</p>
+        ) : null}
+        <ul className={styles.list}>
+          {onlineMembers.map((member) => (
+            <li key={member.id}>
+              <span className={styles.chip}>
+                <OnlineIndicator online title={`${member.name} в сети`} />
+                <span className={styles.chipName}>{member.name}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 
   if (prominent) {

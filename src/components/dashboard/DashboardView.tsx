@@ -179,7 +179,10 @@ export function DashboardView({
         </div>
       </section>
 
-      <section className={styles.section} aria-labelledby="team-chat-heading">
+      <section
+        className={[styles.section, styles.teamChatSection].join(" ")}
+        aria-labelledby="team-chat-heading"
+      >
         <div className={styles.sectionHeadingRow}>
           <h2 id="team-chat-heading" className={styles.sectionTitle}>
             Последние сообщения команды

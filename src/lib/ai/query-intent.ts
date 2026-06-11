@@ -107,12 +107,15 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
   const needsEmigrantDriveFullText =
     needsEmigrantDrive &&
     !fastClientLookup &&
-    (lower.includes("содерж") ||
+    (emigrantDrivePrimary ||
+      lower.includes("содерж") ||
       lower.includes("текст") ||
       lower.includes("что в") ||
       lower.includes("прочит") ||
       lower.includes("открой") ||
-      lower.includes("покажи документ"));
+      lower.includes("покажи документ") ||
+      lower.includes("найди") ||
+      lower.includes("информац"));
 
   return {
     fastClientLookup,

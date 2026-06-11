@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdf-parse"],
   headers: async () => [
     {
       source: "/sw.js",

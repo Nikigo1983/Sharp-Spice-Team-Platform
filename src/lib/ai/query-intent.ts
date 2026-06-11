@@ -6,6 +6,9 @@ export type WorkspaceQueryIntent = {
   needsKb: boolean;
   /** Полный текст документов (медленно) */
   needsKbFullText: boolean;
+  /** Папка Google Drive «ЭМИГРАНТ» — документы клиентов */
+  needsEmigrantDrive: boolean;
+  needsEmigrantDriveFullText: boolean;
   needsClients: boolean;
   needsEmigrantDesk: boolean;
   needsFormgrid: boolean;
@@ -32,15 +35,26 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
   const needsKb =
     lower.includes("база знан") ||
     lower.includes("knowledge") ||
-    lower.includes("документ") ||
     lower.includes("программ") ||
     lower.includes("digital nomad") ||
-    lower.includes("внж") ||
     lower.includes("требован") ||
     lower.includes("immigration") ||
-    lower.includes("иммиграц") ||
+    lower.includes("иммиграц");
+
+  const needsEmigrantDrive =
+    lower.includes("эмигрант") ||
+    lower.includes("emigrant") ||
+    lower.includes("pdf") ||
+    lower.includes("скан") ||
+    lower.includes("копи") ||
+    lower.includes("паспорт") ||
+    lower.includes("документ") ||
     lower.includes("drive") ||
-    lower.includes("pdf");
+    lower.includes("внж") ||
+    (hasClientName &&
+      (lower.includes("файл") ||
+        lower.includes("документ") ||
+        lower.includes("pdf")));
 
   const needsEmigrantDesk =
     lower.includes("emigrant") ||
@@ -70,14 +84,25 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     !fastClientLookup &&
     (lower.includes("сравн") ||
       lower.includes("требован") ||
-      lower.includes("документ") ||
       lower.includes("программ") ||
       lower.includes("чек"));
+
+  const needsEmigrantDriveFullText =
+    needsEmigrantDrive &&
+    !fastClientLookup &&
+    (lower.includes("содерж") ||
+      lower.includes("текст") ||
+      lower.includes("что в") ||
+      lower.includes("прочит") ||
+      lower.includes("открой") ||
+      lower.includes("покажи документ"));
 
   return {
     fastClientLookup,
     needsKb: needsKb && !fastClientLookup,
     needsKbFullText,
+    needsEmigrantDrive: needsEmigrantDrive && !fastClientLookup,
+    needsEmigrantDriveFullText,
     needsClients: needsClients || !needsFormgrid,
     needsEmigrantDesk: needsEmigrantDesk || needsClients,
     needsFormgrid,

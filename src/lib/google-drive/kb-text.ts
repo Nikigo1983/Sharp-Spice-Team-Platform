@@ -1,5 +1,9 @@
 import { fetchWithTlsFallback } from "@/lib/google-fetch";
-import { getGoogleAccessToken, isGoogleDriveKbConfigured } from "@/lib/google-sheets/auth";
+import {
+  getGoogleAccessToken,
+  isGoogleDriveEmigrantConfigured,
+  isGoogleDriveKbConfigured,
+} from "@/lib/google-sheets/auth";
 import { getCached, setCached } from "@/lib/google-sheets/cache";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -9,7 +13,8 @@ const GOOGLE_SHEET = "application/vnd.google-apps.spreadsheet";
 const GOOGLE_SLIDES = "application/vnd.google-apps.presentation";
 
 const MAX_DEPTH = 6;
-const MAX_FILES = 30;
+const MAX_FILES = 40;
+const MAX_FILES_EMIGRANT = 60;
 const MAX_FILES_FULL_EXPORT = 8;
 const MAX_CHARS_PER_FILE = 4000;
 const MAX_TOTAL_CHARS = 24_000;
@@ -79,17 +84,18 @@ async function collectFiles(
   prefix: string,
   depth: number,
   acc: DriveFileNode[],
+  maxFiles: number,
 ): Promise<void> {
-  if (depth > MAX_DEPTH || acc.length >= MAX_FILES) return;
+  if (depth > MAX_DEPTH || acc.length >= maxFiles) return;
 
   const children = await driveListChildren(folderId);
   for (const child of children) {
-    if (acc.length >= MAX_FILES) break;
+    if (acc.length >= maxFiles) break;
     const path = prefix ? `${prefix}/${child.name}` : child.name;
     const node = { ...child, path };
 
     if (child.mimeType === FOLDER_MIME) {
-      await collectFiles(child.id, path, depth + 1, acc);
+      await collectFiles(child.id, path, depth + 1, acc, maxFiles);
     } else {
       acc.push(node);
     }
@@ -151,11 +157,12 @@ async function fileToChunk(file: DriveFileNode): Promise<KbTextChunk> {
     }
   }
 
+  const typeLabel = file.mimeType.includes("pdf") ? "PDF" : file.mimeType;
   return {
     path: file.path,
     name: file.name,
     mimeType: file.mimeType,
-    text: `[Файл в Drive — текст не извлечён автоматически. Тип: ${file.mimeType}. Откройте в Google Drive.]`,
+    text: `[Файл в Drive — текст не извлечён автоматически. Тип: ${typeLabel}. Откройте в Google Drive.]`,
   };
 }
 
@@ -172,9 +179,13 @@ async function buildKbChunks(files: DriveFileNode[]): Promise<KbTextChunk[]> {
   return chunks;
 }
 
-function formatKbContext(chunks: KbTextChunk[], query: string): string {
+function formatDriveContext(
+  folderLabel: string,
+  chunks: KbTextChunk[],
+  query: string,
+): string {
   if (chunks.length === 0) {
-    return "Knowledge Base: файлы не найдены или нет доступа к папке.";
+    return `${folderLabel}: файлы не найдены или нет доступа к папке.`;
   }
 
   const tokens = tokenizeQuery(query);
@@ -192,13 +203,13 @@ function formatKbContext(chunks: KbTextChunk[], query: string): string {
   const limited = selected.slice(0, 18);
   let total = 0;
   const parts: string[] = [
-    `Knowledge Base (Google Drive): ${chunks.length} файлов, в ответ включено ${limited.length}.`,
+    `${folderLabel} (Google Drive): ${chunks.length} файлов, в ответ включено ${limited.length}.`,
   ];
 
   for (const chunk of limited) {
     const block = `### ${chunk.path}\n${chunk.text}`;
     if (total + block.length > MAX_TOTAL_CHARS) {
-      parts.push("… [остальные файлы KB опущены из‑за лимита контекста]");
+      parts.push("… [остальные файлы опущены из‑за лимита контекста]");
       break;
     }
     parts.push(block);
@@ -208,14 +219,16 @@ function formatKbContext(chunks: KbTextChunk[], query: string): string {
   return parts.join("\n\n");
 }
 
-async function getKbFileList(): Promise<DriveFileNode[]> {
-  const cacheKey = "kb-ai:files";
+async function getDriveFileList(
+  folderId: string,
+  cacheKey: string,
+  maxFiles: number,
+): Promise<DriveFileNode[]> {
   const cached = getCached<DriveFileNode[]>(cacheKey);
   if (cached) return cached;
 
-  const rootId = process.env.GOOGLE_DRIVE_KB_FOLDER_ID!.trim();
   const files: DriveFileNode[] = [];
-  await collectFiles(rootId, "", 0, files);
+  await collectFiles(folderId, "", 0, files, maxFiles);
   setCached(cacheKey, files, 30 * 60_000);
   return files;
 }
@@ -225,17 +238,16 @@ function scoreFile(file: DriveFileNode, tokens: string[]): number {
   return tokens.reduce((s, t) => (hay.includes(t) ? s + 2 : s), 0);
 }
 
-/** Быстро: только список файлов в KB, без скачивания текста. */
-export async function getKnowledgeBaseCatalogForAi(
+async function getDriveCatalogForAi(
+  folderId: string,
+  folderLabel: string,
+  cacheKey: string,
+  maxFiles: number,
   userQuery: string,
 ): Promise<string> {
-  if (!isGoogleDriveKbConfigured()) {
-    return "Knowledge Base: не настроена.";
-  }
-
-  const files = await getKbFileList();
+  const files = await getDriveFileList(folderId, cacheKey, maxFiles);
   if (files.length === 0) {
-    return "Knowledge Base: файлы не найдены.";
+    return `${folderLabel}: файлы не найдены.`;
   }
 
   const tokens = tokenizeQuery(userQuery);
@@ -245,28 +257,40 @@ export async function getKnowledgeBaseCatalogForAi(
   const picked = (tokens.length > 0
     ? ranked.filter((f) => scoreFile(f, tokens) > 0)
     : ranked
-  ).slice(0, 20);
+  ).slice(0, 25);
 
-  const lines = picked.map(
-    (f) => `- ${f.path} (${f.mimeType.split("/").pop()})`,
-  );
-  return `Knowledge Base — список файлов (${files.length} всего, показано ${lines.length}):\n${lines.join("\n")}`;
+  const lines = picked.map((f) => {
+    const type = f.mimeType.includes("pdf")
+      ? "PDF"
+      : f.mimeType.split("/").pop() ?? "file";
+    return `- ${f.path} (${type})`;
+  });
+  return `${folderLabel} — список файлов (${files.length} всего, показано ${lines.length}):\n${lines.join("\n")}`;
 }
 
-/** Полный текст — только для релевантных файлов (медленнее, кэш 15 мин). */
-export async function getKnowledgeBaseTextForAi(
+async function getDriveTextForAi(
+  folderId: string,
+  folderLabel: string,
+  cachePrefix: string,
+  maxFiles: number,
   userQuery: string,
   options?: { full?: boolean },
 ): Promise<string> {
-  if (!isGoogleDriveKbConfigured()) {
-    return "Knowledge Base: не настроена (GOOGLE_DRIVE_KB_FOLDER_ID).";
-  }
-
   if (!options?.full) {
-    return getKnowledgeBaseCatalogForAi(userQuery);
+    return getDriveCatalogForAi(
+      folderId,
+      folderLabel,
+      `${cachePrefix}:files`,
+      maxFiles,
+      userQuery,
+    );
   }
 
-  const files = await getKbFileList();
+  const files = await getDriveFileList(
+    folderId,
+    `${cachePrefix}:files`,
+    maxFiles,
+  );
   const tokens = tokenizeQuery(userQuery);
   const ranked = [...files].sort(
     (a, b) => scoreFile(b, tokens) - scoreFile(a, tokens),
@@ -277,7 +301,7 @@ export async function getKnowledgeBaseTextForAi(
       : ranked
   ).slice(0, MAX_FILES_FULL_EXPORT);
 
-  const cacheKey = `kb-ai:chunks:${toExport.map((f) => f.id).join(",")}`;
+  const cacheKey = `${cachePrefix}:chunks:${toExport.map((f) => f.id).join(",")}`;
   let chunks = getCached<KbTextChunk[]>(cacheKey);
 
   if (!chunks) {
@@ -285,5 +309,43 @@ export async function getKnowledgeBaseTextForAi(
     setCached(cacheKey, chunks, 15 * 60_000);
   }
 
-  return formatKbContext(chunks, userQuery);
+  return formatDriveContext(folderLabel, chunks, userQuery);
+}
+
+/** Быстро: только список файлов в KB, без скачивания текста. */
+export async function getKnowledgeBaseTextForAi(
+  userQuery: string,
+  options?: { full?: boolean },
+): Promise<string> {
+  if (!isGoogleDriveKbConfigured()) {
+    return "Knowledge Base: не настроена (GOOGLE_DRIVE_KB_FOLDER_ID).";
+  }
+
+  return getDriveTextForAi(
+    process.env.GOOGLE_DRIVE_KB_FOLDER_ID!.trim(),
+    "Knowledge Base",
+    "kb-ai",
+    MAX_FILES,
+    userQuery,
+    options,
+  );
+}
+
+/** Папка «ЭМИГРАНТ» — копии документов клиентов (PDF, сканы и т.д.). */
+export async function getEmigrantDriveTextForAi(
+  userQuery: string,
+  options?: { full?: boolean },
+): Promise<string> {
+  if (!isGoogleDriveEmigrantConfigured()) {
+    return "Папка ЭМИГРАНТ: не настроена (GOOGLE_DRIVE_EMIGRANT_FOLDER_ID).";
+  }
+
+  return getDriveTextForAi(
+    process.env.GOOGLE_DRIVE_EMIGRANT_FOLDER_ID!.trim(),
+    "ЭМИГРАНТ",
+    "emigrant-drive-ai",
+    MAX_FILES_EMIGRANT,
+    userQuery,
+    options,
+  );
 }

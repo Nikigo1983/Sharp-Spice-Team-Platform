@@ -54,6 +54,13 @@ export function isGoogleDriveKbConfigured(): boolean {
   );
 }
 
+export function isGoogleDriveEmigrantConfigured(): boolean {
+  return Boolean(
+    isGoogleServiceAccountConfigured() &&
+      process.env.GOOGLE_DRIVE_EMIGRANT_FOLDER_ID?.trim(),
+  );
+}
+
 export async function getGoogleAccessToken(): Promise<string | null> {
   if (!isGoogleServiceAccountConfigured()) return null;
 

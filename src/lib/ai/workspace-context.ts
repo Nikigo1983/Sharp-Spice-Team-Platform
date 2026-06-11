@@ -8,7 +8,10 @@ import {
 } from "@/lib/ai/name-matching";
 import type { WorkspaceQueryIntent } from "@/lib/ai/query-intent";
 import { buildEmigrantDeskContextForAi } from "@/lib/emigrant-desk/clients";
-import { getKnowledgeBaseTextForAi } from "@/lib/google-drive/kb-text";
+import {
+  getEmigrantDriveTextForAi,
+  getKnowledgeBaseTextForAi,
+} from "@/lib/google-drive/kb-text";
 import {
   formatFormgridRowSummary,
   sortFormgridRowsByDate,
@@ -130,11 +133,13 @@ export async function buildFormgridContextForAi(
 export type WorkspaceContextBundle = {
   clientsText: string;
   emigrantDeskText: string;
+  emigrantDriveText: string;
   formgridText: string;
   knowledgeBaseText: string;
   meta: {
     clientsTotal: number;
     emigrantDeskTotal: number;
+    emigrantDriveConfigured: boolean;
     formgridRows: number;
   };
 };
@@ -143,7 +148,8 @@ export async function buildWorkspaceContext(
   userMessage: string,
   intent: WorkspaceQueryIntent,
 ): Promise<WorkspaceContextBundle> {
-  const [clients, emigrantDesk, formgrid, knowledgeBaseText] = await Promise.all([
+  const [clients, emigrantDesk, emigrantDriveText, formgrid, knowledgeBaseText] =
+    await Promise.all([
     intent.needsClients
       ? buildClientsContextForAi(userMessage)
       : Promise.resolve({ text: "Клиенты: не запрашивались.", count: 0 }),
@@ -153,6 +159,13 @@ export async function buildWorkspaceContext(
           text: "Emigrant Croatia Desk: не запрашивался.",
           count: 0,
         }),
+    intent.needsEmigrantDrive
+      ? getEmigrantDriveTextForAi(userMessage, {
+          full: intent.needsEmigrantDriveFullText,
+        })
+      : Promise.resolve(
+          "Папка ЭМИГРАНТ (Google Drive): для этого вопроса не подключалась.",
+        ),
     intent.needsFormgrid
       ? buildFormgridContextForAi(userMessage)
       : Promise.resolve({
@@ -171,11 +184,13 @@ export async function buildWorkspaceContext(
   return {
     clientsText: clients.text,
     emigrantDeskText: emigrantDesk.text,
+    emigrantDriveText,
     formgridText: formgrid.text,
     knowledgeBaseText,
     meta: {
       clientsTotal: clients.count,
       emigrantDeskTotal: emigrantDesk.count,
+      emigrantDriveConfigured: intent.needsEmigrantDrive,
       formgridRows: formgrid.rowCount,
     },
   };

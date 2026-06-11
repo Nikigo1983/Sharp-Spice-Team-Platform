@@ -77,6 +77,9 @@ function buildSources(
 ): string[] {
   const sources: string[] = [];
   if (intent.needsKb) sources.push("Knowledge Base");
+  if (intent.needsEmigrantDrive && context.meta.emigrantDriveConfigured) {
+    sources.push("ЭМИГРАНТ (Google Drive)");
+  }
   if (intent.needsClients && context.meta.clientsTotal > 0) {
     sources.push(`Клиенты (${context.meta.clientsTotal})`);
   }
@@ -105,6 +108,9 @@ function buildContextBlock(
 
   if (intent.needsKb) {
     contextParts.push(`=== KNOWLEDGE BASE ===\n${context.knowledgeBaseText}`);
+  }
+  if (intent.needsEmigrantDrive) {
+    contextParts.push(`=== ЭМИГРАНТ (документы клиентов) ===\n${context.emigrantDriveText}`);
   }
   if (intent.needsClients && !clientContext) {
     contextParts.push(`=== КЛИЕНТЫ ===\n${context.clientsText}`);
@@ -299,9 +305,15 @@ async function prepareWorkspaceRequest(
     context = {
       clientsText: "Клиенты: не удалось загрузить таблицу.",
       emigrantDeskText: "Emigrant Croatia Desk: не удалось загрузить статусы дел.",
+      emigrantDriveText: "Папка ЭМИГРАНТ: не удалось загрузить Google Drive.",
       formgridText: "Formgrid: не удалось загрузить анкеты.",
       knowledgeBaseText: "Knowledge Base: не удалось загрузить Drive.",
-      meta: { clientsTotal: 0, emigrantDeskTotal: 0, formgridRows: 0 },
+      meta: {
+        clientsTotal: 0,
+        emigrantDeskTotal: 0,
+        emigrantDriveConfigured: false,
+        formgridRows: 0,
+      },
     };
   }
 

@@ -162,29 +162,34 @@ function getCompletionOptions(): ChatCompletionOptions {
   };
 }
 
-function logWorkspaceAiRequest(
+function workspaceAiDebugHooks(stream: boolean): ChatCompletionOptions["debugHooks"] {
+  return {
+    onBeforeRequest: ({ model, temperature, max_tokens }) => {
+      console.log("==================================");
+      console.log("AI WORKSPACE DEBUG");
+      console.log(`Model: ${model}`);
+      console.log(`Temperature: ${temperature}`);
+      console.log(`Max Tokens: ${max_tokens ?? "—"}`);
+      console.log(`Stream: ${stream}`);
+      console.log("==================================");
+    },
+    onResponse: ({ model }) => {
+      console.log("==================================");
+      console.log("AI RESPONSE RECEIVED");
+      console.log(`Model used: ${model}`);
+      console.log("==================================");
+    },
+  };
+}
+
+function withWorkspaceDebug(
   options: ChatCompletionOptions,
   stream: boolean,
-): void {
-  const runtime = getAiRuntimeConfig();
-  const model = options.model?.trim() || runtime?.model || "—";
-  const temperature = options.temperature ?? 0.35;
-  const maxTokens =
-    options.maxTokens && options.maxTokens > 0 ? options.maxTokens : undefined;
-
-  console.log("AI Workspace model:", model);
-  console.log("AI Workspace temperature:", temperature);
-  console.log("AI Workspace max_tokens:", maxTokens ?? "—");
-  console.log(
-    "[ai-workspace] OpenRouter payload:",
-    JSON.stringify({
-      model,
-      temperature,
-      max_tokens: maxTokens,
-      stream,
-      messages: "[omitted]",
-    }),
-  );
+): ChatCompletionOptions {
+  return {
+    ...options,
+    debugHooks: workspaceAiDebugHooks(stream),
+  };
 }
 
 async function prepareWorkspaceRequest(
@@ -406,8 +411,7 @@ export async function runWorkspaceAi(
     };
   }
 
-  const completionOptions = getCompletionOptions();
-  logWorkspaceAiRequest(completionOptions, false);
+  const completionOptions = withWorkspaceDebug(getCompletionOptions(), false);
   const aiReply = await createChatCompletion(
     prepared.messages,
     completionOptions,
@@ -466,8 +470,7 @@ export async function* runWorkspaceAiStream(
 
   yield { status: "generating" };
 
-  const completionOptions = getCompletionOptions();
-  logWorkspaceAiRequest(completionOptions, true);
+  const completionOptions = withWorkspaceDebug(getCompletionOptions(), true);
 
   let hasContent = false;
   for await (const chunk of streamChatCompletion(

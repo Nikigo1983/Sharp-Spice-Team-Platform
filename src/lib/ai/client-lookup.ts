@@ -23,6 +23,7 @@ import {
   SCORE_VIABLE,
   type SearchField,
 } from "@/lib/ai/client-search";
+import { isEmigrantDrivePrimaryQuery } from "@/lib/ai/query-intent";
 import {
   getRecentClientSearches,
   recordClientSearch,
@@ -264,6 +265,7 @@ export function isClientRelatedQuery(query: string): boolean {
 
 export function needsClientLookup(query: string): boolean {
   if (isDebugClientCommand(query)) return true;
+  if (isEmigrantDrivePrimaryQuery(query)) return false;
 
   const searchQuery = buildClientSearchQuery(query);
   if (searchQuery.tokens.length > 0) return true;

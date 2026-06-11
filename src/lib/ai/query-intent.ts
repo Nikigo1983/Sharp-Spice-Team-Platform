@@ -9,13 +9,28 @@ export type WorkspaceQueryIntent = {
   /** Папка Google Drive «ЭМИГРАНТ» — документы клиентов */
   needsEmigrantDrive: boolean;
   needsEmigrantDriveFullText: boolean;
+  /** Запрос явно про папку ЭМИГРАНТ — не обрывать на «клиент не в таблице» */
+  emigrantDrivePrimary: boolean;
   needsClients: boolean;
   needsEmigrantDesk: boolean;
   needsFormgrid: boolean;
 };
 
+/** Запрос про папку «ЭМИГРАНТ» в Google Drive, а не про таблицы клиентов. */
+export function isEmigrantDrivePrimaryQuery(query: string): boolean {
+  const lower = query.toLowerCase();
+  return (
+    lower.includes("эмигрант") ||
+    lower.includes("emigrant folder") ||
+    lower.includes("emigrant drive") ||
+    (lower.includes("папк") &&
+      (lower.includes("эмигрант") || lower.includes("emigrant")))
+  );
+}
+
 export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
   const lower = query.toLowerCase();
+  const emigrantDrivePrimary = isEmigrantDrivePrimaryQuery(query);
 
   const hasClientName =
     extractPersonNameTokens(query).length > 0 ||
@@ -42,8 +57,10 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     lower.includes("иммиграц");
 
   const needsEmigrantDrive =
+    emigrantDrivePrimary ||
     lower.includes("эмигрант") ||
     lower.includes("emigrant") ||
+    lower.includes("папк") ||
     lower.includes("pdf") ||
     lower.includes("скан") ||
     lower.includes("копи") ||
@@ -57,7 +74,7 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
         lower.includes("pdf")));
 
   const needsEmigrantDesk =
-    lower.includes("emigrant") ||
+    (!emigrantDrivePrimary && lower.includes("emigrant")) ||
     lower.includes("кабинет") ||
     lower.includes("статус дела") ||
     lower.includes("статус клиента") ||
@@ -103,8 +120,11 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     needsKbFullText,
     needsEmigrantDrive: needsEmigrantDrive && !fastClientLookup,
     needsEmigrantDriveFullText,
-    needsClients: needsClients || !needsFormgrid,
-    needsEmigrantDesk: needsEmigrantDesk || needsClients,
+    emigrantDrivePrimary,
+    needsClients:
+      !emigrantDrivePrimary && (needsClients || !needsFormgrid),
+    needsEmigrantDesk:
+      !emigrantDrivePrimary && (needsEmigrantDesk || needsClients),
     needsFormgrid,
   };
 }

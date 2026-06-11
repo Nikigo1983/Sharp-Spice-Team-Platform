@@ -12,6 +12,7 @@ import {
   getEmigrantDriveTextForAi,
   getKnowledgeBaseTextForAi,
 } from "@/lib/google-drive/kb-text";
+import { isGoogleDriveEmigrantConfigured } from "@/lib/google-sheets/auth";
 import {
   formatFormgridRowSummary,
   sortFormgridRowsByDate,
@@ -190,7 +191,8 @@ export async function buildWorkspaceContext(
     meta: {
       clientsTotal: clients.count,
       emigrantDeskTotal: emigrantDesk.count,
-      emigrantDriveConfigured: intent.needsEmigrantDrive,
+      emigrantDriveConfigured:
+        intent.needsEmigrantDrive && isGoogleDriveEmigrantConfigured(),
       formgridRows: formgrid.rowCount,
     },
   };

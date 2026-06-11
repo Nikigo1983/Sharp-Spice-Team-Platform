@@ -127,11 +127,20 @@ function truncate(text: string, max: number): string {
 }
 
 function tokenizeQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}@.]+/u)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
+  const tokens = new Set<string>();
+  const add = (raw: string) => {
+    for (const part of raw.toLowerCase().split(/[^\p{L}\p{N}@.]+/u)) {
+      const t = part.trim();
+      if (t.length >= 2) tokens.add(t);
+    }
+  };
+
+  for (const match of query.matchAll(/["«"']([^"»"']{2,})["»"']/gu)) {
+    add(match[1] ?? "");
+  }
+
+  add(query);
+  return [...tokens];
 }
 
 function scoreChunk(chunk: KbTextChunk, tokens: string[]): number {

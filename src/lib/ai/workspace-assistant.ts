@@ -138,13 +138,16 @@ function buildChatMessages(
   const clientNote = contextBlock.includes("CLIENT CONTEXT")
     ? "\n\nДля данных о клиенте используй только CLIENT CONTEXT из Google Sheets."
     : "";
+  const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)")
+    ? "\n\nДля запросов про папку ЭМИГРАНТ используй блок «ЭМИГРАНТ (документы клиентов)». Отсутствие в таблицах Клиенты не означает отсутствие в Drive."
+    : "";
 
   return [
     { role: "system", content: buildWorkspaceSystemPrompt(mode) },
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -232,7 +235,12 @@ async function prepareWorkspaceRequest(
     clientContext = followUpToClientContext(followUp);
   } else {
     const clientLookup = await lookupClientsInSheets(trimmed);
-    if (clientLookup.kind === "not_found") {
+    if (
+      clientLookup.kind === "not_found" &&
+      !intent.emigrantDrivePrimary &&
+      !intent.needsEmigrantDrive &&
+      !intent.needsKb
+    ) {
       return {
         kind: "direct",
         reply: formatClientNotFoundReply(),

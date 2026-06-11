@@ -160,15 +160,22 @@ export type ClientCandidateScenario =
 export function formatClientCandidatesForAi(
   clients: ResolvedClientContext[],
   scenario: ClientCandidateScenario = "multiple",
+  totalFound?: number,
 ): string {
+  const total = totalFound ?? clients.length;
   const intro =
     scenario === "not_found"
       ? "Точного совпадения в таблицах нет. Ближайшие кандидаты (fuzzy-поиск):"
       : scenario === "weak"
         ? "Точных совпадений нет. Похожие записи:"
         : scenario === "structured"
-          ? "Результаты структурированного поиска (по фильтрам запроса):"
+          ? `Результаты структурированного поиска (найдено ${total}, передано в контекст ${clients.length}):`
           : "Найдено несколько подходящих клиентов:";
+
+  const countNote =
+    scenario === "structured" && total > clients.length
+      ? `\n\nВ контекст переданы первые ${clients.length} из ${total} найденных.`
+      : "";
 
   const lines = clients.map((client, index) => {
     const mergedNote =
@@ -190,7 +197,7 @@ export function formatClientCandidatesForAi(
     return details.join("\n");
   });
 
-  return `${intro}\n\n${lines.join("\n\n")}`;
+  return `${intro}${countNote}\n\n${lines.join("\n\n")}`;
 }
 
 export function formatClientContextBlock(client: ResolvedClientContext): string {

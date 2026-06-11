@@ -101,6 +101,7 @@ function buildContextBlock(
   clientCandidates: ResolvedClientContext[] | null = null,
   candidateScenario: ClientCandidateScenario | null = null,
   clientSearchIntentNote: string | null = null,
+  clientCandidatesTotalFound: number | null = null,
 ): string {
   const contextParts: string[] = [];
 
@@ -127,7 +128,11 @@ function buildContextBlock(
             ? "=== CLIENT CANDIDATES (структурированный поиск) ==="
             : "=== CLIENT CANDIDATES (найдено несколько) ===";
     contextParts.push(
-      `${header}\n${formatClientCandidatesForAi(clientCandidates, candidateScenario)}`,
+      `${header}\n${formatClientCandidatesForAi(
+        clientCandidates,
+        candidateScenario,
+        clientCandidatesTotalFound ?? clientCandidates.length,
+      )}`,
     );
   }
 
@@ -172,13 +177,16 @@ function buildChatMessages(
   const structuredNote = contextBlock.includes("CLIENT SEARCH INTENT")
     ? "\n\nПоиск выполнен по распознанным фильтрам (CLIENT SEARCH INTENT). Отвечай по найденным CLIENT CONTEXT / CLIENT CANDIDATES."
     : "";
+  const listNote = contextBlock.includes("тип запроса: list")
+    ? "\n\nЭто списочный запрос: начни с «Найдено N клиентов…», перечисли клиентов нумерованным списком (имя — статус — менеджер). Если в контексте больше 20 — в ответе покажи первые 20 и добавь «Показано 20 из N клиентов.»"
+    : "";
 
   return [
     { role: "system", content: buildWorkspaceSystemPrompt(mode) },
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}${candidatesNote}${structuredNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -268,6 +276,7 @@ async function prepareWorkspaceRequest(
   let pendingForUi: ClientContext[] | undefined;
   let needsClientSelection = false;
   let clientSearchIntentNote: string | null = null;
+  let clientCandidatesTotalFound: number | null = null;
 
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
@@ -275,8 +284,22 @@ async function prepareWorkspaceRequest(
     const aiSearch = await lookupClientsWithAiSearch(trimmed);
     const clientLookup = aiSearch.lookup;
     clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
+    clientCandidatesTotalFound = aiSearch.foundClients;
 
-    if (clientLookup.kind === "single") {
+    console.log(
+      `[workspace-ai] Found clients: ${aiSearch.foundClients}, Sent to Claude: ${aiSearch.sentToClaude}, Intent type: ${aiSearch.intentType}`,
+    );
+
+    if (
+      aiSearch.intentType === "list" &&
+      clientLookup.kind === "single"
+    ) {
+      clientCandidates = [clientLookup.client];
+      candidateScenario = "structured";
+      pendingForUi = isMergedClientContext(clientLookup.client)
+        ? clientLookup.client.parts
+        : [clientLookup.client];
+    } else if (clientLookup.kind === "single") {
       clientContext = clientLookup.client;
     } else if (clientLookup.kind === "multiple") {
       clientCandidates = clientLookup.clients;
@@ -373,6 +396,7 @@ async function prepareWorkspaceRequest(
     clientCandidates,
     candidateScenario,
     clientSearchIntentNote,
+    clientCandidatesTotalFound,
   );
   const messages = buildChatMessages(trimmed, contextBlock, history, mode);
 

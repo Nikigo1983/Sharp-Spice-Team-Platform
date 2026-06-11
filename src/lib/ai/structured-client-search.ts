@@ -356,14 +356,21 @@ function activitySortKey(client: ClientContext): number {
   return 0;
 }
 
+export type StructuredClientSearchResult = {
+  clients: ResolvedClientContext[];
+  totalFound: number;
+};
+
 export async function executeStructuredClientSearch(
   intent: ClientSearchIntent,
   fallbackQuery: string,
   limit = 10,
-): Promise<ResolvedClientContext[]> {
+): Promise<StructuredClientSearchResult> {
   const effectiveIntent: ClientSearchIntent = {
     ...intent,
-    clientName: intent.clientName ?? extractNameFromFallback(fallbackQuery),
+    clientName: intent.isListQuery
+      ? intent.clientName
+      : intent.clientName ?? extractNameFromFallback(fallbackQuery),
   };
 
   const matches: ClientContext[] = [];
@@ -402,7 +409,11 @@ export async function executeStructuredClientSearch(
     return b.score - a.score;
   });
 
-  return deduplicateToResolved(sorted).slice(0, limit);
+  const deduped = deduplicateToResolved(sorted);
+  return {
+    clients: deduped.slice(0, limit),
+    totalFound: deduped.length,
+  };
 }
 
 function extractNameFromFallback(query: string): string | null {

@@ -32,6 +32,14 @@ export type ClientSearchIntent = {
   isListQuery: boolean;
 };
 
+/** Максимум клиентов в контексте Claude для списочных запросов. */
+export const LIST_QUERY_CLIENT_LIMIT = 50;
+
+/** Сколько клиентов Claude показывает в ответе, если найдено больше. */
+export const LIST_QUERY_DISPLAY_LIMIT = 20;
+
+export type ClientSearchIntentType = "list" | "single";
+
 export const EMPTY_CLIENT_SEARCH_INTENT: ClientSearchIntent = {
   clientName: null,
   country: null,
@@ -92,7 +100,9 @@ Schema:
 }
 
 Rules:
-- "у кого", "покажи клиентов", "найди клиентов" → isListQuery: true
+- "у кого", "покажи клиентов", "покажи всех клиентов", "найди клиентов", "клиенты менеджера/референта", "клиенты по Хорватии", "кто находится в работе" → isListQuery: true
+- "референт Saša Merunka" / "референта X" → manager: "Saša Merunka", isListQuery: true if asking for a list
+- For list queries, clientName is null unless asking about one specific person by name
 - "девушку", "женщину" → gender: "female"
 - "недавно" in activity context → recentActivity: true
 - Extract passport as digits only
@@ -177,11 +187,6 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
   const intent: ClientSearchIntent = { ...EMPTY_CLIENT_SEARCH_INTENT };
   const lower = query.toLowerCase();
 
-  const entity = extractClientEntityFromQuery(query);
-  if (entity?.searchPhrase) {
-    intent.clientName = entity.searchPhrase;
-  }
-
   const email = extractEmailFromQuery(query);
   if (email) intent.email = email;
 
@@ -191,10 +196,18 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
   const passportMatch = query.match(/\b(\d{6,12})\b/);
   if (passportMatch?.[1]) intent.passport = passportMatch[1];
 
-  const managerMatch = query.match(
-    /(?:менеджер[а]?|manager)\s+([a-zа-яё\sšžćčđŠŽĆČĐ\-'.]+)/iu,
-  );
-  if (managerMatch?.[1]) intent.manager = managerMatch[1].trim();
+  const staffPatterns = [
+    /(?:покажи|найди)\s+клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)\s+([a-zA-Zà-žÀ-Žа-яА-ЯёЁ\sšžćčđŠŽĆČĐ\-'.]+)/iu,
+    /клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)\s+([a-zA-Zà-žÀ-Žа-яА-ЯёЁ\sšžćčđŠŽĆČĐ\-'.]+)/iu,
+    /(?:менеджер[а]?|manager|референт[а]?|referent)\s+([a-zA-Zà-žÀ-Žа-яА-ЯёЁ\sšžćčđŠŽĆČĐ\-'.]+)/iu,
+  ];
+  for (const pattern of staffPatterns) {
+    const match = query.match(pattern);
+    if (match?.[1]) {
+      intent.manager = match[1].trim().replace(/[.,!?]+$/u, "");
+      break;
+    }
+  }
 
   if (/адрес\s+отправлен/i.test(query)) {
     intent.status = "адрес отправлен";
@@ -245,20 +258,56 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
     intent.recentActivity = true;
   }
 
-  intent.isListQuery =
-    /у\s+кого|покажи\s+клиент|найди\s+клиент|клиентов\s+менеджер|список\s+клиент/i.test(
-      lower,
-    );
+  if (/в\s+работе|находится\s+в\s+работе/i.test(lower)) {
+    intent.status = intent.status ?? "в работе";
+  }
+
+  intent.isListQuery = isClientListQuery(query);
+
+  if (intent.isListQuery) {
+    intent.clientName = null;
+  } else {
+    const entity = extractClientEntityFromQuery(query);
+    if (entity?.searchPhrase) {
+      intent.clientName = entity.searchPhrase;
+    }
+  }
 
   return intent;
+}
+
+/** Списочный запрос — нужен список клиентов, а не лучший одиночный match. */
+export function isClientListQuery(query: string): boolean {
+  const lower = query.toLowerCase();
+  return (
+    /у\s+кого/i.test(lower) ||
+    /покажи\s+(?:всех\s+)?клиент/i.test(lower) ||
+    /найди\s+(?:всех\s+)?клиент/i.test(lower) ||
+    /список\s+клиент/i.test(lower) ||
+    /клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)/i.test(lower) ||
+    /клиент[а-яё]*\s+по\s+/i.test(lower) ||
+    /кто\s+находится/i.test(lower) ||
+    /(?:все|всех)\s+клиент/i.test(lower)
+  );
+}
+
+export function resolveClientSearchIntentType(
+  intent: ClientSearchIntent,
+  query: string,
+): ClientSearchIntentType {
+  return intent.isListQuery || isClientListQuery(query) ? "list" : "single";
 }
 
 function mergeIntents(
   rules: ClientSearchIntent,
   ai: ClientSearchIntent,
+  query: string,
 ): ClientSearchIntent {
+  const isList =
+    ai.isListQuery || rules.isListQuery || isClientListQuery(query);
+
   return {
-    clientName: ai.clientName ?? rules.clientName,
+    clientName: isList ? null : ai.clientName ?? rules.clientName,
     country: ai.country ?? rules.country,
     direction: ai.direction ?? rules.direction,
     manager: ai.manager ?? rules.manager,
@@ -277,7 +326,7 @@ function mergeIntents(
       ai.freeText.length > 0
         ? ai.freeText
         : rules.freeText,
-    isListQuery: ai.isListQuery || rules.isListQuery,
+    isListQuery: isList,
   };
 }
 
@@ -313,7 +362,7 @@ export async function analyzeClientSearchIntent(
   try {
     const ai = await extractClientSearchIntentWithAi(query);
     if (!ai) return rules;
-    return mergeIntents(rules, ai);
+    return mergeIntents(rules, ai, query);
   } catch (error) {
     console.error("[client-search-intent] AI extraction failed", error);
     return rules;
@@ -355,7 +404,10 @@ export function formatClientSearchIntentForAi(
     parts.push(`- свободный текст: ${intent.freeText.join(", ")}`);
   }
 
-  if (parts.length === 0) {
+  const intentType = intent.isListQuery ? "list" : "single";
+  parts.unshift(`- тип запроса: ${intentType}`);
+
+  if (parts.length === 1) {
     return "Фильтры не извлечены — поиск по общему смыслу запроса.";
   }
 
@@ -375,16 +427,19 @@ export function isClientContextualQuery(query: string): boolean {
   );
 }
 
+function stripDiacritics(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
 export function textMatchesField(haystack: string, needle: string): boolean {
-  const hay = normalizeComparable(haystack);
-  const ned = normalizeComparable(needle);
+  const hay = normalizeComparable(stripDiacritics(haystack));
+  const ned = normalizeComparable(stripDiacritics(needle));
   if (!hay || !ned) return false;
   if (hay.includes(ned)) return true;
 
-  const hayWords = hay.split(/\s+/).filter(Boolean);
-  const nedWords = ned.split(/\s+/).filter(Boolean);
-  if (nedWords.length > 1) {
-    return nedWords.every((word) => hayWords.some((hw) => hw.includes(word) || word.includes(hw)));
+  const nedParts = ned.match(/[a-z0-9]{2,}/g) ?? [];
+  if (nedParts.length > 1) {
+    return nedParts.every((part) => hay.includes(part));
   }
   return false;
 }

@@ -34,7 +34,10 @@ import {
   EMPTY_CLIENT_SEARCH_INTENT,
   hasStructuredSearchFilters,
   isClientContextualQuery,
+  LIST_QUERY_CLIENT_LIMIT,
+  resolveClientSearchIntentType,
   type ClientSearchIntent,
+  type ClientSearchIntentType,
 } from "@/lib/ai/client-search-intent";
 import { executeStructuredClientSearch } from "@/lib/ai/structured-client-search";
 import { isEmigrantDrivePrimaryQuery } from "@/lib/ai/query-intent";
@@ -293,23 +296,47 @@ export type ClientAiSearchResult = {
   lookup: ClientLookupResult;
   intent: ClientSearchIntent;
   usedStructuredSearch: boolean;
+  intentType: ClientSearchIntentType;
+  foundClients: number;
+  sentToClaude: number;
 };
+
+function logAiSearchAudit(payload: {
+  query: string;
+  intentType: ClientSearchIntentType;
+  foundClients: number;
+  sentToClaude: number;
+  structuredCount: number;
+}): void {
+  console.log(`AI SEARCH RESULTS COUNT: ${payload.structuredCount}`);
+  console.log(`Found clients: ${payload.foundClients}`);
+  console.log(`Sent to Claude: ${payload.sentToClaude}`);
+  console.log(`Intent type: ${payload.intentType}`);
+  console.log("[ai-client-search]", {
+    query: payload.query,
+    intentType: payload.intentType,
+    foundClients: payload.foundClients,
+    sentToClaude: payload.sentToClaude,
+    structuredCount: payload.structuredCount,
+  });
+}
 
 function structuredToLookupResult(
   clients: ResolvedClientContext[],
   query: string,
   candidates: ClientContext[],
+  isListQuery: boolean,
 ): ClientLookupResult {
   if (clients.length === 0) {
     return { kind: "not_found", query };
   }
-  if (clients.length === 1) {
+  if (clients.length === 1 && !isListQuery) {
     return { kind: "single", client: clients[0], query };
   }
   return {
     kind: "multiple",
     clients,
-    pendingParts: candidates.slice(0, 12),
+    pendingParts: candidates.slice(0, isListQuery ? LIST_QUERY_CLIENT_LIMIT : 12),
     query,
   };
 }
@@ -325,15 +352,37 @@ export async function lookupClientsWithAiSearch(
       lookup: { kind: "skip" },
       intent: EMPTY_CLIENT_SEARCH_INTENT,
       usedStructuredSearch: false,
+      intentType: "single",
+      foundClients: 0,
+      sentToClaude: 0,
     };
   }
 
   const intent = await analyzeClientSearchIntent(trimmed);
+  const intentType = resolveClientSearchIntentType(intent, trimmed);
+  const isListQuery = intentType === "list";
+  const searchLimit = isListQuery ? LIST_QUERY_CLIENT_LIMIT : 10;
   const useStructured =
     hasStructuredSearchFilters(intent) || isClientContextualQuery(trimmed);
 
   if (useStructured) {
-    const structuredMatches = await executeStructuredClientSearch(intent, trimmed, 10);
+    const structured = await executeStructuredClientSearch(
+      intent,
+      trimmed,
+      searchLimit,
+    );
+    const structuredMatches = structured.clients;
+    const foundClients = structured.totalFound;
+    const sentToClaude = structuredMatches.length;
+
+    logAiSearchAudit({
+      query: trimmed,
+      intentType,
+      foundClients,
+      sentToClaude,
+      structuredCount: foundClients,
+    });
+
     if (structuredMatches.length > 0) {
       const rawCandidates = structuredMatches.flatMap((client) =>
         isMergedClientContext(client) ? client.parts : [client],
@@ -342,14 +391,56 @@ export async function lookupClientsWithAiSearch(
         structuredMatches,
         trimmed,
         rawCandidates,
+        isListQuery,
       );
       logSearchResult(trimmed, lookup, rawCandidates);
-      return { lookup, intent, usedStructuredSearch: true };
+      return {
+        lookup,
+        intent,
+        usedStructuredSearch: true,
+        intentType,
+        foundClients,
+        sentToClaude,
+      };
+    }
+
+    if (isListQuery) {
+      return {
+        lookup: { kind: "not_found", query: trimmed },
+        intent,
+        usedStructuredSearch: true,
+        intentType,
+        foundClients: 0,
+        sentToClaude: 0,
+      };
     }
   }
 
   const lookup = await lookupClientsInSheets(trimmed);
-  return { lookup, intent, usedStructuredSearch: false };
+  const foundClients =
+    lookup.kind === "single"
+      ? 1
+      : lookup.kind === "multiple" || lookup.kind === "weak"
+        ? lookup.clients.length
+        : 0;
+  const sentToClaude = foundClients;
+
+  logAiSearchAudit({
+    query: trimmed,
+    intentType,
+    foundClients,
+    sentToClaude,
+    structuredCount: 0,
+  });
+
+  return {
+    lookup,
+    intent,
+    usedStructuredSearch: false,
+    intentType,
+    foundClients,
+    sentToClaude,
+  };
 }
 
 async function collectClientMatches(

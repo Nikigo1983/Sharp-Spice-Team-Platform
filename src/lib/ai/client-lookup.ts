@@ -13,6 +13,10 @@ import {
   groupDuplicateClients,
 } from "@/lib/ai/client-deduplication";
 import {
+  extractClientEntityFromQuery,
+  logClientEntityExtraction,
+} from "@/lib/ai/client-entity-extract";
+import {
   buildClientSearchQuery,
   buildNormalizedNameFields,
   extractLeadingCandidateName,
@@ -380,30 +384,43 @@ export async function lookupClientsInSheets(
     return { kind: "skip" };
   }
 
-  const searchQuery = isDebugClientCommand(trimmed)
+  const searchQueryText = isDebugClientCommand(trimmed)
     ? parseDebugClientQuery(trimmed) || trimmed
     : trimmed;
+  const entityExtraction = extractClientEntityFromQuery(searchQueryText);
 
-  const matches = await collectClientMatches(searchQuery, SCORE_MIN);
-  const result = pickBestMatches(matches, searchQuery);
-  logSearchResult(searchQuery, result, matches);
+  const matches = await collectClientMatches(searchQueryText, SCORE_MIN);
+  const result = pickBestMatches(matches, searchQueryText);
+  logSearchResult(searchQueryText, result, matches);
+
+  const clientName =
+    result.kind === "single"
+      ? result.client.name
+      : result.kind === "multiple"
+        ? result.clients[0]?.name
+        : undefined;
+
+  logClientEntityExtraction(trimmed, entityExtraction, {
+    kind: result.kind,
+    clientName,
+  });
 
   if (result.kind === "not_found") {
-    return { kind: "not_found", query: searchQuery };
+    return { kind: "not_found", query: searchQueryText };
   }
   if (result.kind === "single") {
-    return { kind: "single", client: result.client, query: searchQuery };
+    return { kind: "single", client: result.client, query: searchQueryText };
   }
   if (result.kind === "multiple") {
     return {
       kind: "multiple",
       clients: result.clients,
       pendingParts: result.pendingParts,
-      query: searchQuery,
+      query: searchQueryText,
     };
   }
   if (result.kind === "weak") {
-    return { kind: "weak", clients: result.clients, query: searchQuery };
+    return { kind: "weak", clients: result.clients, query: searchQueryText };
   }
 
   return { kind: "skip" };

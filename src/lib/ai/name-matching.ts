@@ -1,3 +1,5 @@
+import { extractSearchTokens } from "@/lib/ai/client-search";
+
 const STOP_WORDS = new Set([
   "из",
   "наш",
@@ -57,44 +59,13 @@ const STOP_WORDS = new Set([
   "эти",
 ]);
 
-/** Имя/фамилия из «у Марии Бяковой», «клиентка Сканченко» и т.п. */
+/** Имя/фамилия из естественных фраз («клиентка Калашниковой», «по Ирине …»). */
 export function extractPersonNameTokens(query: string): string[] {
-  const lower = query.toLowerCase();
-  const patterns = [
-    /(?:клиент(?:ка|ки|ку|ке|ов)?|у)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:статус|дело|паспорт[ае]?|email|почт[ае]?|телефон|номер)\s+(?:у\s+)?([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:найди|покажи|дай).*(?:паспорт[ае]?|email|почт[ае]?|телефон)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /([a-zа-яё][a-zа-яё\-]{3,})\s+(?:какой|какая|какие).*(?:паспорт|email|почт|телефон|статус)/iu,
-    /([a-zа-яё][a-zа-яё\-]+\s+[a-zа-яё][a-zа-яё\-]+)\s*$/iu,
-    /([a-zа-яё][a-zа-яё\-]+\s+[a-zа-яё][a-zа-яё\-]+)/iu,
-  ];
-
-  for (const pattern of patterns) {
-    const match = lower.match(pattern);
-    if (!match?.[1]) continue;
-    const tokens = match[1]
-      .split(/[^\p{L}\p{N}]+/u)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
-    if (tokens.length > 0) {
-      return tokens;
-    }
-  }
-
-  return [];
+  return extractSearchTokens(query);
 }
 
 export function tokenizeSearchQuery(query: string): string[] {
-  const nameTokens = extractPersonNameTokens(query);
-  if (nameTokens.length > 0) {
-    return nameTokens;
-  }
-
-  return query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}@.]+/u)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
+  return extractSearchTokens(query);
 }
 
 function commonPrefixLength(a: string, b: string): number {

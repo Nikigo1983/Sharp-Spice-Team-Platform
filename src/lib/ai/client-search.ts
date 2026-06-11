@@ -1,5 +1,6 @@
 /** Нормализация, fuzzy matching и scoring для Client Lookup. */
 
+import { extractClientEntityFromQuery } from "@/lib/ai/client-entity-extract";
 import {
   buildNormalizedNameParts,
   formatNormalizedQueryLabel,
@@ -195,6 +196,7 @@ const QUERY_STOP_WORDS = new Set([
   "информации",
   "известно",
   "про",
+  "по",
   "мне",
   "дай",
   "что",
@@ -203,6 +205,17 @@ const QUERY_STOP_WORDS = new Set([
   "о",
   "об",
   "у",
+  "нас",
+  "нам",
+  "ли",
+  "клиентке",
+  "клиенткой",
+  "клиентом",
+  "клиентка",
+  "клиентки",
+  "профиль",
+  "профиля",
+  "происходит",
   "нее",
   "него",
   "неё",
@@ -280,16 +293,14 @@ export function extractLeadingCandidateName(query: string): string[] {
 }
 
 export function extractSearchTokens(query: string): string[] {
+  const entity = extractClientEntityFromQuery(query);
+  if (entity) return entity.tokens;
+
   const leading = extractLeadingCandidateName(query);
   if (leading.length > 0) return leading;
 
   const lower = normalizeText(query);
   const patterns = [
-    /(?:о|об|про|у)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:информаци(?:я|ю|и)|данны(?:е|х)|известно)\s+(?:о|об|про|у)?\s*([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:клиент(?:а|у|ке|ом|ка|ки|ов)?)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:найди|покажи|дай|расскажи).*(?:о|об|про|у)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
-    /(?:клиент(?:ка|ки|ку|ке|ов)?|у)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
     /(?:статус|дело|паспорт[ае]?|email|почт[ае]?|телефон|номер)\s+(?:у\s+)?([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
     /(?:найди|покажи|дай).*(?:паспорт[ае]?|email|почт[аe]?|телефон)\s+([a-zа-яё][a-zа-яё\-]*(?:\s+[a-zа-яё][a-zа-яё\-]*){0,2})/iu,
     /([a-zа-яё][a-zа-яё\-]+\s+[a-zа-яё][a-zа-яё\-]+)\s*$/iu,
@@ -313,16 +324,19 @@ export function extractSearchTokens(query: string): string[] {
 }
 
 export function buildClientSearchQuery(raw: string): ClientSearchQuery {
-  const tokens = extractSearchTokens(raw);
+  const entity = extractClientEntityFromQuery(raw);
+  const tokens = entity?.tokens ?? extractSearchTokens(raw);
   const email = extractEmailFromQuery(raw);
   const phone = extractPhoneFromQuery(raw);
-  const morphology = buildNormalizedNameParts(tokens);
+  const morphology = entity?.morphology ?? buildNormalizedNameParts(tokens);
   return {
     raw: raw.trim(),
     tokens,
     email,
     phone,
-    fullNamePhrase: morphology.normalizedFullName || tokens.join(" "),
+    fullNamePhrase:
+      entity?.searchPhrase ??
+      (morphology.normalizedFullName || tokens.join(" ")),
     morphology,
   };
 }

@@ -98,6 +98,16 @@
   color: var(--white);
 }
 
+.subsectionTitle {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gray-300);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .statsGridWrap {
   display: flow-root;
   width: 100%;

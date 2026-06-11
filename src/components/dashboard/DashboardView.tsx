@@ -190,7 +190,8 @@ export function DashboardView({
           </Link>
         </div>
 
-        <TeamOnlineBar />
+        <TeamOnlineBar variant="prominent" />
+        <h3 className={styles.subsectionTitle}>Последние сообщения</h3>
         <DashboardTeamMessages messages={teamRecentMessages} />
       </section>
 

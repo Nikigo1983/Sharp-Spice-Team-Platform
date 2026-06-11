@@ -7,13 +7,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  getNotificationHref,
+  getNotificationSection,
+  isOnNotificationSection,
+  pathnameMatchesNotificationSection,
+  shouldShowNotificationToast,
+} from "@/lib/notifications/navigation";
+import { playNotificationSound } from "@/lib/notifications/play-sound";
 import {
   NotificationContext,
   type NotificationItem,
 } from "./notification-context";
 import { NOTIFICATION_TYPE_ICONS } from "./constants";
 import styles from "./NotificationToastStack.module.css";
+
+const TOAST_AUTO_DISMISS_MS = 12_000;
 
 type ToastItem = {
   id: string;
@@ -23,9 +33,11 @@ type ToastItem = {
 function NotificationToasts({
   toasts,
   onDismiss,
+  onOpen,
 }: {
   toasts: ToastItem[];
   onDismiss: (id: string) => void;
+  onOpen: (notification: NotificationItem) => void;
 }) {
   return (
     <div className={styles.stack} aria-live="polite">
@@ -34,6 +46,7 @@ function NotificationToasts({
           key={toast.id}
           notification={toast.notification}
           onDismiss={() => onDismiss(toast.id)}
+          onOpen={() => onOpen(toast.notification)}
         />
       ))}
     </div>
@@ -43,17 +56,29 @@ function NotificationToasts({
 function ToastCard({
   notification,
   onDismiss,
+  onOpen,
 }: {
   notification: NotificationItem;
   onDismiss: () => void;
+  onOpen: () => void;
 }) {
+  const href = getNotificationHref(notification.type);
+
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 5000);
-    return () => clearTimeout(timer);
+    const timer = window.setTimeout(onDismiss, TOAST_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
   }, [onDismiss]);
 
   return (
-    <div className={styles.toast} role="status">
+    <button
+      type="button"
+      className={styles.toast}
+      role="status"
+      onClick={() => {
+        onOpen();
+        onDismiss();
+      }}
+    >
       <div className={styles.toastTitle}>
         {NOTIFICATION_TYPE_ICONS[notification.type]} {notification.title}
       </div>
@@ -61,12 +86,25 @@ function ToastCard({
         <div className={styles.toastAuthor}>{notification.author_name}:</div>
       ) : null}
       <div className={styles.toastMessage}>{notification.message}</div>
-    </div>
+      {href ? <div className={styles.toastAction}>Открыть раздел →</div> : null}
+      <span
+        className={styles.toastClose}
+        role="presentation"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDismiss();
+        }}
+        aria-hidden
+      >
+        ×
+      </span>
+    </button>
   );
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -75,27 +113,43 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const knownIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const pollSinceRef = useRef<string | null>(null);
-
-  const isOnTeamChat =
-    pathname === "/team-chat" || pathname.startsWith("/team-chat/");
-
-  const showToast = useCallback(
-    (notification: NotificationItem) => {
-      if (notification.type === "team_chat" && isOnTeamChat) {
-        return;
-      }
-
-      setToasts((prev) => {
-        if (prev.some((item) => item.id === notification.id)) return prev;
-        return [...prev, { id: notification.id, notification }];
-      });
-    },
-    [isOnTeamChat],
-  );
+  const markReadRef = useRef<(id: string) => Promise<void>>(async () => {});
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id));
   }, []);
+
+  const showToast = useCallback(
+    (notification: NotificationItem) => {
+      if (!shouldShowNotificationToast(notification.type)) return;
+      if (isOnNotificationSection(pathname, notification.type)) return;
+
+      let added = false;
+      setToasts((prev) => {
+        if (prev.some((item) => item.id === notification.id)) return prev;
+        added = true;
+        return [...prev, { id: notification.id, notification }];
+      });
+
+      if (added) {
+        playNotificationSound();
+      }
+    },
+    [pathname],
+  );
+
+  const openToast = useCallback(
+    (notification: NotificationItem) => {
+      const href = getNotificationHref(notification.type);
+      if (href) {
+        router.push(href);
+      }
+      if (!notification.is_read) {
+        void markReadRef.current(notification.id);
+      }
+    },
+    [router],
+  );
 
   const applyNotifications = useCallback(
     (items: NotificationItem[], unreadCount: number, isPoll = false) => {
@@ -161,7 +215,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
         applyNotifications(data.notifications, data.unread, !opts?.initial);
       } catch {
-        // Сеть недоступна (например, dev-сервер перезапускался) — не ломаем UI.
+        // Сеть недоступна — не ломаем UI.
       }
     },
     [applyNotifications],
@@ -183,6 +237,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
     setUnread((prev) => Math.max(0, prev - 1));
   }, []);
+
+  markReadRef.current = markRead;
 
   const markAllRead = useCallback(async () => {
     const res = await fetch("/api/notifications/read-all", { method: "POST" });
@@ -217,6 +273,30 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [fetchNotifications]);
 
+  useEffect(() => {
+    const idsToMark: string[] = [];
+
+    setToasts((prev) =>
+      prev.filter((toast) => {
+        const section = getNotificationSection(toast.notification.type);
+        if (
+          section &&
+          pathnameMatchesNotificationSection(pathname, section)
+        ) {
+          if (!toast.notification.is_read) {
+            idsToMark.push(toast.id);
+          }
+          return false;
+        }
+        return true;
+      }),
+    );
+
+    for (const id of idsToMark) {
+      void markRead(id);
+    }
+  }, [pathname, markRead]);
+
   return (
     <NotificationContext.Provider
       value={{
@@ -229,7 +309,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <NotificationToasts toasts={toasts} onDismiss={dismissToast} />
+      <NotificationToasts
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onOpen={openToast}
+      />
     </NotificationContext.Provider>
   );
 }

@@ -31,8 +31,8 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 export function getWorkspaceAiConfig(): WorkspaceAiConfig {
   return {
     model: process.env.AI_WORKSPACE_MODEL?.trim() || undefined,
-    temperature: parseNumber(process.env.AI_WORKSPACE_TEMPERATURE, 0.8),
-    maxTokens: parseNumber(process.env.AI_WORKSPACE_MAX_TOKENS, 1000),
+    temperature: parseNumber(process.env.AI_WORKSPACE_TEMPERATURE, 0.4),
+    maxTokens: parseNumber(process.env.AI_WORKSPACE_MAX_TOKENS, 1500),
     stream: parseBoolean(process.env.AI_WORKSPACE_STREAM, true),
   };
 }

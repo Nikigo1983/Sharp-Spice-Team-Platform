@@ -2,6 +2,7 @@ import { getAiRuntimeConfig, getAiSetupHint, isAiConfigured } from "@/lib/ai/con
 import {
   createChatCompletion,
   streamChatCompletion,
+  type ChatCompletionOptions,
   type ChatMessage,
 } from "@/lib/ai/openai";
 import { detectWorkspaceIntent } from "@/lib/ai/query-intent";
@@ -152,13 +153,38 @@ function buildChatMessages(
   ];
 }
 
-function getCompletionOptions() {
+function getCompletionOptions(): ChatCompletionOptions {
   const workspaceConfig = getWorkspaceAiConfig();
   return {
     temperature: workspaceConfig.temperature,
     maxTokens: workspaceConfig.maxTokens,
     model: workspaceConfig.model,
   };
+}
+
+function logWorkspaceAiRequest(
+  options: ChatCompletionOptions,
+  stream: boolean,
+): void {
+  const runtime = getAiRuntimeConfig();
+  const model = options.model?.trim() || runtime?.model || "—";
+  const temperature = options.temperature ?? 0.35;
+  const maxTokens =
+    options.maxTokens && options.maxTokens > 0 ? options.maxTokens : undefined;
+
+  console.log("AI Workspace model:", model);
+  console.log("AI Workspace temperature:", temperature);
+  console.log("AI Workspace max_tokens:", maxTokens ?? "—");
+  console.log(
+    "[ai-workspace] OpenRouter payload:",
+    JSON.stringify({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      stream,
+      messages: "[omitted]",
+    }),
+  );
 }
 
 async function prepareWorkspaceRequest(
@@ -380,9 +406,11 @@ export async function runWorkspaceAi(
     };
   }
 
+  const completionOptions = getCompletionOptions();
+  logWorkspaceAiRequest(completionOptions, false);
   const aiReply = await createChatCompletion(
     prepared.messages,
-    getCompletionOptions(),
+    completionOptions,
   );
 
   if (aiReply) {
@@ -438,10 +466,13 @@ export async function* runWorkspaceAiStream(
 
   yield { status: "generating" };
 
+  const completionOptions = getCompletionOptions();
+  logWorkspaceAiRequest(completionOptions, true);
+
   let hasContent = false;
   for await (const chunk of streamChatCompletion(
     prepared.messages,
-    getCompletionOptions(),
+    completionOptions,
   )) {
     hasContent = true;
     yield chunk;

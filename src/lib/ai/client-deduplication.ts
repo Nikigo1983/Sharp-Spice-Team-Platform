@@ -1,17 +1,31 @@
 import type { ClientContext, MergedClientContext } from "@/lib/ai/client-context";
+import {
+  extractPassportFromClientRecord,
+  passportsMatch,
+} from "@/lib/ai/client-passport";
 import { buildNormalizedNameParts } from "@/lib/ai/russian-name-morphology";
 import { normalizeComparable, normalizeText } from "@/lib/ai/search-normalize";
 import { normalizePhone, tokensMatchWord } from "@/lib/ai/client-search";
 
 export type DuplicateCheck = {
+  /** Надёжный дубль — автоматический merge (паспорт, email, телефон, telegram). */
   isDuplicate: boolean;
+  /** Возможный дубль — только ФИО, без автоматического merge. */
+  isPossibleDuplicate: boolean;
   reasons: string[];
+  possibleReasons: string[];
 };
 
 export type ClientDuplicateGroup = {
   parts: ClientContext[];
   mergeReasons: string[];
   merged: MergedClientContext;
+};
+
+export type PossibleDuplicatePair = {
+  left: ClientContext;
+  right: ClientContext;
+  possibleReasons: string[];
 };
 
 function nameTokens(name: string): string[] {
@@ -88,11 +102,45 @@ function fioWithoutPatronymicMatch(nameA: string, nameB: string): boolean {
   );
 }
 
+function collectFioReasons(left: ClientContext, right: ClientContext): string[] {
+  const possibleReasons: string[] = [];
+
+  if (fioWithoutPatronymicMatch(left.name, right.name)) {
+    possibleReasons.push("фамилия + имя");
+  } else if (surnameAndFirstNameMatch(left.name, right.name)) {
+    possibleReasons.push("фамилия + имя (partial)");
+  } else {
+    const overlap = namesOverlapScore(nameTokens(left.name), nameTokens(right.name));
+    if (overlap >= 0.75) {
+      possibleReasons.push(
+        `normalized_full_name overlap ${Math.round(overlap * 100)}%`,
+      );
+    }
+
+    const leftNorm = buildNormalizedNameParts(nameTokens(left.name)).normalizedFullName;
+    const rightNorm = buildNormalizedNameParts(nameTokens(right.name)).normalizedFullName;
+    if (
+      leftNorm &&
+      rightNorm &&
+      (leftNorm === rightNorm ||
+        normalizeComparable(leftNorm) === normalizeComparable(rightNorm))
+    ) {
+      possibleReasons.push("normalized_full_name");
+    }
+  }
+
+  return possibleReasons;
+}
+
 export function areClientsDuplicates(
   left: ClientContext,
   right: ClientContext,
 ): DuplicateCheck {
   const reasons: string[] = [];
+
+  if (passportsMatch(left, right)) {
+    reasons.push("passport");
+  }
 
   if (
     left.email &&
@@ -112,39 +160,50 @@ export function areClientsDuplicates(
     reasons.push("telegram");
   }
 
-  if (fioWithoutPatronymicMatch(left.name, right.name)) {
-    reasons.push("фамилия + имя");
-  } else if (surnameAndFirstNameMatch(left.name, right.name)) {
-    reasons.push("фамилия + имя (partial)");
-  } else {
-    const overlap = namesOverlapScore(nameTokens(left.name), nameTokens(right.name));
-    if (overlap >= 0.75) {
-      reasons.push(`normalized_full_name overlap ${Math.round(overlap * 100)}%`);
-    }
+  const possibleReasons = collectFioReasons(left, right);
 
-    const leftNorm = buildNormalizedNameParts(nameTokens(left.name)).normalizedFullName;
-    const rightNorm = buildNormalizedNameParts(nameTokens(right.name)).normalizedFullName;
-    if (
-      leftNorm &&
-      rightNorm &&
-      (leftNorm === rightNorm ||
-        normalizeComparable(leftNorm) === normalizeComparable(rightNorm))
-    ) {
-      reasons.push("normalized_full_name");
+  const passportsDiffer =
+    isValidPassportPair(left, right) && !passportsMatch(left, right);
+
+  const isDuplicate = reasons.length > 0;
+  const isPossibleDuplicate =
+    !isDuplicate &&
+    !passportsDiffer &&
+    possibleReasons.length > 0;
+
+  return {
+    isDuplicate,
+    isPossibleDuplicate,
+    reasons,
+    possibleReasons,
+  };
+}
+
+function isValidPassportPair(left: ClientContext, right: ClientContext): boolean {
+  const leftNorm = extractPassportFromClientRecord(left).normalized;
+  const rightNorm = extractPassportFromClientRecord(right).normalized;
+  return Boolean(leftNorm && rightNorm);
+}
+
+export function findPossibleDuplicatePairs(
+  clients: ClientContext[],
+): PossibleDuplicatePair[] {
+  const pairs: PossibleDuplicatePair[] = [];
+
+  for (let i = 0; i < clients.length; i++) {
+    for (let j = i + 1; j < clients.length; j++) {
+      const check = areClientsDuplicates(clients[i], clients[j]);
+      if (check.isPossibleDuplicate) {
+        pairs.push({
+          left: clients[i],
+          right: clients[j],
+          possibleReasons: check.possibleReasons,
+        });
+      }
     }
   }
 
-  const leftPassport = left.debugRow.passport ?? left.debugRow["номер паспорта"] ?? "";
-  const rightPassport = right.debugRow.passport ?? right.debugRow["номер паспорта"] ?? "";
-  if (
-    leftPassport.trim() &&
-    rightPassport.trim() &&
-    normalizeComparable(leftPassport) === normalizeComparable(rightPassport)
-  ) {
-    reasons.push("passport");
-  }
-
-  return { isDuplicate: reasons.length > 0, reasons };
+  return pairs;
 }
 
 function pickLongestName(parts: ClientContext[]): string {

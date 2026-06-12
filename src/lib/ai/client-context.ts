@@ -6,6 +6,8 @@ import {
   formatFormgridRowDetailed,
   getFormgridClientFields,
 } from "@/lib/google-sheets/formgrid-lookup";
+import { findPossibleDuplicatePairs } from "@/lib/ai/client-deduplication";
+import { formatPassportPairDebug } from "@/lib/ai/client-passport";
 import {
   FORMGRID_LEAD_STATUS,
   formatStatusForAiContext,
@@ -148,6 +150,9 @@ export function formgridRowToContext(
       debugRow[header.slice(0, 80)] = value.slice(0, 200);
     }
   });
+  if (fields.passport) {
+    debugRow.passport = fields.passport;
+  }
 
   return {
     source: "new_clients",
@@ -399,6 +404,28 @@ export function formatDebugClientReply(
       .map((group) => group.mergedName);
     if (mergedPreview.length > 0) {
       lines.push(`**Merged as:** ${mergedPreview.join("; ")}`, "");
+    }
+  }
+
+  const possiblePairs = findPossibleDuplicatePairs(clients);
+  if (possiblePairs.length > 0) {
+    lines.push("**Possible duplicates (FIO only — not auto-merged):**");
+    for (const pair of possiblePairs) {
+      lines.push(
+        `- ${pair.left.name} (${pair.left.sourceLabel}) ↔ ${pair.right.name} (${pair.right.sourceLabel}): ${pair.possibleReasons.join(", ")}`,
+      );
+    }
+    lines.push("");
+  }
+
+  const crmCandidates = clients.filter((c) => c.source === "clients");
+  const formgridCandidates = clients.filter((c) => c.source === "new_clients");
+  if (crmCandidates.length > 0 && formgridCandidates.length > 0) {
+    lines.push("**Passport cross-source debug:**");
+    for (const crm of crmCandidates) {
+      for (const fg of formgridCandidates) {
+        lines.push(...formatPassportPairDebug(crm, fg), "");
+      }
     }
   }
 

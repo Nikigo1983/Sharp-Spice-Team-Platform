@@ -7,7 +7,14 @@ import {
   getFormgridClientFields,
 } from "@/lib/google-sheets/formgrid-lookup";
 import { findPossibleDuplicatePairs } from "@/lib/ai/client-deduplication";
+import {
+  type FormatClientContextOptions,
+  formatMergedClientContextWithSources,
+  formatSingleClientContextWithSources,
+} from "@/lib/ai/client-field-sources";
 import { formatPassportPairDebug } from "@/lib/ai/client-passport";
+
+export type { EmigrantDeskContextSlice, FormatClientContextOptions } from "@/lib/ai/client-field-sources";
 import {
   FORMGRID_LEAD_STATUS,
   formatStatusForAiContext,
@@ -222,77 +229,21 @@ export function formatClientCandidatesForAi(
   return `${intro}${countNote}\n\n${lines.join("\n\n")}`;
 }
 
-export function formatClientContextBlock(client: ResolvedClientContext): string {
+export function formatClientContextBlock(
+  client: ResolvedClientContext,
+  options?: FormatClientContextOptions,
+): string {
   if (isMergedClientContext(client)) {
-    return formatMergedClientContextBlock(client);
+    return formatMergedClientContextBlock(client, options);
   }
-
-  const lines = [
-    `Источник: ${client.sourceLabel} (Google Sheets)`,
-    `Строка таблицы: ${client.rowIndex}`,
-    `Имя: ${client.name}`,
-    client.phone ? `Телефон: ${client.phone}` : "",
-    client.email ? `Email: ${client.email}` : "",
-    client.country ? `Страна: ${client.country}` : "",
-    client.direction ? `Направление: ${client.direction}` : "",
-    client.status ? `Статус: ${client.status}` : "",
-    client.manager ? `Ответственный менеджер: ${client.manager}` : "",
-    client.lastActivity
-      ? `Последняя активность: ${client.lastActivity}`
-      : "",
-    client.surveyData ? `Данные анкеты / таблицы:\n${client.surveyData}` : "",
-  ].filter(Boolean);
-
-  return lines.join("\n");
+  return formatSingleClientContextWithSources(client, options?.desk);
 }
 
 export function formatMergedClientContextBlock(
   merged: MergedClientContext,
+  options?: FormatClientContextOptions,
 ): string {
-  const sourceLines = merged.parts.map(
-    (part) => `Источник ${merged.parts.indexOf(part) + 1}: ${part.sourceLabel}, строка ${part.rowIndex}`,
-  );
-
-  const contactLines = [
-    merged.email ? `Email: ${merged.email}` : "",
-    merged.phone ? `Телефон: ${merged.phone}` : "",
-  ].filter(Boolean);
-
-  const crmPart = merged.parts.find((part) => part.source === "clients");
-  const formPart = merged.parts.find((part) => part.source === "new_clients");
-
-  const lines = [
-    "=== CLIENT CONTEXT (MERGED) ===",
-    ...sourceLines,
-    "",
-    `ФИО: ${merged.name}`,
-    contactLines.length > 0 ? `Контакты:\n${contactLines.join("\n")}` : "",
-    merged.mergeReasons.length > 0
-      ? `Объединено по: ${merged.mergeReasons.join(", ")}`
-      : "",
-  ].filter(Boolean);
-
-  if (crmPart) {
-    lines.push("", "Данные из CRM:", formatClientContextBlock(crmPart));
-  } else if (merged.crmData) {
-    lines.push("", "Данные из CRM:", merged.crmData);
-  }
-
-  if (formPart?.surveyData || merged.surveyData) {
-    lines.push("", "Данные анкеты:", formPart?.surveyData ?? merged.surveyData);
-  }
-
-  if (merged.conflicts.length > 0) {
-    lines.push("", "Конфликты данных:");
-    for (const conflict of merged.conflicts) {
-      lines.push(
-        `${conflict.field}:`,
-        ...conflict.values.map((entry) => `${entry.source}: ${entry.value}`),
-      );
-    }
-  }
-
-  return lines.join("\n");
+  return formatMergedClientContextWithSources(merged, options?.desk);
 }
 
 export function formatMultipleClientsReply(

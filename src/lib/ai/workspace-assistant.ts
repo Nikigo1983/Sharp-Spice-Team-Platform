@@ -18,6 +18,7 @@ import {
   isMergedClientContext,
   type ClientCandidateScenario,
   type ClientContext,
+  type EmigrantDeskContextSlice,
   type ResolvedClientContext,
 } from "@/lib/ai/client-context";
 import { formatClientSearchIntentForAi } from "@/lib/ai/client-search-intent";
@@ -38,7 +39,10 @@ import {
 import { mergeClientContexts } from "@/lib/ai/client-deduplication";
 import { buildWorkspaceSystemPrompt } from "@/lib/ai/workspace-prompt";
 import { buildWorkspaceContext } from "@/lib/ai/workspace-context";
-import { findEmigrantDeskClientByQuery } from "@/lib/emigrant-desk/clients";
+import {
+  emigrantDeskClientToContextSlice,
+  findEmigrantDeskClientByQuery,
+} from "@/lib/emigrant-desk/clients";
 import {
   formatFormgridRowSummary,
   listFormgridRowsSince,
@@ -102,6 +106,7 @@ function buildContextBlock(
   candidateScenario: ClientCandidateScenario | null = null,
   clientSearchIntentNote: string | null = null,
   clientCandidatesTotalFound: number | null = null,
+  deskSlice: EmigrantDeskContextSlice | null = null,
 ): string {
   const contextParts: string[] = [];
 
@@ -115,7 +120,9 @@ function buildContextBlock(
     const header = isMergedClientContext(clientContext)
       ? "=== CLIENT CONTEXT (MERGED) ==="
       : "=== CLIENT CONTEXT (Google Sheets) ===";
-    contextParts.push(`${header}\n${formatClientContextBlock(clientContext)}`);
+    contextParts.push(
+      `${header}\n${formatClientContextBlock(clientContext, { desk: deskSlice })}`,
+    );
   }
 
   if (clientCandidates && clientCandidates.length > 0 && candidateScenario) {
@@ -145,7 +152,7 @@ function buildContextBlock(
   if (intent.needsClients && !clientContext && !clientCandidates?.length) {
     contextParts.push(`=== КЛИЕНТЫ ===\n${context.clientsText}`);
   }
-  if (intent.needsEmigrantDesk) {
+  if (intent.needsEmigrantDesk && !deskSlice) {
     contextParts.push(`=== EMIGRANT CROATIA DESK ===\n${context.emigrantDeskText}`);
   }
   if (intent.needsFormgrid && !clientContext) {
@@ -166,7 +173,7 @@ function buildChatMessages(
   }));
 
   const clientNote = contextBlock.includes("CLIENT CONTEXT")
-    ? "\n\nДля данных о клиенте используй только CLIENT CONTEXT из Google Sheets."
+    ? "\n\nДля данных о клиенте используй CLIENT CONTEXT. У каждого поля указан источник (CRM / Formgrid / Emigrant Desk) — в ответе менеджеру кратко поясни происхождение человеческим языком (например: «контакты из анкеты Formgrid»), не выводи сырой блок целиком."
     : "";
   const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)")
     ? "\n\nДля запросов про папку ЭМИГРАНТ используй блок «ЭМИГРАНТ (документы клиентов)». Отсутствие в таблицах Клиенты не означает отсутствие в Drive."
@@ -377,13 +384,30 @@ async function prepareWorkspaceRequest(
     };
   }
 
+  let deskSlice: EmigrantDeskContextSlice | null = null;
+  if (clientContext && intent.needsEmigrantDesk) {
+    try {
+      const deskClient = await findEmigrantDeskClientByQuery(clientContext.name);
+      if (deskClient) {
+        deskSlice = emigrantDeskClientToContextSlice(deskClient);
+      }
+    } catch (error) {
+      console.error("[workspace-ai] desk lookup for client context failed", error);
+    }
+  }
+
   const sources = clientContext
     ? [
         isMergedClientContext(clientContext)
-          ? "Клиенты + Новые клиенты"
-          : clientContext.sourceLabel,
+          ? deskSlice
+            ? "Клиенты + Новые клиенты + Emigrant Desk"
+            : "Клиенты + Новые клиенты"
+          : deskSlice
+            ? `${clientContext.sourceLabel} + Emigrant Desk`
+            : clientContext.sourceLabel,
         ...buildSources(context, intent).filter(
-          (source) => !/^Клиенты|^Анкеты Formgrid/i.test(source),
+          (source) =>
+            !/^Клиенты|^Анкеты Formgrid|^Emigrant Desk/i.test(source),
         ),
       ]
     : clientCandidates?.length
@@ -397,6 +421,7 @@ async function prepareWorkspaceRequest(
     candidateScenario,
     clientSearchIntentNote,
     clientCandidatesTotalFound,
+    deskSlice,
   );
   const messages = buildChatMessages(trimmed, contextBlock, history, mode);
 

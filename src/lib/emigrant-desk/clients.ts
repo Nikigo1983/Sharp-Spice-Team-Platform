@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { EmigrantDeskContextSlice } from "@/lib/ai/client-field-sources";
 import {
   scorePersonName,
   tokenizeSearchQuery,
@@ -115,6 +116,22 @@ function scoreClient(client: EmigrantDeskClient, tokens: string[]): number {
     if (token.length >= 4 && hay.includes(token)) return score + 2;
     return score;
   }, 0);
+}
+
+export function emigrantDeskClientToContextSlice(
+  client: EmigrantDeskClient,
+): EmigrantDeskContextSlice {
+  return {
+    name: fullName(client) || client.email,
+    email: client.email,
+    caseNumber: client.caseNumber ?? "",
+    currentStatus: client.currentStatus ?? "",
+    consulate: client.consulate ?? "",
+    submissionCity: client.submissionCity ?? "",
+    submissionDate: client.submissionDate ?? "",
+    statusUpdatedAt: client.statusUpdatedAt ?? "",
+    internalComment: client.internalComment ?? "",
+  };
 }
 
 export async function findEmigrantDeskClientByQuery(

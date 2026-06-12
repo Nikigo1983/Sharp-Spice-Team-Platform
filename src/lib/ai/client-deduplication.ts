@@ -1,4 +1,5 @@
 import type { ClientContext, MergedClientContext } from "@/lib/ai/client-context";
+import { collectSheetFieldConflict } from "@/lib/ai/client-field-sources";
 import {
   extractPassportFromClientRecord,
   passportsMatch,
@@ -235,15 +236,19 @@ export function mergeClientContexts(parts: ClientContext[]): MergedClientContext
 
   const statusCrm = crm?.status ?? "";
   const statusForm = formgrid?.status ?? "";
+
   const conflicts: MergedClientContext["conflicts"] = [];
-  if (statusCrm && statusForm && statusCrm !== statusForm) {
-    conflicts.push({
-      field: "Статус",
-      values: [
-        { source: "CRM", value: statusCrm },
-        { source: "Анкета", value: statusForm },
-      ],
-    });
+  for (const key of ["email", "phone", "status"] as const) {
+    const conflict = collectSheetFieldConflict(parts, key);
+    if (conflict) {
+      conflicts.push({
+        field: conflict.field,
+        values: conflict.values.map((entry) => ({
+          source: entry.source,
+          value: entry.value,
+        })),
+      });
+    }
   }
 
   return {

@@ -22,6 +22,7 @@ import type {
 
 
 
+import { AssistantMessageMarkdown } from "./AssistantMessageMarkdown";
 import styles from "./AiWorkspaceView.module.css";
 
 
@@ -1155,7 +1156,11 @@ export function AiWorkspaceView() {
 
                     >
 
-                      {entry.content}
+                      {entry.role === "user" ? (
+                        entry.content
+                      ) : (
+                        <AssistantMessageMarkdown content={entry.content} />
+                      )}
 
                     </div>
 

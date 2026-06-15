@@ -20,6 +20,7 @@ type TaskFormProps = {
   initial?: Partial<TaskFormValues>;
   teamMembers: TeamMemberOption[];
   submitLabel: string;
+  isEditing?: boolean;
   onSubmit: (values: TaskFormValues) => Promise<void>;
   onCancel: () => void;
 };
@@ -36,6 +37,7 @@ export function TaskForm({
   initial,
   teamMembers,
   submitLabel,
+  isEditing = false,
   onSubmit,
   onCancel,
 }: TaskFormProps) {
@@ -131,22 +133,28 @@ export function TaskForm({
         </div>
       </fieldset>
 
-      <label className={styles.field}>
-        <span className={styles.label}>Статус</span>
-        <select
-          className={styles.select}
-          value={values.status}
-          onChange={(e) =>
-            setValues({ ...values, status: e.target.value as TaskStatus })
-          }
-        >
-          {TASK_STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!isEditing ? (
+        <label className={styles.field}>
+          <span className={styles.label}>Статус</span>
+          <select
+            className={styles.select}
+            value={values.status}
+            onChange={(e) =>
+              setValues({ ...values, status: e.target.value as TaskStatus })
+            }
+          >
+            {TASK_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p className={styles.hint}>
+          Статус меняется через действия «В работе», «На проверку» и согласование автором.
+        </p>
+      )}
 
       {error && <p className={styles.error}>{error}</p>}
 
@@ -167,7 +175,10 @@ export function taskToFormValues(task: Task): TaskFormValues {
     title: task.title,
     description: task.description,
     dueDate: task.dueDate ?? "",
-    status: task.status,
+    status:
+      task.status === "new" || task.status === "in_progress"
+        ? task.status
+        : "in_progress",
     assigneeIds: task.assignees.map((assignee) => assignee.id),
   };
 }

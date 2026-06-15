@@ -10,6 +10,8 @@ export type NotificationItem = {
     | "task_new"
     | "task_status"
     | "task_completed"
+    | "task_pending_approval"
+    | "task_revision"
     | "client_new"
     | "consultation_assigned"
     | "system";

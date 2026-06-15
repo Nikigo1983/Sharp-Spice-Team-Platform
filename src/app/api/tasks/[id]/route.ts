@@ -1,11 +1,25 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { notifyTaskStatusUpdate } from "@/lib/notifications/emit";
-import { completeTask, deleteTask, getTask, setTaskStatus, updateTask } from "@/lib/tasks/store";
+import {
+  approveTask,
+  completeTask,
+  deleteTask,
+  getTask,
+  requestTaskRevision,
+  setTaskStatus,
+  submitTaskForApproval,
+  updateTask,
+} from "@/lib/tasks/store";
 import type { TaskStatus, UpdateTaskInput } from "@/lib/tasks/types";
 import { TASK_STATUSES } from "@/lib/tasks/types";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const WORKFLOW_ONLY_STATUSES = new Set<TaskStatus>([
+  "pending_approval",
+  "needs_revision",
+]);
 
 export async function GET(_request: Request, context: RouteContext) {
   const session = await getSession();
@@ -48,6 +62,8 @@ export async function PUT(request: Request, context: RouteContext) {
       previousStatus: existing.status,
       newStatus: task.status,
       creatorUserId: existing.createdByUserId,
+      assigneeIds: existing.assignees.map((assignee) => assignee.id),
+      revisionComment: null,
     });
   }
 
@@ -73,6 +89,26 @@ export async function DELETE(_request: Request, context: RouteContext) {
   return NextResponse.json({ ok: true });
 }
 
+async function notifyTransition(
+  session: { id: string; name: string },
+  existing: NonNullable<Awaited<ReturnType<typeof getTask>>>,
+  task: NonNullable<Awaited<ReturnType<typeof getTask>>>,
+  revisionComment?: string | null,
+) {
+  if (existing.status === task.status) return;
+
+  await notifyTaskStatusUpdate({
+    actorId: session.id,
+    actorName: session.name,
+    taskTitle: task.title,
+    previousStatus: existing.status,
+    newStatus: task.status,
+    creatorUserId: existing.createdByUserId,
+    assigneeIds: existing.assignees.map((assignee) => assignee.id),
+    revisionComment: revisionComment ?? null,
+  });
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   const session = await getSession();
   if (!session) {
@@ -83,16 +119,51 @@ export async function PATCH(request: Request, context: RouteContext) {
   const body = (await request.json()) as {
     action?: string;
     status?: TaskStatus;
+    comment?: string;
   };
+
+  const existing = await getTask(id);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (body.action === "submit_for_approval") {
+    const task = await submitTaskForApproval(id, session);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    await notifyTransition(session, existing, task);
+    return NextResponse.json({ task });
+  }
+
+  if (body.action === "approve") {
+    const task = await approveTask(id, session);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    await notifyTransition(session, existing, task);
+    return NextResponse.json({ task });
+  }
+
+  if (body.action === "request_revision") {
+    const comment = body.comment?.trim() ?? "";
+    if (!comment) {
+      return NextResponse.json({ error: "Comment required" }, { status: 400 });
+    }
+    const task = await requestTaskRevision(id, comment, session);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    await notifyTransition(session, existing, task, comment);
+    return NextResponse.json({ task });
+  }
 
   if (body.action === "set_status" && body.status) {
     if (!TASK_STATUSES.includes(body.status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
-
-    const existing = await getTask(id);
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (WORKFLOW_ONLY_STATUSES.has(body.status)) {
+      return NextResponse.json({ error: "Invalid status transition" }, { status: 400 });
     }
 
     const task = await setTaskStatus(id, body.status, session);
@@ -100,42 +171,17 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (existing && existing.status !== body.status) {
-      await notifyTaskStatusUpdate({
-        actorId: session.id,
-        actorName: session.name,
-        taskTitle: task.title,
-        previousStatus: existing.status,
-        newStatus: task.status,
-        creatorUserId: existing.createdByUserId,
-      });
-    }
-
+    await notifyTransition(session, existing, task);
     return NextResponse.json({ task });
   }
 
   if (body.action === "complete") {
-    const existing = await getTask(id);
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
     const task = await completeTask(id, session);
     if (!task) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (existing && existing.status !== "completed") {
-      await notifyTaskStatusUpdate({
-        actorId: session.id,
-        actorName: session.name,
-        taskTitle: task.title,
-        previousStatus: existing.status,
-        newStatus: "completed",
-        creatorUserId: existing.createdByUserId,
-      });
-    }
-
+    await notifyTransition(session, existing, task);
     return NextResponse.json({ task });
   }
 

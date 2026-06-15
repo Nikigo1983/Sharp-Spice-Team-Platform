@@ -7,19 +7,25 @@ import type { SessionUser } from "@/lib/auth/types";
 import { normalizeAssignees } from "./assignees";
 import { isTaskOverdue } from "./overdue";
 import {
-  canChangeTaskStatus,
   canDeleteTask,
+  canDirectComplete,
   canEditTask,
+  canReviewTask,
+  canStartTask,
+  canSubmitForApproval,
+  canChangeTaskStatus,
   isTaskCreator,
 } from "./permissions";
 import type {
   CreateTaskInput,
   Task,
   TaskAssignee,
+  TaskReviewEvent,
   TaskStats,
   TaskStatus,
   UpdateTaskInput,
 } from "./types";
+import { taskNeedsApprovalWorkflow } from "./workflow";
 import { listTeamMembers } from "@/lib/team/store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbTasks from "@/lib/supabase/tasks-repo";
@@ -30,10 +36,38 @@ type TaskStore = {
   tasks: Task[];
 };
 
+function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const events: TaskReviewEvent[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const event = item as Partial<TaskReviewEvent>;
+    if (
+      !event.id ||
+      !event.action ||
+      !event.actorUserId ||
+      !event.actorName ||
+      !event.createdAt
+    ) {
+      continue;
+    }
+    events.push({
+      id: event.id,
+      action: event.action,
+      actorUserId: event.actorUserId,
+      actorName: event.actorName,
+      comment: event.comment,
+      createdAt: event.createdAt,
+    });
+  }
+  return events;
+}
+
 function normalizeTask(task: Task): Task {
   return {
     ...task,
     assignees: normalizeAssignees(task.assignees),
+    reviewHistory: normalizeReviewHistory(task.reviewHistory),
   };
 }
 
@@ -67,7 +101,49 @@ async function resolveAssignees(ids?: string[]): Promise<TaskAssignee[]> {
     .map((member) => ({ id: member.id, name: member.name }));
 }
 
-export { canChangeTaskStatus, canDeleteTask, canEditTask, isTaskCreator };
+function appendReviewEvent(
+  task: Task,
+  event: Omit<TaskReviewEvent, "id" | "createdAt">,
+  now: string,
+): TaskReviewEvent[] {
+  return [
+    ...task.reviewHistory,
+    {
+      id: randomUUID(),
+      ...event,
+      createdAt: now,
+    },
+  ];
+}
+
+async function persistTask(updated: Task): Promise<Task | null> {
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbTasks.sbUpdateTask(updated);
+    } catch (error) {
+      console.error("[tasks] supabase persist", error);
+      return null;
+    }
+  }
+
+  const store = await readStore();
+  const index = store.tasks.findIndex((t) => t.id === updated.id);
+  if (index < 0) return null;
+  store.tasks[index] = updated;
+  await writeStore(store);
+  return updated;
+}
+
+export {
+  canChangeTaskStatus,
+  canDeleteTask,
+  canEditTask,
+  canReviewTask,
+  canSubmitForApproval,
+  canDirectComplete,
+  canStartTask,
+  isTaskCreator,
+};
 
 export async function listTasks(): Promise<Task[]> {
   if (isSupabaseConfigured()) {
@@ -119,6 +195,7 @@ export async function createTask(
     dueDate: input.dueDate?.trim() || null,
     completedAt: status === "completed" ? now : null,
     updatedAt: now,
+    reviewHistory: [],
   };
 
   store.tasks.unshift(task);
@@ -142,15 +219,30 @@ export async function updateTask(
 ): Promise<Task | null> {
   const current = isSupabaseConfigured()
     ? await sbTasks.sbGetTask(id)
-    : (await readStore()).tasks.find((t) => t.id === id) ?? null;
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
   if (!current) return null;
 
   if (!canEditTask(current, user)) return null;
 
-  const nextStatus = input.status ?? current.status;
   const now = new Date().toISOString();
-  let completedAt = current.completedAt;
+  let nextStatus = input.status ?? current.status;
 
+  if (
+    nextStatus === "completed" &&
+    taskNeedsApprovalWorkflow(current) &&
+    current.status !== "completed"
+  ) {
+    return null;
+  }
+
+  if (
+    nextStatus === "pending_approval" ||
+    nextStatus === "needs_revision"
+  ) {
+    nextStatus = current.status;
+  }
+
+  let completedAt = current.completedAt;
   if (nextStatus === "completed" && current.status !== "completed") {
     completedAt = now;
   } else if (nextStatus !== "completed") {
@@ -179,21 +271,7 @@ export async function updateTask(
     updatedAt: now,
   };
 
-  if (isSupabaseConfigured()) {
-    try {
-      return await sbTasks.sbUpdateTask(updated);
-    } catch (error) {
-      console.error("[tasks] supabase update", error);
-      return null;
-    }
-  }
-
-  const store = await readStore();
-  const index = store.tasks.findIndex((t) => t.id === id);
-  if (index < 0) return null;
-  store.tasks[index] = updated;
-  await writeStore(store);
-  return updated;
+  return persistTask(updated);
 }
 
 export async function setTaskStatus(
@@ -203,9 +281,28 @@ export async function setTaskStatus(
 ): Promise<Task | null> {
   const current = isSupabaseConfigured()
     ? await sbTasks.sbGetTask(id)
-    : (await readStore()).tasks.find((t) => t.id === id) ?? null;
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
   if (!current) return null;
-  if (!canChangeTaskStatus(current, user)) return null;
+
+  if (status === "pending_approval" || status === "needs_revision") {
+    return null;
+  }
+
+  if (status === "completed") {
+    if (taskNeedsApprovalWorkflow(current)) {
+      return null;
+    }
+    if (!canDirectComplete(current, user) && !canEditTask(current, user)) {
+      return null;
+    }
+  } else if (status === "in_progress") {
+    if (!canStartTask(current, user) && current.status !== "in_progress") {
+      if (!canChangeTaskStatus(current, user)) return null;
+    }
+  } else if (!canChangeTaskStatus(current, user)) {
+    return null;
+  }
+
   if (current.status === status) return current;
 
   const now = new Date().toISOString();
@@ -216,27 +313,117 @@ export async function setTaskStatus(
     updatedAt: now,
   };
 
-  if (isSupabaseConfigured()) {
-    try {
-      return await sbTasks.sbUpdateTask(updated);
-    } catch (error) {
-      console.error("[tasks] supabase status", error);
-      return null;
-    }
-  }
+  return persistTask(updated);
+}
 
-  const store = await readStore();
-  const index = store.tasks.findIndex((t) => t.id === id);
-  if (index < 0) return null;
-  store.tasks[index] = updated;
-  await writeStore(store);
-  return updated;
+export async function submitTaskForApproval(
+  id: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = isSupabaseConfigured()
+    ? await sbTasks.sbGetTask(id)
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
+  if (!current) return null;
+  if (!canSubmitForApproval(current, user)) return null;
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...current,
+    status: "pending_approval",
+    completedAt: null,
+    updatedAt: now,
+    reviewHistory: appendReviewEvent(
+      current,
+      {
+        action: "submitted",
+        actorUserId: user.id,
+        actorName: user.name,
+      },
+      now,
+    ),
+  };
+
+  return persistTask(updated);
+}
+
+export async function approveTask(
+  id: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = isSupabaseConfigured()
+    ? await sbTasks.sbGetTask(id)
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
+  if (!current) return null;
+  if (!canReviewTask(current, user)) return null;
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...current,
+    status: "completed",
+    completedAt: now,
+    updatedAt: now,
+    reviewHistory: appendReviewEvent(
+      current,
+      {
+        action: "approved",
+        actorUserId: user.id,
+        actorName: user.name,
+      },
+      now,
+    ),
+  };
+
+  return persistTask(updated);
+}
+
+export async function requestTaskRevision(
+  id: string,
+  comment: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = isSupabaseConfigured()
+    ? await sbTasks.sbGetTask(id)
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
+  if (!current) return null;
+  if (!canReviewTask(current, user)) return null;
+
+  const trimmed = comment.trim();
+  if (!trimmed) return null;
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...current,
+    status: "needs_revision",
+    completedAt: null,
+    updatedAt: now,
+    reviewHistory: appendReviewEvent(
+      current,
+      {
+        action: "revision_requested",
+        actorUserId: user.id,
+        actorName: user.name,
+        comment: trimmed,
+      },
+      now,
+    ),
+  };
+
+  return persistTask(updated);
 }
 
 export async function completeTask(
   id: string,
   user: SessionUser,
 ): Promise<Task | null> {
+  const current = isSupabaseConfigured()
+    ? await sbTasks.sbGetTask(id)
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
+  if (!current) return null;
+
+  if (taskNeedsApprovalWorkflow(current)) {
+    return submitTaskForApproval(id, user);
+  }
+
   return setTaskStatus(id, "completed", user);
 }
 
@@ -246,7 +433,7 @@ export async function deleteTask(
 ): Promise<boolean> {
   const task = isSupabaseConfigured()
     ? await sbTasks.sbGetTask(id)
-    : (await readStore()).tasks.find((t) => t.id === id) ?? null;
+    : ((await readStore()).tasks.find((t) => t.id === id) ?? null);
   if (!task) return false;
 
   if (!canDeleteTask(task, user)) return false;
@@ -270,9 +457,11 @@ export async function getTaskStats(): Promise<TaskStats> {
   const tasks = await listTasks();
   return {
     total: tasks.length,
-    inProgress: tasks.filter((t) => t.status === "in_progress").length,
+    inProgress: tasks.filter(
+      (t) => t.status === "in_progress" || t.status === "needs_revision",
+    ).length,
+    pendingApproval: tasks.filter((t) => t.status === "pending_approval").length,
     completed: tasks.filter((t) => t.status === "completed").length,
     overdue: tasks.filter((t) => isTaskOverdue(t)).length,
   };
 }
-

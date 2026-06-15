@@ -2,7 +2,7 @@ import "server-only";
 
 import { getSupabaseAdmin } from "./server";
 import { normalizeAssignees } from "@/lib/tasks/assignees";
-import type { Task, TaskStatus } from "@/lib/tasks/types";
+import type { Task, TaskReviewEvent, TaskStatus } from "@/lib/tasks/types";
 
 type TaskRow = {
   id: string;
@@ -16,7 +16,35 @@ type TaskRow = {
   due_date: string | null;
   completed_at: string | null;
   updated_at: string;
+  review_history?: unknown;
 };
+
+function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const events: TaskReviewEvent[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const event = item as Partial<TaskReviewEvent>;
+    if (
+      !event.id ||
+      !event.action ||
+      !event.actorUserId ||
+      !event.actorName ||
+      !event.createdAt
+    ) {
+      continue;
+    }
+    events.push({
+      id: event.id,
+      action: event.action,
+      actorUserId: event.actorUserId,
+      actorName: event.actorName,
+      comment: event.comment,
+      createdAt: event.createdAt,
+    });
+  }
+  return events;
+}
 
 function mapRow(row: TaskRow): Task {
   return {
@@ -31,6 +59,7 @@ function mapRow(row: TaskRow): Task {
     dueDate: row.due_date,
     completedAt: row.completed_at,
     updatedAt: row.updated_at,
+    reviewHistory: normalizeReviewHistory(row.review_history),
   };
 }
 
@@ -47,6 +76,7 @@ function mapTask(task: Task): TaskRow {
     due_date: task.dueDate,
     completed_at: task.completedAt,
     updated_at: task.updatedAt,
+    review_history: task.reviewHistory,
   };
 }
 

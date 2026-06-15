@@ -87,6 +87,74 @@ export async function notifyTaskCompleted(params: {
   );
 }
 
+export async function notifyTaskPendingApproval(params: {
+  actorId: string;
+  actorName: string;
+  taskTitle: string;
+  creatorUserId: string;
+}) {
+  if (params.creatorUserId === params.actorId) return;
+
+  await createNotificationsForTeam(
+    {
+      type: "task_pending_approval",
+      title: "Задача на проверке",
+      author_name: params.actorName,
+      message: params.taskTitle,
+    },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: [params.creatorUserId],
+    },
+  );
+}
+
+export async function notifyTaskRevisionRequested(params: {
+  actorId: string;
+  actorName: string;
+  taskTitle: string;
+  comment: string;
+  assigneeIds: string[];
+}) {
+  const preview =
+    params.comment.length > 160
+      ? `${params.comment.slice(0, 160)}…`
+      : params.comment;
+
+  await createNotificationsForTeam(
+    {
+      type: "task_revision",
+      title: "Задача на доработке",
+      author_name: params.actorName,
+      message: `${params.taskTitle} — ${preview}`,
+    },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: params.assigneeIds.length ? params.assigneeIds : undefined,
+    },
+  );
+}
+
+export async function notifyTaskApproved(params: {
+  actorId: string;
+  actorName: string;
+  taskTitle: string;
+  assigneeIds: string[];
+}) {
+  await createNotificationsForTeam(
+    {
+      type: "task_completed",
+      title: "Задача принята",
+      author_name: params.actorName,
+      message: params.taskTitle,
+    },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: params.assigneeIds.length ? params.assigneeIds : undefined,
+    },
+  );
+}
+
 export async function notifyTaskStatusUpdate(params: {
   actorId: string;
   actorName: string;
@@ -94,8 +162,44 @@ export async function notifyTaskStatusUpdate(params: {
   previousStatus: TaskStatus;
   newStatus: TaskStatus;
   creatorUserId: string;
+  assigneeIds: string[];
+  revisionComment?: string | null;
 }) {
   if (params.newStatus === params.previousStatus) return;
+
+  if (params.newStatus === "pending_approval") {
+    await notifyTaskPendingApproval({
+      actorId: params.actorId,
+      actorName: params.actorName,
+      taskTitle: params.taskTitle,
+      creatorUserId: params.creatorUserId,
+    });
+    return;
+  }
+
+  if (params.newStatus === "needs_revision") {
+    await notifyTaskRevisionRequested({
+      actorId: params.actorId,
+      actorName: params.actorName,
+      taskTitle: params.taskTitle,
+      comment: params.revisionComment ?? "",
+      assigneeIds: params.assigneeIds,
+    });
+    return;
+  }
+
+  if (
+    params.newStatus === "completed" &&
+    params.previousStatus === "pending_approval"
+  ) {
+    await notifyTaskApproved({
+      actorId: params.actorId,
+      actorName: params.actorName,
+      taskTitle: params.taskTitle,
+      assigneeIds: params.assigneeIds,
+    });
+    return;
+  }
 
   if (params.newStatus === "completed") {
     await notifyTaskCompleted({

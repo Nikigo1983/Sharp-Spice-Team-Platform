@@ -1,11 +1,30 @@
-export const TASK_STATUSES = ["new", "in_progress", "completed"] as const;
+export const TASK_STATUSES = [
+  "new",
+  "in_progress",
+  "pending_approval",
+  "needs_revision",
+  "completed",
+] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   new: "Новая",
   in_progress: "В работе",
-  completed: "Выполнена",
+  pending_approval: "На проверке",
+  needs_revision: "На доработке",
+  completed: "Принята",
+};
+
+export type TaskReviewAction = "submitted" | "approved" | "revision_requested";
+
+export type TaskReviewEvent = {
+  id: string;
+  action: TaskReviewAction;
+  actorUserId: string;
+  actorName: string;
+  comment?: string;
+  createdAt: string;
 };
 
 export type TaskAssignee = {
@@ -25,11 +44,13 @@ export type Task = {
   dueDate: string | null;
   completedAt: string | null;
   updatedAt: string;
+  reviewHistory: TaskReviewEvent[];
 };
 
 export type TaskStats = {
   total: number;
   inProgress: number;
+  pendingApproval: number;
   completed: number;
   overdue: number;
 };
@@ -49,3 +70,8 @@ export type UpdateTaskInput = {
   status?: TaskStatus;
   assigneeIds?: string[];
 };
+
+export type TaskWorkflowAction =
+  | "submit_for_approval"
+  | "approve"
+  | "request_revision";

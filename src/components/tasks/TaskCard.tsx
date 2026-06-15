@@ -7,13 +7,17 @@ import { formatAssigneeNames } from "@/lib/tasks/assignees";
 import { formatTaskDate, formatTaskDateTime } from "@/lib/tasks/format";
 import { isTaskOverdue } from "@/lib/tasks/overdue";
 import {
-  canChangeTaskStatus,
+  canDirectComplete,
   canDeleteTask,
   canEditTask,
+  canReviewTask,
+  canStartTask,
+  canSubmitForApproval,
   isTaskAssignee,
   isTaskCreator,
 } from "@/lib/tasks/permissions";
-import type { Task, TaskStatus } from "@/lib/tasks/types";
+import type { Task } from "@/lib/tasks/types";
+import { getLatestRevisionComment } from "@/lib/tasks/workflow";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import styles from "./TaskCard.module.css";
 
@@ -21,8 +25,11 @@ type TaskCardProps = {
   task: Task;
   user: SessionUser;
   highlighted?: boolean;
+  workflowLoading?: boolean;
   onOpen: (task: Task) => void;
-  onStatusChange: (task: Task, status: TaskStatus) => void;
+  onStartTask: (task: Task) => void;
+  onComplete: (task: Task) => void;
+  onSubmitForApproval: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
 };
@@ -31,18 +38,27 @@ export function TaskCard({
   task,
   user,
   highlighted = false,
+  workflowLoading = false,
   onOpen,
-  onStatusChange,
+  onStartTask,
+  onComplete,
+  onSubmitForApproval,
   onEdit,
   onDelete,
 }: TaskCardProps) {
   const isCompleted = task.status === "completed";
+  const isPendingApproval = task.status === "pending_approval";
+  const isNeedsRevision = task.status === "needs_revision";
   const overdue = isTaskOverdue(task);
   const createdByMe = isTaskCreator(task, user);
   const assignedToMe = isTaskAssignee(task, user.id);
   const canEdit = canEditTask(task, user);
   const canDelete = canDeleteTask(task, user);
-  const canChangeStatus = canChangeTaskStatus(task, user);
+  const canStart = canStartTask(task, user);
+  const canSubmit = canSubmitForApproval(task, user);
+  const canCompleteDirect = canDirectComplete(task, user);
+  const canReview = canReviewTask(task, user);
+  const latestRevision = getLatestRevisionComment(task);
 
   return (
     <Card
@@ -50,6 +66,8 @@ export function TaskCard({
         styles.card,
         task.status === "new" ? styles.statusNew : "",
         task.status === "in_progress" ? styles.statusInProgress : "",
+        isPendingApproval ? styles.statusPending : "",
+        isNeedsRevision ? styles.statusRevision : "",
         isCompleted ? styles.completed : "",
         overdue ? styles.overdue : "",
         highlighted ? styles.highlighted : "",
@@ -58,13 +76,19 @@ export function TaskCard({
         .join(" ")}
     >
       {overdue ? <div className={styles.overdueBanner}>Просрочена</div> : null}
+      {isPendingApproval && createdByMe ? (
+        <div className={styles.pendingBanner}>На вашей проверке</div>
+      ) : null}
+      {isNeedsRevision && assignedToMe ? (
+        <div className={styles.revisionBanner}>Нужна доработка</div>
+      ) : null}
       {isCompleted ? (
         <div className={styles.completedBanner}>
           {createdByMe && !assignedToMe
-            ? `Выполнена исполнителем${
+            ? `Принята${
                 task.completedAt ? ` · ${formatTaskDateTime(task.completedAt)}` : ""
               }`
-            : `Выполнена${
+            : `Завершена${
                 task.completedAt ? ` · ${formatTaskDateTime(task.completedAt)}` : ""
               }`}
         </div>
@@ -86,6 +110,12 @@ export function TaskCard({
         </button>
         <TaskStatusBadge status={task.status} />
       </div>
+
+      {isNeedsRevision && latestRevision ? (
+        <p className={styles.revisionPreview}>
+          <strong>Комментарий:</strong> {latestRevision}
+        </p>
+      ) : null}
 
       {task.description ? (
         <p
@@ -119,35 +149,56 @@ export function TaskCard({
         </div>
         {isCompleted && task.completedAt ? (
           <div>
-            <dt>Выполнено</dt>
+            <dt>Принято</dt>
             <dd className={styles.completedAt}>{formatTaskDateTime(task.completedAt)}</dd>
           </div>
         ) : null}
       </dl>
 
-      {!isCompleted && canChangeStatus ? (
+      {!isCompleted && !isPendingApproval ? (
         <div className={styles.statusActions}>
-          <span className={styles.statusActionsLabel}>Быстрый статус:</span>
+          <span className={styles.statusActionsLabel}>Быстрые действия:</span>
           <div className={styles.statusButtons}>
-            {task.status === "new" ? (
+            {canStart ? (
               <Button
                 type="button"
                 variant="ghost"
                 className={styles.statusBtnInProgress}
-                onClick={() => onStatusChange(task, "in_progress")}
+                onClick={() => onStartTask(task)}
+                disabled={workflowLoading}
               >
                 ▶ В работе
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              className={styles.statusBtnComplete}
-              onClick={() => onStatusChange(task, "completed")}
-            >
-              ✅ Выполнено
-            </Button>
+            {canSubmit ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={styles.statusBtnComplete}
+                onClick={() => onSubmitForApproval(task)}
+                disabled={workflowLoading}
+              >
+                ✅ На проверку
+              </Button>
+            ) : null}
+            {canCompleteDirect ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={styles.statusBtnComplete}
+                onClick={() => onComplete(task)}
+                disabled={workflowLoading}
+              >
+                ✅ Выполнено
+              </Button>
+            ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {canReview ? (
+        <div className={styles.reviewHint}>
+          Откройте задачу, чтобы принять или отправить на доработку.
         </div>
       ) : null}
 
@@ -155,7 +206,7 @@ export function TaskCard({
         <Button type="button" variant="secondary" onClick={() => onOpen(task)}>
           Открыть
         </Button>
-        {canEdit ? (
+        {canEdit && !isPendingApproval ? (
           <Button type="button" variant="secondary" onClick={() => onEdit(task)}>
             ✏️ Редактировать
           </Button>

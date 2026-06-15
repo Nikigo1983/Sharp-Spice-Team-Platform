@@ -8,9 +8,9 @@ import { Card } from "@/components/ui/Card";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { SessionUser } from "@/lib/auth/types";
-import { isTaskCreator } from "@/lib/tasks/permissions";
+import { isTaskCreator, isTaskAssignee } from "@/lib/tasks/permissions";
 import { isTaskOverdue } from "@/lib/tasks/overdue";
-import { formatTaskDate } from "@/lib/tasks/format";
+import { formatTaskDate, TASK_FILTER_STATUS_OPTIONS } from "@/lib/tasks/format";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TaskCard } from "./TaskCard";
 import { TaskDetailModal } from "./TaskDetailModal";
@@ -26,7 +26,7 @@ type TasksViewProps = {
 };
 
 type StatusFilter = "all" | TaskStatus;
-type QuickFilter = "all" | "overdue" | "created_by_me" | "completed";
+type QuickFilter = "all" | "overdue" | "created_by_me" | "pending_review" | "needs_my_revision" | "completed";
 
 export function TasksView({ user, teamMembers }: TasksViewProps) {
   const router = useRouter();
@@ -45,6 +45,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
   const [viewTask, setViewTask] = useState<Task | null>(null);
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -115,6 +116,22 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     [tasks],
   );
 
+  const pendingMyReview = useMemo(
+    () =>
+      tasks.filter(
+        (task) => isTaskCreator(task, user) && task.status === "pending_approval",
+      ),
+    [tasks, user],
+  );
+
+  const needsMyRevision = useMemo(
+    () =>
+      tasks.filter(
+        (task) => isTaskAssignee(task, user.id) && task.status === "needs_revision",
+      ),
+    [tasks, user.id],
+  );
+
   const assignedByMeCompleted = useMemo(
     () =>
       tasks.filter(
@@ -126,23 +143,19 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     [tasks, user.id],
   );
 
-  const unreadCompletedNotifications = useMemo(
+  const unreadPendingNotifications = useMemo(
     () =>
       (notificationsCtx?.notifications ?? []).filter(
-        (item) => item.type === "task_completed" && !item.is_read,
+        (item) =>
+          (item.type === "task_pending_approval" ||
+            item.type === "task_revision" ||
+            item.type === "task_completed") &&
+          !item.is_read,
       ),
     [notificationsCtx?.notifications],
   );
 
-  const statusOptions = useMemo(
-    () => [
-      { value: "all", label: "Все статусы" },
-      { value: "new", label: "Новые" },
-      { value: "in_progress", label: "В работе" },
-      { value: "completed", label: "Выполненные" },
-    ],
-    [],
-  );
+  const statusOptions = useMemo(() => TASK_FILTER_STATUS_OPTIONS, []);
 
   const authorOptions = useMemo(
     () => [
@@ -175,6 +188,18 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       if (quickFilter === "created_by_me" && !isTaskCreator(task, user)) {
         return false;
       }
+      if (
+        quickFilter === "pending_review" &&
+        !(isTaskCreator(task, user) && task.status === "pending_approval")
+      ) {
+        return false;
+      }
+      if (
+        quickFilter === "needs_my_revision" &&
+        !(isTaskAssignee(task, user.id) && task.status === "needs_revision")
+      ) {
+        return false;
+      }
       if (quickFilter === "completed" && task.status !== "completed") {
         return false;
       }
@@ -202,6 +227,10 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     setQuickFilter(filter);
     if (filter === "completed") {
       setStatusFilter("completed");
+    } else if (filter === "pending_review") {
+      setStatusFilter("pending_approval");
+    } else if (filter === "needs_my_revision") {
+      setStatusFilter("needs_revision");
     } else if (filter === "all") {
       setStatusFilter("all");
     } else if (filter !== "overdue") {
@@ -249,7 +278,6 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         title: values.title,
         description: values.description,
         dueDate: values.dueDate || null,
-        status: values.status,
         assigneeIds: values.assigneeIds,
       }),
     });
@@ -259,33 +287,91 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     await fetchTasks();
   }
 
-  async function handleStatusChange(task: Task, status: TaskStatus) {
-    const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_status", status }),
-    });
-    if (!res.ok) {
-      setToast({
-        text:
-          res.status === 403
-            ? "Недостаточно прав для смены статуса."
-            : "Не удалось обновить статус.",
-        type: "error",
+  async function runWorkflow(
+    task: Task,
+    action:
+      | "set_status"
+      | "complete"
+      | "submit_for_approval"
+      | "approve"
+      | "request_revision",
+    extra?: { status?: TaskStatus; comment?: string },
+  ) {
+    setWorkflowLoading(true);
+    try {
+      const body: Record<string, string> = { action };
+      if (extra?.status) body.status = extra.status;
+      if (extra?.comment) body.comment = extra.comment;
+
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      return;
-    }
 
-    if (status === "completed") {
-      setToast({ text: "Задача отмечена выполненной." });
-    } else if (status === "in_progress") {
-      setToast({ text: "Задача в работе." });
-    } else {
-      setToast({ text: "Статус задачи обновлён." });
-    }
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setToast({
+          text:
+            res.status === 403
+              ? "Недостаточно прав для этого действия."
+              : data.error === "Comment required"
+                ? "Добавьте комментарий для доработки."
+                : "Не удалось обновить задачу.",
+          type: "error",
+        });
+        return;
+      }
 
-    setViewTask(null);
-    await fetchTasks();
+      const data = (await res.json()) as { task?: Task };
+      if (data.task) setViewTask(data.task);
+
+      switch (action) {
+        case "submit_for_approval":
+          setToast({ text: "Задача отправлена автору на проверку." });
+          break;
+        case "approve":
+          setToast({ text: "Задача принята и завершена." });
+          break;
+        case "request_revision":
+          setToast({ text: "Задача отправлена на доработку." });
+          break;
+        case "complete":
+          setToast({ text: "Задача отмечена выполненной." });
+          break;
+        case "set_status":
+          if (extra?.status === "in_progress") {
+            setToast({ text: "Задача в работе." });
+          } else {
+            setToast({ text: "Статус задачи обновлён." });
+          }
+          break;
+      }
+
+      await fetchTasks();
+    } finally {
+      setWorkflowLoading(false);
+    }
+  }
+
+  async function handleStartTask(task: Task) {
+    await runWorkflow(task, "set_status", { status: "in_progress" });
+  }
+
+  async function handleComplete(task: Task) {
+    await runWorkflow(task, "complete");
+  }
+
+  async function handleSubmitForApproval(task: Task) {
+    await runWorkflow(task, "submit_for_approval");
+  }
+
+  async function handleApprove(task: Task) {
+    await runWorkflow(task, "approve");
+  }
+
+  async function handleRequestRevision(task: Task, comment: string) {
+    await runWorkflow(task, "request_revision", { comment });
   }
 
   async function confirmDelete() {
@@ -321,12 +407,11 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         }
       />
 
-      {unreadCompletedNotifications.length > 0 ? (
+      {unreadPendingNotifications.length > 0 ? (
         <Card className={styles.completedNotificationAlert}>
           <div className={styles.completedNotificationHeader}>
             <strong>
-              ✅ Выполнено задач, которые вы назначили:{" "}
-              {unreadCompletedNotifications.length}
+              Уведомления по задачам: {unreadPendingNotifications.length}
             </strong>
             <Button
               type="button"
@@ -334,7 +419,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
               className={styles.completedNotificationDismiss}
               onClick={() => {
                 void (async () => {
-                  for (const item of unreadCompletedNotifications) {
+                  for (const item of unreadPendingNotifications) {
                     await notificationsCtx?.markRead(item.id);
                   }
                 })();
@@ -344,7 +429,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
             </Button>
           </div>
           <ul className={styles.completedNotificationList}>
-            {unreadCompletedNotifications.map((item) => (
+            {unreadPendingNotifications.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
@@ -409,6 +494,36 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         </Card>
       ) : null}
 
+      {!loading && pendingMyReview.length > 0 ? (
+        <Card className={styles.pendingAlert}>
+          <p className={styles.pendingAlertText}>
+            На вашей проверке: <strong>{pendingMyReview.length}</strong>
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => applyQuickFilter("pending_review")}
+          >
+            Показать задачи на проверке
+          </Button>
+        </Card>
+      ) : null}
+
+      {!loading && needsMyRevision.length > 0 ? (
+        <Card className={styles.revisionAlert}>
+          <p className={styles.revisionAlertText}>
+            Нужна ваша доработка: <strong>{needsMyRevision.length}</strong>
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => applyQuickFilter("needs_my_revision")}
+          >
+            Показать задачи на доработке
+          </Button>
+        </Card>
+      ) : null}
+
       {!loading && assignedByMeCompleted.length > 0 ? (
         <Card className={styles.completedAlert}>
           <p className={styles.completedAlertText}>
@@ -449,10 +564,24 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         </button>
         <button
           type="button"
+          className={[styles.quickFilter, quickFilter === "pending_review" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("pending_review")}
+        >
+          На проверке{pendingMyReview.length > 0 ? ` (${pendingMyReview.length})` : ""}
+        </button>
+        <button
+          type="button"
+          className={[styles.quickFilter, quickFilter === "needs_my_revision" ? styles.quickFilterActive : ""].join(" ")}
+          onClick={() => applyQuickFilter("needs_my_revision")}
+        >
+          На доработке{needsMyRevision.length > 0 ? ` (${needsMyRevision.length})` : ""}
+        </button>
+        <button
+          type="button"
           className={[styles.quickFilter, quickFilter === "completed" ? styles.quickFilterActive : ""].join(" ")}
           onClick={() => applyQuickFilter("completed")}
         >
-          Выполненные
+          Принятые
         </button>
       </div>
 
@@ -510,8 +639,11 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
                 task={task}
                 user={user}
                 highlighted={viewTask?.id === task.id || isTaskOverdue(task)}
+                workflowLoading={workflowLoading}
                 onOpen={openTask}
-                onStatusChange={(t, status) => void handleStatusChange(t, status)}
+                onStartTask={(t) => void handleStartTask(t)}
+                onComplete={(t) => void handleComplete(t)}
+                onSubmitForApproval={(t) => void handleSubmitForApproval(t)}
                 onEdit={setEditTask}
                 onDelete={setDeleteTask}
               />
@@ -535,10 +667,15 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
         <TaskDetailModal
           task={viewTask}
           user={user}
+          workflowLoading={workflowLoading}
           onClose={closeTaskView}
           onEdit={setEditTask}
           onDelete={setDeleteTask}
-          onStatusChange={(t, status) => void handleStatusChange(t, status)}
+          onStartTask={(t) => void handleStartTask(t)}
+          onComplete={(t) => void handleComplete(t)}
+          onSubmitForApproval={(t) => void handleSubmitForApproval(t)}
+          onApprove={(t) => void handleApprove(t)}
+          onRequestRevision={(t, comment) => void handleRequestRevision(t, comment)}
         />
       ) : null}
 
@@ -547,6 +684,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           <TaskForm
             initial={taskToFormValues(editTask)}
             teamMembers={teamMembers}
+            isEditing
             submitLabel="Сохранить"
             onCancel={() => setEditTask(null)}
             onSubmit={handleUpdate}

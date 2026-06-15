@@ -16,5 +16,14 @@ export function formatTaskDateTime(iso: string): string {
 export const TASK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "new", label: TASK_STATUS_LABELS.new },
   { value: "in_progress", label: TASK_STATUS_LABELS.in_progress },
-  { value: "completed", label: TASK_STATUS_LABELS.completed },
 ];
+
+export const TASK_FILTER_STATUS_OPTIONS: { value: TaskStatus | "all"; label: string }[] =
+  [
+    { value: "all", label: "Все статусы" },
+    { value: "new", label: TASK_STATUS_LABELS.new },
+    { value: "in_progress", label: TASK_STATUS_LABELS.in_progress },
+    { value: "pending_approval", label: TASK_STATUS_LABELS.pending_approval },
+    { value: "needs_revision", label: TASK_STATUS_LABELS.needs_revision },
+    { value: "completed", label: TASK_STATUS_LABELS.completed },
+  ];

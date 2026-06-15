@@ -2,6 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { buildFormgridRowKey } from "@/lib/leads/formgrid-row-key";
 import {
   getFormgridLeadsTable,
   type LeadsTableResult,
@@ -66,26 +67,6 @@ async function writeStore(store: KnownLeadsStore): Promise<void> {
   await writeStoreToFile(store);
 }
 
-function buildRowKey(headers: string[], row: string[]): string {
-  const nameIdx = headers.findIndex((header) =>
-    /имя|name|фио/i.test(header),
-  );
-  const emailIdx = headers.findIndex((header) =>
-    /email|почта|e-mail/i.test(header),
-  );
-  const phoneIdx = headers.findIndex((header) =>
-    /тел|phone/i.test(header),
-  );
-
-  const parts = [
-    nameIdx >= 0 ? row[nameIdx] : "",
-    emailIdx >= 0 ? row[emailIdx] : "",
-    phoneIdx >= 0 ? row[phoneIdx] : "",
-    row.join("|"),
-  ];
-  return parts.join("::");
-}
-
 function getClientName(headers: string[], row: string[]): string {
   const nameIdx = headers.findIndex((header) =>
     /имя|name|фио/i.test(header),
@@ -144,7 +125,9 @@ export async function processFormgridLeadsForNotifications(
   table: LeadsTableResult,
 ): Promise<void> {
   const store = await readStore();
-  const currentKeys = table.rows.map((row) => buildRowKey(table.headers, row));
+  const currentKeys = table.rows.map((row) =>
+    buildFormgridRowKey(table.headers, row),
+  );
 
   if (!store.initialized) {
     await writeStore({
@@ -156,7 +139,7 @@ export async function processFormgridLeadsForNotifications(
 
   const known = new Set(store.rowKeys);
   const newRows = table.rows.filter(
-    (row) => !known.has(buildRowKey(table.headers, row)),
+    (row) => !known.has(buildFormgridRowKey(table.headers, row)),
   );
 
   if (!newRows.length) return;

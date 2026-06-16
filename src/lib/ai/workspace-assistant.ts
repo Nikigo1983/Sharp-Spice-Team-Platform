@@ -5,7 +5,11 @@ import {
   type ChatCompletionOptions,
   type ChatMessage,
 } from "@/lib/ai/openai";
-import { detectWorkspaceIntent } from "@/lib/ai/query-intent";
+import {
+  detectWorkspaceIntent,
+  isPassportNumberLookupQuery,
+} from "@/lib/ai/query-intent";
+import { extractPersonNameTokens } from "@/lib/ai/name-matching";
 import {
   getWorkspaceAiConfig,
   type WorkspaceResponseMode,
@@ -331,6 +335,17 @@ async function prepareWorkspaceRequest(
     }
   }
 
+  if (isPassportNumberLookupQuery(trimmed)) {
+    const direct = await tryDirectPassportAnswer(trimmed);
+    if (direct) {
+      return {
+        kind: "direct",
+        reply: direct,
+        sources: ["Клиенты"],
+      };
+    }
+  }
+
   if (intent.fastClientLookup && !clientContext) {
     const direct = await tryDirectBookingAnswer(trimmed);
     if (direct) {
@@ -607,6 +622,30 @@ async function tryDirectEmigrantStatusAnswer(
   }
 
   return parts.join(" ");
+}
+
+async function tryDirectPassportAnswer(message: string): Promise<string | null> {
+  const tokens = extractPersonNameTokens(message);
+  if (tokens.length === 0) return null;
+
+  const { items } = await listClients(1, 500);
+  const client = items.find((entry) => {
+    const nameLower = entry.name.toLowerCase();
+    return tokens.every((token) => nameLower.includes(token.toLowerCase()));
+  });
+  if (!client) return null;
+
+  const passport = client.passportNumber?.trim();
+  if (passport && passport !== "—") {
+    return [
+      `Номер паспорта **${client.name}** в таблице «Клиенты»: **${passport}**.`,
+      client.rowIndex ? `(строка ${client.rowIndex} в Google Sheets.)` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return `Клиент **${client.name}** найден в таблице «Клиенты», но колонка «Номер паспорта» пуста${client.rowIndex ? ` (строка ${client.rowIndex})` : ""}.`;
 }
 
 async function tryDirectBookingAnswer(message: string): Promise<string | null> {

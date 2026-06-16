@@ -10,7 +10,7 @@
     "lint": "node --use-system-ca ./node_modules/next/dist/bin/next lint",
     "auth:hash-password": "node scripts/hash-password.mjs",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
-    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --import ./scripts/test-register.mjs --test src/lib/ai/client-passport.test.ts src/lib/ai/client-deduplication.test.ts src/lib/ai/client-field-sources.test.ts src/lib/ai/query-intent.test.ts src/lib/google-sheets/parse-croatia-external.test.ts src/lib/leads/formgrid-to-crm-mapper.test.ts src/lib/leads/desk-dedup.test.ts src/lib/leads/lead-review-dedup.integration.test.ts src/lib/leads/lead-review-action-errors.test.ts"
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --import ./scripts/test-register.mjs --test src/lib/ai/client-passport.test.ts src/lib/ai/client-deduplication.test.ts src/lib/ai/client-field-sources.test.ts src/lib/ai/format-client-passport.test.ts src/lib/ai/query-intent.test.ts src/lib/google-sheets/parse-croatia-external.test.ts src/lib/leads/formgrid-to-crm-mapper.test.ts src/lib/leads/desk-dedup.test.ts src/lib/leads/lead-review-dedup.integration.test.ts src/lib/leads/lead-review-action-errors.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

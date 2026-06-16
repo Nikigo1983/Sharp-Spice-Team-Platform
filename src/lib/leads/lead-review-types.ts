@@ -25,6 +25,13 @@ export type LeadReviewRecord = {
   note?: string;
   /** Placeholder until Sheets write-path is implemented. */
   pendingCrmClientId?: string;
+  crmWritePreview?: {
+    mode: "status_only" | "dry_run" | "write_blocked" | "write";
+    targetRange?: string;
+    rowValues?: string[];
+    validationErrors?: string[];
+    duplicateReasons?: string[];
+  };
 };
 
 export type LeadReviewStore = {

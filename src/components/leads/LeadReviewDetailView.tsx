@@ -10,6 +10,7 @@ import type {
   LeadDuplicateMatch,
   LeadReviewAction,
 } from "@/lib/leads/lead-review-types";
+import { formatLeadReviewActionUserMessage } from "@/lib/leads/lead-review-action-errors";
 import styles from "./LeadReviewQueue.module.css";
 
 function MatchBlock({
@@ -100,11 +101,18 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (!res.ok) throw new Error("patch failed");
-      const data = (await res.json()) as { lead?: LeadDetail };
+      const data = (await res.json().catch(() => ({}))) as {
+        lead?: LeadDetail;
+        error?: string;
+        code?: string;
+      };
+      if (!res.ok) {
+        setError(formatLeadReviewActionUserMessage(data.code, data.error));
+        return;
+      }
       setLead(data.lead ?? null);
     } catch {
-      setError("Не удалось выполнить действие");
+      setError("Не удалось выполнить действие. Проверьте подключение и попробуйте ещё раз.");
     } finally {
       setActing(false);
     }
@@ -294,7 +302,11 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
               </div>
             ) : null}
 
-            {error ? <div className={styles.noteBox}>{error}</div> : null}
+            {error ? (
+              <div className={styles.alertError} role="alert">
+                {error}
+              </div>
+            ) : null}
           </Card>
         </div>
       </div>

@@ -12,6 +12,10 @@ import {
   buildExternalRowFromFormgridLead,
 } from "@/lib/leads/formgrid-to-crm-mapper";
 import { validateLeadForCrmCreate } from "@/lib/leads/lead-create-validation";
+import {
+  resolveDuplicateErrorCode,
+  resolveValidationErrorCode,
+} from "@/lib/leads/lead-review-action-errors";
 import { analyzeLeadDuplicates } from "@/lib/leads/lead-review-dedup";
 import {
   readLeadReviewStore,
@@ -271,13 +275,10 @@ export async function applyLeadReviewAction(
       email: fields.email,
     });
     if (validationErrors.length > 0) {
-      const hasTestLeadDetected = validationErrors.includes("test_lead_detected");
       throw new LeadReviewActionError(
         422,
-        "validation_error",
-        hasTestLeadDetected
-          ? "validation_error: test_lead_detected"
-          : `Validation failed: ${validationErrors.join(", ")}`,
+        resolveValidationErrorCode(validationErrors),
+        `Validation failed: ${validationErrors.join(", ")}`,
       );
     }
 
@@ -287,7 +288,7 @@ export async function applyLeadReviewAction(
       ];
       throw new LeadReviewActionError(
         409,
-        "duplicate_detected",
+        resolveDuplicateErrorCode(detail.dedup.strongMatches),
         `Strong duplicate found: ${reasons.join(", ")}`,
       );
     }

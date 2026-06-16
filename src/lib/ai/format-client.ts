@@ -54,3 +54,30 @@ export function formatClientOneLiner(client: Client): string {
   );
   return `- ${client.name} | паспорт ${client.passportNumber ?? "—"} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
 }
+
+/** Отсекает латиницу ФИО, ошибочно попавшую в колонку паспорта. */
+export function looksLikePassportNumber(value: string): boolean {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || trimmed === "—") return false;
+  if (/\s/.test(trimmed) && !/\d/.test(trimmed)) return false;
+  const alnum = trimmed.replace(/[^\p{L}\p{N}]/gu, "");
+  return alnum.length >= 6 && /\d/.test(alnum);
+}
+
+/** Короткий ответ менеджеру на вопрос про номер паспорта. */
+export function formatPassportLookupReply(
+  clientName: string,
+  passport: string,
+  rowIndex?: number,
+): string {
+  const row = rowIndex && rowIndex > 0 ? ` · строка ${rowIndex}` : "";
+  return `**${passport}** — паспорт ${clientName} · таблица «Клиенты»${row}`;
+}
+
+export function formatPassportMissingReply(
+  clientName: string,
+  rowIndex?: number,
+): string {
+  const row = rowIndex && rowIndex > 0 ? ` (строка ${rowIndex})` : "";
+  return `У **${clientName}** в таблице «Клиенты» колонка «Номер паспорта» пуста${row}.`;
+}

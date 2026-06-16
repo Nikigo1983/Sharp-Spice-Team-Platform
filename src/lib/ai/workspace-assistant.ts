@@ -10,6 +10,12 @@ import {
   isPassportNumberLookupQuery,
 } from "@/lib/ai/query-intent";
 import { extractPersonNameTokens } from "@/lib/ai/name-matching";
+import { extractPassportFromClientRecord } from "@/lib/ai/client-passport";
+import {
+  formatPassportLookupReply,
+  formatPassportMissingReply,
+  looksLikePassportNumber,
+} from "@/lib/ai/format-client";
 import {
   getWorkspaceAiConfig,
   type WorkspaceResponseMode,
@@ -177,7 +183,7 @@ function buildChatMessages(
   }));
 
   const clientNote = contextBlock.includes("CLIENT CONTEXT")
-    ? "\n\nДля данных о клиенте используй CLIENT CONTEXT. У каждого поля указан источник (CRM / Formgrid / Emigrant Desk) — в ответе менеджеру кратко поясни происхождение человеческим языком (например: «контакты из анкеты Formgrid»), не выводи сырой блок целиком."
+    ? "\n\nДля данных о клиенте используй CLIENT CONTEXT. У каждого поля указан источник — в ответе кратко поясни «таблица «Клиенты»», «анкета Formgrid» и т.д., не пиши «CRM» и не выводи сырой блок."
     : "";
   const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)")
     ? "\n\nДля запросов про папку ЭМИГРАНТ используй блок «ЭМИГРАНТ (документы клиентов)». Отсутствие в таблицах Клиенты не означает отсутствие в Drive."
@@ -209,6 +215,66 @@ function getCompletionOptions(): ChatCompletionOptions {
     maxTokens: workspaceConfig.maxTokens,
     model: workspaceConfig.model,
   };
+}
+
+function findRecentPassportQuestion(
+  history: WorkspaceChatTurn[],
+): string | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    if (turn.role === "user" && isPassportNumberLookupQuery(turn.content)) {
+      return turn.content;
+    }
+  }
+  return null;
+}
+
+function passportReplyFromClientContext(
+  ctx: ClientContext,
+): string | null {
+  const { raw } = extractPassportFromClientRecord(ctx);
+  if (!raw || !looksLikePassportNumber(raw)) return null;
+  return formatPassportLookupReply(ctx.name, raw, ctx.rowIndex);
+}
+
+function passportReplyFromResolvedContext(
+  ctx: ResolvedClientContext,
+): string | null {
+  const parts = isMergedClientContext(ctx) ? ctx.parts : [ctx];
+  const crm = parts.find((part) => part.source === "clients");
+  if (!crm) return null;
+  return passportReplyFromClientContext(crm);
+}
+
+function buildPassportLookupDirectResult(reply: string) {
+  return {
+    kind: "direct" as const,
+    reply,
+    sources: ["Клиенты"],
+    pendingClientCandidates: [] as ClientContext[],
+    needsClientSelection: false,
+  };
+}
+
+async function resolvePassportLookupReply(
+  query: string,
+  clientContext: ResolvedClientContext | null,
+  clientCandidates: ResolvedClientContext[] | null,
+  pendingForUi: ClientContext[] | undefined,
+): Promise<string | null> {
+  if (clientContext) {
+    const fromContext = passportReplyFromResolvedContext(clientContext);
+    if (fromContext) return fromContext;
+  }
+  if (clientCandidates?.length === 1) {
+    const fromCandidate = passportReplyFromResolvedContext(clientCandidates[0]);
+    if (fromCandidate) return fromCandidate;
+  }
+  if (pendingForUi?.length === 1) {
+    const fromPending = passportReplyFromClientContext(pendingForUi[0]);
+    if (fromPending) return fromPending;
+  }
+  return tryDirectPassportAnswer(query);
 }
 
 async function prepareWorkspaceRequest(
@@ -280,7 +346,29 @@ async function prepareWorkspaceRequest(
     history,
   );
 
+  if (followUp?.kind === "select" && findRecentPassportQuestion(history)) {
+    const fromSelected = passportReplyFromClientContext(followUp.client);
+    if (fromSelected) {
+      return buildPassportLookupDirectResult(fromSelected);
+    }
+    const passportQuery = findRecentPassportQuestion(history);
+    if (passportQuery) {
+      const retry = await tryDirectPassportAnswer(passportQuery);
+      if (retry) {
+        return buildPassportLookupDirectResult(retry);
+      }
+    }
+  }
+
   const intent = detectWorkspaceIntent(trimmed);
+
+  if (isPassportNumberLookupQuery(trimmed)) {
+    const early = await tryDirectPassportAnswer(trimmed);
+    if (early) {
+      return buildPassportLookupDirectResult(early);
+    }
+  }
+
   let clientContext: ResolvedClientContext | null = null;
   let clientCandidates: ResolvedClientContext[] | null = null;
   let candidateScenario: ClientCandidateScenario | null = null;
@@ -336,14 +424,17 @@ async function prepareWorkspaceRequest(
   }
 
   if (isPassportNumberLookupQuery(trimmed)) {
-    const direct = await tryDirectPassportAnswer(trimmed);
-    if (direct) {
-      return {
-        kind: "direct",
-        reply: direct,
-        sources: ["Клиенты"],
-      };
+    const passportReply = await resolvePassportLookupReply(
+      trimmed,
+      clientContext,
+      clientCandidates,
+      pendingForUi,
+    );
+    if (passportReply) {
+      return buildPassportLookupDirectResult(passportReply);
     }
+    needsClientSelection = false;
+    pendingForUi = undefined;
   }
 
   if (intent.fastClientLookup && !clientContext) {
@@ -636,16 +727,15 @@ async function tryDirectPassportAnswer(message: string): Promise<string | null> 
   if (!client) return null;
 
   const passport = client.passportNumber?.trim();
-  if (passport && passport !== "—") {
-    return [
-      `Номер паспорта **${client.name}** в таблице «Клиенты»: **${passport}**.`,
-      client.rowIndex ? `(строка ${client.rowIndex} в Google Sheets.)` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+  if (passport && passport !== "—" && looksLikePassportNumber(passport)) {
+    return formatPassportLookupReply(
+      client.name,
+      passport,
+      client.rowIndex,
+    );
   }
 
-  return `Клиент **${client.name}** найден в таблице «Клиенты», но колонка «Номер паспорта» пуста${client.rowIndex ? ` (строка ${client.rowIndex})` : ""}.`;
+  return formatPassportMissingReply(client.name, client.rowIndex);
 }
 
 async function tryDirectBookingAnswer(message: string): Promise<string | null> {

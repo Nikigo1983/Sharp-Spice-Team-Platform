@@ -116,7 +116,7 @@ export function buildManagerSourceSummary(sources: DataSourceLabel[]): string {
   const unique = [...new Set(sources)];
   if (unique.length === 0) return "";
   if (unique.length === 1) {
-    if (unique[0] === "CRM") return "Данные получены из CRM (таблица «Клиенты»).";
+    if (unique[0] === "CRM") return "Данные из таблицы «Клиенты».";
     if (unique[0] === "Formgrid") {
       return "Данные получены из анкеты Formgrid (новые клиенты).";
     }

@@ -16,6 +16,37 @@ export type WorkspaceQueryIntent = {
   needsFormgrid: boolean;
 };
 
+/** Номер паспорта из таблицы «Клиенты», а не скан/PDF в Drive. */
+export function isPassportNumberLookupQuery(query: string): boolean {
+  const lower = query.toLowerCase();
+  if (
+    /номер\s+(?:загран(?:ичного)?\s+)?паспорта/iu.test(query) ||
+    /паспорт\s*(?:номер|№|no\.?)/iu.test(query)
+  ) {
+    return true;
+  }
+  if (!lower.includes("паспорт")) return false;
+  if (
+    lower.includes("скан") ||
+    lower.includes("копи") ||
+    lower.includes("pdf") ||
+    lower.includes("drive") ||
+    lower.includes("файл") ||
+    (lower.includes("документ") && !lower.includes("номер"))
+  ) {
+    return false;
+  }
+  const hasClientName =
+    extractPersonNameTokens(query).length > 0 ||
+    /(?:клиент[а-я]*|у)\s+[а-яё\-]{3,}/iu.test(query);
+  return (
+    hasClientName ||
+    lower.includes("какой") ||
+    lower.includes("какая") ||
+    lower.includes("скажи")
+  );
+}
+
 /** Запрос про папку «ЭМИГРАНТ» в Google Drive, а не про таблицы клиентов. */
 export function isEmigrantDrivePrimaryQuery(query: string): boolean {
   const lower = query.toLowerCase();
@@ -32,6 +63,8 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
   const lower = query.toLowerCase();
   const emigrantDrivePrimary = isEmigrantDrivePrimaryQuery(query);
 
+  const asksPassportFromTable = isPassportNumberLookupQuery(query);
+
   const hasClientName =
     extractPersonNameTokens(query).length > 0 ||
     /(?:клиент[а-я]*|у)\s+[а-яё\-]{3,}/iu.test(query);
@@ -39,7 +72,8 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     hasClientName &&
     (lower.includes("букинг") ||
       lower.includes("адрес") ||
-      lower.includes("статус"));
+      lower.includes("статус") ||
+      asksPassportFromTable);
 
   const needsFormgrid =
     lower.includes("formgrid") ||
@@ -64,7 +98,7 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     lower.includes("pdf") ||
     lower.includes("скан") ||
     lower.includes("копи") ||
-    lower.includes("паспорт") ||
+    (lower.includes("паспорт") && !asksPassportFromTable) ||
     lower.includes("документ") ||
     lower.includes("drive") ||
     lower.includes("внж") ||

@@ -126,8 +126,8 @@ export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
     emigrantDrivePrimary,
     needsClients:
       !emigrantDrivePrimary && (needsClients || !needsFormgrid),
-    needsEmigrantDesk:
-      !emigrantDrivePrimary && (needsEmigrantDesk || needsClients),
+    /** Desk — отдельный продукт; не подмешивать к запросам о клиентах из Google Sheets CRM */
+    needsEmigrantDesk: !emigrantDrivePrimary && needsEmigrantDesk,
     needsFormgrid,
   };
 }

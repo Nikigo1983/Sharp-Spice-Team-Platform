@@ -116,6 +116,28 @@ function pickCell(
   return "";
 }
 
+/** Шапка без колонки латиницы: «Номер паспорта» в B, данные — латиница в B, паспорт в C. */
+function isExternalLatinColumnShift(
+  idxFamily: number,
+  idxPassport: number,
+  familyCol: number,
+  latinCol: number,
+): boolean {
+  return (
+    (idxFamily < 0 || idxFamily === familyCol) && idxPassport === latinCol
+  );
+}
+
+function pickExternalCell(
+  row: string[],
+  headerIdx: number,
+  fixedCol: number,
+  useFixedLayout: boolean,
+): string {
+  if (useFixedLayout) return pickCell(row, -1, fixedCol);
+  return pickCell(row, headerIdx, fixedCol);
+}
+
 /**
  * Парсер таблицы "Клиенты Хорватия" (вкладка External).
  * Приводит данные к нашей модели Client, чтобы `ClientsList` показывал синхронизированные записи.
@@ -174,17 +196,34 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
   ]);
   const idxAppPassword = findHeaderIndex(headers, ["пароль для приложения", "пароль"]);
 
+  const useFixedLayout = isExternalLatinColumnShift(
+    idxFamily,
+    idxPassport,
+    COL.family,
+    COL.familyLatin,
+  );
+
   const direction = "Хорватия";
   const country = "Хорватия";
 
   return rows.slice(1).flatMap((row, index) => {
-    const family = pickCell(row, idxFamily, COL.family);
+    const family = pickExternalCell(row, idxFamily, COL.family, useFixedLayout);
     const familyLatin = pickCell(row, -1, COL.familyLatin);
-    const passport = pickCell(row, idxPassport, COL.passport);
+    const passport = pickExternalCell(
+      row,
+      idxPassport,
+      COL.passport,
+      useFixedLayout,
+    );
     if (!family && !passport) return [];
 
-    const notes = pickCell(row, idxNotes, COL.notes);
-    const approvalRaw = pickCell(row, idxApproval, COL.approvalAt);
+    const notes = pickExternalCell(row, idxNotes, COL.notes, useFixedLayout);
+    const approvalRaw = pickExternalCell(
+      row,
+      idxApproval,
+      COL.approvalAt,
+      useFixedLayout,
+    );
 
     const { status, derivation } = deriveCroatiaExternalStatus(notes, approvalRaw);
     const familyName = family || "—";
@@ -197,20 +236,38 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
       derivation,
     });
 
-    const createdAt = pickCell(row, idxDateSubmit, COL.submittedAt) || "—";
+    const createdAt =
+      pickExternalCell(row, idxDateSubmit, COL.submittedAt, useFixedLayout) ||
+      "—";
 
     const submittedAt2Raw = pickCell(row, idxDateSubmit2);
     const submittedAt2 =
       idxDateSubmit2 >= 0 && submittedAt2Raw ? submittedAt2Raw : "—";
 
     const expectedApprovalAt =
-      pickCell(row, idxExpectedApproval, COL.expectedApproval) || "—";
+      pickExternalCell(
+        row,
+        idxExpectedApproval,
+        COL.expectedApproval,
+        useFixedLayout,
+      ) || "—";
 
-    const referentName = pickCell(row, idxRef, COL.referent) || "—";
+    const referentName =
+      pickExternalCell(row, idxRef, COL.referent, useFixedLayout) || "—";
     const bookingAddress =
-      pickCell(row, idxBookingAddress, COL.bookingAddress) || "—";
+      pickExternalCell(
+        row,
+        idxBookingAddress,
+        COL.bookingAddress,
+        useFixedLayout,
+      ) || "—";
     const bookingRange =
-      pickCell(row, idxBookingRange, COL.bookingRange) || "—";
+      pickExternalCell(
+        row,
+        idxBookingRange,
+        COL.bookingRange,
+        useFixedLayout,
+      ) || "—";
 
     const lastActivity =
       bookingRange !== "—"
@@ -242,8 +299,19 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
         approvalAt: approvalRaw || "—",
         notes: notes || "—",
         residenceCardIssuedAt:
-          pickCell(row, idxResidenceCard, COL.residenceCardIssuedAt) || "—",
-        appPassword: pickCell(row, idxAppPassword, COL.appPassword) || "—",
+          pickExternalCell(
+            row,
+            idxResidenceCard,
+            COL.residenceCardIssuedAt,
+            useFixedLayout,
+          ) || "—",
+        appPassword:
+          pickExternalCell(
+            row,
+            idxAppPassword,
+            COL.appPassword,
+            useFixedLayout,
+          ) || "—",
         rowIndex: index + 2,
       },
     ];

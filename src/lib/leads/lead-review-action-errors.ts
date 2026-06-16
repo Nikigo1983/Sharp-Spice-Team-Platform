@@ -2,7 +2,6 @@ import type { LeadDuplicateMatch } from "@/lib/leads/lead-review-types";
 
 export type LeadReviewActionErrorCode =
   | "duplicate_detected_crm"
-  | "duplicate_detected_desk"
   | "duplicate_detected"
   | "test_lead_detected"
   | "phone_invalid"
@@ -16,11 +15,10 @@ export function resolveValidationErrorCode(errors: string[]): LeadReviewActionEr
 }
 
 export function resolveDuplicateErrorCode(
-  strongMatches: LeadDuplicateMatch[],
+  blockingStrongMatches: LeadDuplicateMatch[],
 ): LeadReviewActionErrorCode {
-  const sources = new Set(strongMatches.map((match) => match.source));
+  const sources = new Set(blockingStrongMatches.map((match) => match.source));
   if (sources.has("crm")) return "duplicate_detected_crm";
-  if (sources.has("desk")) return "duplicate_detected_desk";
   return "duplicate_detected";
 }
 
@@ -31,8 +29,6 @@ export function formatLeadReviewActionUserMessage(
   switch (code) {
     case "duplicate_detected_crm":
       return "Клиент не создан: найден надёжный дубликат в CRM. Проверьте совпадения в блоке «Проверка дублей».";
-    case "duplicate_detected_desk":
-      return "Клиент не создан: клиент уже есть в Emigrant Desk. Проверьте совпадение по case number или email.";
     case "duplicate_detected":
       return "Клиент не создан: найден надёжный дубликат. Проверьте совпадения в блоке «Проверка дублей».";
     case "test_lead_detected":

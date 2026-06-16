@@ -169,8 +169,8 @@ export async function listLeadReviewQueue(): Promise<{
       row,
       index,
       reviewStatus,
-      dedup.hasStrongMatch,
-      dedup.hasMediumMatch || dedup.hasPossibleMatch,
+      dedup.hasBlockingStrongMatch,
+      dedup.hasPossibleMatch,
       review?.updatedAt,
     );
   });
@@ -214,7 +214,7 @@ export async function getLeadReviewDetail(
     row,
     dataRowIndex,
     reviewStatus,
-    dedup.hasStrongMatch,
+    dedup.hasBlockingStrongMatch,
     dedup.hasPossibleMatch,
     review?.updatedAt,
   );
@@ -282,13 +282,13 @@ export async function applyLeadReviewAction(
       );
     }
 
-    if (detail.dedup.hasStrongMatch) {
+    if (detail.dedup.hasBlockingStrongMatch) {
       const reasons = [
-        ...new Set(detail.dedup.strongMatches.flatMap((m) => m.reasons)),
+        ...new Set(detail.dedup.blockingStrongMatches.flatMap((m) => m.reasons)),
       ];
       throw new LeadReviewActionError(
         409,
-        resolveDuplicateErrorCode(detail.dedup.strongMatches),
+        resolveDuplicateErrorCode(detail.dedup.blockingStrongMatches),
         `Strong duplicate found: ${reasons.join(", ")}`,
       );
     }

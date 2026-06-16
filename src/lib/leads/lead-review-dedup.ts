@@ -48,14 +48,15 @@ export function analyzeLeadDuplicates(
   deskClients: EmigrantDeskClient[] = [],
   leadFields?: LeadDedupInput,
 ): LeadDedupAnalysis {
-  const strongMatches: LeadDuplicateMatch[] = [];
-  const mediumMatches: LeadDuplicateMatch[] = [];
+  const blockingStrongMatches: LeadDuplicateMatch[] = [];
+  const deskStrongMatches: LeadDuplicateMatch[] = [];
+  const deskMediumMatches: LeadDuplicateMatch[] = [];
   const possibleMatches: LeadDuplicateMatch[] = [];
 
   for (const crm of crmContexts) {
     const check = areClientsDuplicates(lead, crm);
     if (check.isDuplicate) {
-      pushMatch(strongMatches, {
+      pushMatch(blockingStrongMatches, {
         matchType: "strong",
         source: "crm",
         name: crm.name,
@@ -81,7 +82,7 @@ export function analyzeLeadDuplicates(
 
     const check = areClientsDuplicates(lead, other);
     if (check.isDuplicate) {
-      pushMatch(strongMatches, {
+      pushMatch(blockingStrongMatches, {
         matchType: "strong",
         source: "formgrid",
         name: other.name,
@@ -111,7 +112,7 @@ export function analyzeLeadDuplicates(
     const deskName = deskClientFullName(desk) || desk.email;
 
     if (check.isStrongDuplicate) {
-      pushMatch(strongMatches, {
+      pushMatch(deskStrongMatches, {
         matchType: "strong",
         source: "desk",
         name: deskName,
@@ -119,7 +120,7 @@ export function analyzeLeadDuplicates(
         reasons: formatDeskStrongReasons(check.strongReasons),
       });
     } else if (check.isMediumDuplicate) {
-      pushMatch(mediumMatches, {
+      pushMatch(deskMediumMatches, {
         matchType: "medium",
         source: "desk",
         name: deskName,
@@ -129,12 +130,16 @@ export function analyzeLeadDuplicates(
     }
   }
 
+  const hasDeskHint =
+    deskStrongMatches.length > 0 || deskMediumMatches.length > 0;
+
   return {
-    strongMatches,
-    mediumMatches,
+    blockingStrongMatches,
+    deskStrongMatches,
+    deskMediumMatches,
     possibleMatches,
-    hasStrongMatch: strongMatches.length > 0,
-    hasMediumMatch: mediumMatches.length > 0,
+    hasBlockingStrongMatch: blockingStrongMatches.length > 0,
+    hasDeskHint,
     hasPossibleMatch: possibleMatches.length > 0,
   };
 }

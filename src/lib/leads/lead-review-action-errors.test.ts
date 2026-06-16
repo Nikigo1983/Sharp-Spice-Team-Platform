@@ -37,21 +37,14 @@ describe("resolveValidationErrorCode", () => {
 });
 
 describe("resolveDuplicateErrorCode", () => {
-  it("prioritizes CRM over Desk", () => {
+  it("returns duplicate_detected_crm when CRM is in blocking matches", () => {
     assert.equal(
-      resolveDuplicateErrorCode([strongMatch("desk"), strongMatch("crm")]),
+      resolveDuplicateErrorCode([strongMatch("crm")]),
       "duplicate_detected_crm",
     );
   });
 
-  it("returns duplicate_detected_desk for desk-only strong match", () => {
-    assert.equal(
-      resolveDuplicateErrorCode([strongMatch("desk")]),
-      "duplicate_detected_desk",
-    );
-  });
-
-  it("returns duplicate_detected for formgrid-only strong match", () => {
+  it("returns duplicate_detected for formgrid-only blocking match", () => {
     assert.equal(
       resolveDuplicateErrorCode([strongMatch("formgrid")]),
       "duplicate_detected",
@@ -64,11 +57,6 @@ describe("formatLeadReviewActionUserMessage", () => {
     const message = formatLeadReviewActionUserMessage("duplicate_detected_crm");
     assert.match(message, /CRM/i);
     assert.doesNotMatch(message, /Не удалось выполнить действие/);
-  });
-
-  it("maps duplicate_detected_desk", () => {
-    const message = formatLeadReviewActionUserMessage("duplicate_detected_desk");
-    assert.match(message, /Emigrant Desk/i);
   });
 
   it("maps test_lead_detected", () => {

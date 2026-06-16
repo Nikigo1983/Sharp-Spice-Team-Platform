@@ -133,8 +133,10 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
     );
   }
 
-  const crmStrong = lead.dedup.strongMatches.filter((m) => m.source === "crm");
-  const fgStrong = lead.dedup.strongMatches.filter(
+  const crmStrong = lead.dedup.blockingStrongMatches.filter(
+    (m) => m.source === "crm",
+  );
+  const fgStrong = lead.dedup.blockingStrongMatches.filter(
     (m) => m.source === "formgrid",
   );
   const crmPossible = lead.dedup.possibleMatches.filter(
@@ -143,8 +145,8 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
   const fgPossible = lead.dedup.possibleMatches.filter(
     (m) => m.source === "formgrid",
   );
-  const deskStrong = lead.dedup.strongMatches.filter((m) => m.source === "desk");
-  const deskMedium = lead.dedup.mediumMatches.filter((m) => m.source === "desk");
+  const deskStrong = lead.dedup.deskStrongMatches;
+  const deskMedium = lead.dedup.deskMediumMatches;
 
   const actionsDisabled =
     acting ||
@@ -170,18 +172,31 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
         </div>
       </div>
 
-      {lead.dedup.hasStrongMatch ? (
+      {lead.dedup.hasBlockingStrongMatch ? (
         <div className={styles.alertStrong}>
           <i className="fa-solid fa-triangle-exclamation" aria-hidden />
           <div>
             <strong>Возможный дубликат</strong>
             <div>
               Найдено надёжное совпадение (
-              {lead.dedup.strongMatches
+              {lead.dedup.blockingStrongMatches
                 .flatMap((m) => m.reasons)
                 .filter((v, i, a) => a.indexOf(v) === i)
                 .join(", ") || "идентификатор"}
               ). Проверьте перед созданием клиента в CRM.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {lead.dedup.hasDeskHint ? (
+        <div className={styles.alertInfo}>
+          <i className="fa-solid fa-circle-info" aria-hidden />
+          <div>
+            <strong>Информация: возможное совпадение с Emigrant Desk</strong>
+            <div>
+              Проверьте case number, email или ФИО. Это не блокирует создание
+              клиента в CRM.
             </div>
           </div>
         </div>
@@ -241,11 +256,11 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
               matches={fgStrong}
             />
             <MatchBlock
-              title="Emigrant Desk — надёжные совпадения"
+              title="Emigrant Desk — совпадение (информация)"
               matches={deskStrong}
             />
             <MatchBlock
-              title="Emigrant Desk — возможные совпадения (ФИО)"
+              title="Emigrant Desk — похожее ФИО (информация)"
               matches={deskMedium}
             />
             <MatchBlock

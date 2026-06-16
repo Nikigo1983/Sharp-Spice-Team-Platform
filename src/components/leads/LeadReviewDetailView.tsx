@@ -39,7 +39,11 @@ function MatchBlock({
           >
             <strong>{match.name}</strong>
             <div className={styles.matchMeta}>
-              {match.source === "crm" ? "CRM" : "Formgrid"}
+              {match.source === "crm"
+                ? "CRM"
+                : match.source === "desk"
+                  ? "Emigrant Desk"
+                  : "Formgrid"}
               {match.sheetRow ? ` · строка ${match.sheetRow}` : ""}
               {match.clientId ? ` · id ${match.clientId}` : ""}
             </div>
@@ -131,6 +135,8 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
   const fgPossible = lead.dedup.possibleMatches.filter(
     (m) => m.source === "formgrid",
   );
+  const deskStrong = lead.dedup.strongMatches.filter((m) => m.source === "desk");
+  const deskMedium = lead.dedup.mediumMatches.filter((m) => m.source === "desk");
 
   const actionsDisabled =
     acting ||
@@ -225,6 +231,14 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
             <MatchBlock
               title="Formgrid — надёжные совпадения"
               matches={fgStrong}
+            />
+            <MatchBlock
+              title="Emigrant Desk — надёжные совпадения"
+              matches={deskStrong}
+            />
+            <MatchBlock
+              title="Emigrant Desk — возможные совпадения (ФИО)"
+              matches={deskMedium}
             />
             <MatchBlock
               title="CRM — возможные совпадения"

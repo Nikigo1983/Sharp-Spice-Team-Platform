@@ -10,8 +10,8 @@ import {
 } from "@/lib/leads/formgrid-row-key";
 import {
   buildExternalRowFromFormgridLead,
-  validateLeadForCrmCreate,
 } from "@/lib/leads/formgrid-to-crm-mapper";
+import { validateLeadForCrmCreate } from "@/lib/leads/lead-create-validation";
 import { analyzeLeadDuplicates } from "@/lib/leads/lead-review-dedup";
 import {
   readLeadReviewStore,
@@ -25,10 +25,11 @@ import type {
   LeadReviewRecord,
   LeadReviewStatus,
 } from "@/lib/leads/lead-review-types";
+import { listAllClients } from "@/lib/google-sheets/service";
 import { LEAD_REVIEW_STATUS_LABELS } from "@/lib/leads/lead-review-types";
 import { getFormgridClientFields } from "@/lib/google-sheets/formgrid-lookup";
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
-import { listAllClients } from "@/lib/google-sheets/service";
+import { listEmigrantDeskClients } from "@/lib/emigrant-desk/clients";
 
 type CrmWriteMode = "status_only" | "dry_run" | "write_blocked" | "write";
 
@@ -87,9 +88,10 @@ function toQueueItem(
 }
 
 async function loadFormgridContexts() {
-  const [formgrid, { items: crmClients }] = await Promise.all([
+  const [formgrid, { items: crmClients }, deskClients] = await Promise.all([
     getFormgridLeadsTable(),
     listAllClients(),
+    listEmigrantDeskClients(),
   ]);
 
   const fgContexts = formgrid.rows.map((row, index) =>
@@ -99,7 +101,23 @@ async function loadFormgridContexts() {
     crmClientToContext(client, 100 - index),
   );
 
-  return { formgrid, fgContexts, crmContexts };
+  return { formgrid, fgContexts, crmContexts, deskClients };
+}
+
+function analyzeLeadDedupForRow(
+  leadCtx: ReturnType<typeof formgridRowToContext>,
+  headers: string[],
+  row: string[],
+  crmContexts: Awaited<ReturnType<typeof loadFormgridContexts>>["crmContexts"],
+  fgContexts: Awaited<ReturnType<typeof loadFormgridContexts>>["fgContexts"],
+  deskClients: Awaited<ReturnType<typeof loadFormgridContexts>>["deskClients"],
+) {
+  const fields = getFormgridClientFields(headers, row);
+  return analyzeLeadDuplicates(leadCtx, crmContexts, fgContexts, deskClients, {
+    name: fields.name,
+    passport: fields.passport,
+    email: fields.email,
+  });
 }
 
 function isEnabled(name: string): boolean {
@@ -124,12 +142,20 @@ export async function listLeadReviewQueue(): Promise<{
   source: string;
   total: number;
 }> {
-  const { formgrid, fgContexts, crmContexts } = await loadFormgridContexts();
+  const { formgrid, fgContexts, crmContexts, deskClients } =
+    await loadFormgridContexts();
   const reviewStore = await readLeadReviewStore();
 
   const items = formgrid.rows.map((row, index) => {
     const leadCtx = fgContexts[index];
-    const dedup = analyzeLeadDuplicates(leadCtx, crmContexts, fgContexts);
+    const dedup = analyzeLeadDedupForRow(
+      leadCtx,
+      formgrid.headers,
+      row,
+      crmContexts,
+      fgContexts,
+      deskClients,
+    );
     const rowKey = buildFormgridRowKey(formgrid.headers, row);
     const reviewStatus = resolveReviewStatus(rowKey, reviewStore);
     const review = reviewStore.reviews[rowKey];
@@ -140,7 +166,7 @@ export async function listLeadReviewQueue(): Promise<{
       index,
       reviewStatus,
       dedup.hasStrongMatch,
-      dedup.hasPossibleMatch,
+      dedup.hasMediumMatch || dedup.hasPossibleMatch,
       review?.updatedAt,
     );
   });
@@ -160,12 +186,20 @@ export async function getLeadReviewDetail(
   const dataRowIndex = formgridDataRowIndexFromSheetRow(sheetRow);
   if (dataRowIndex < 0) return null;
 
-  const { formgrid, fgContexts, crmContexts } = await loadFormgridContexts();
+  const { formgrid, fgContexts, crmContexts, deskClients } =
+    await loadFormgridContexts();
   const row = formgrid.rows[dataRowIndex];
   if (!row) return null;
 
   const leadCtx = fgContexts[dataRowIndex];
-  const dedup = analyzeLeadDuplicates(leadCtx, crmContexts, fgContexts);
+  const dedup = analyzeLeadDedupForRow(
+    leadCtx,
+    formgrid.headers,
+    row,
+    crmContexts,
+    fgContexts,
+    deskClients,
+  );
   const rowKey = buildFormgridRowKey(formgrid.headers, row);
   const reviewStore = await readLeadReviewStore();
   const reviewStatus = resolveReviewStatus(rowKey, reviewStore);
@@ -234,27 +268,27 @@ export async function applyLeadReviewAction(
       name: fields.name,
       passport: fields.passport,
       phone: fields.phone,
+      email: fields.email,
     });
     if (validationErrors.length > 0) {
+      const hasTestLeadDetected = validationErrors.includes("test_lead_detected");
       throw new LeadReviewActionError(
         422,
         "validation_error",
-        `Validation failed: ${validationErrors.join(", ")}`,
+        hasTestLeadDetected
+          ? "validation_error: test_lead_detected"
+          : `Validation failed: ${validationErrors.join(", ")}`,
       );
     }
 
-    const strongReasons = detail.dedup.strongMatches
-      .flatMap((m) => m.reasons)
-      .filter((r) =>
-        ["passport", "email", "телефон", "phone", "Telegram", "telegram"].includes(
-          r,
-        ),
-      );
-    if (strongReasons.length > 0) {
+    if (detail.dedup.hasStrongMatch) {
+      const reasons = [
+        ...new Set(detail.dedup.strongMatches.flatMap((m) => m.reasons)),
+      ];
       throw new LeadReviewActionError(
         409,
         "duplicate_detected",
-        `Strong duplicate found: ${[...new Set(strongReasons)].join(", ")}`,
+        `Strong duplicate found: ${reasons.join(", ")}`,
       );
     }
 

@@ -1,5 +1,12 @@
 import type { ClientContext } from "@/lib/ai/client-context";
 import { areClientsDuplicates } from "@/lib/ai/client-deduplication";
+import {
+  checkLeadAgainstDesk,
+  deskClientFullName,
+  formatDeskMediumReasons,
+  formatDeskStrongReasons,
+} from "@/lib/leads/desk-dedup";
+import type { EmigrantDeskClient } from "@/lib/emigrant-desk/types";
 import type { LeadDedupAnalysis, LeadDuplicateMatch } from "@/lib/leads/lead-review-types";
 
 const STRONG_REASON_LABELS: Record<string, string> = {
@@ -28,12 +35,21 @@ function pushMatch(
   }
 }
 
+export type LeadDedupInput = {
+  name: string;
+  passport: string;
+  email: string;
+};
+
 export function analyzeLeadDuplicates(
   lead: ClientContext,
   crmContexts: ClientContext[],
   formgridContexts: ClientContext[],
+  deskClients: EmigrantDeskClient[] = [],
+  leadFields?: LeadDedupInput,
 ): LeadDedupAnalysis {
   const strongMatches: LeadDuplicateMatch[] = [];
+  const mediumMatches: LeadDuplicateMatch[] = [];
   const possibleMatches: LeadDuplicateMatch[] = [];
 
   for (const crm of crmContexts) {
@@ -84,10 +100,41 @@ export function analyzeLeadDuplicates(
     }
   }
 
+  const dedupFields: LeadDedupInput = leadFields ?? {
+    name: lead.name,
+    passport: lead.debugRow.passport ?? "",
+    email: lead.email,
+  };
+
+  for (const desk of deskClients) {
+    const check = checkLeadAgainstDesk(dedupFields, desk);
+    const deskName = deskClientFullName(desk) || desk.email;
+
+    if (check.isStrongDuplicate) {
+      pushMatch(strongMatches, {
+        matchType: "strong",
+        source: "desk",
+        name: deskName,
+        clientId: desk.id,
+        reasons: formatDeskStrongReasons(check.strongReasons),
+      });
+    } else if (check.isMediumDuplicate) {
+      pushMatch(mediumMatches, {
+        matchType: "medium",
+        source: "desk",
+        name: deskName,
+        clientId: desk.id,
+        reasons: formatDeskMediumReasons(check.mediumReasons),
+      });
+    }
+  }
+
   return {
     strongMatches,
+    mediumMatches,
     possibleMatches,
     hasStrongMatch: strongMatches.length > 0,
+    hasMediumMatch: mediumMatches.length > 0,
     hasPossibleMatch: possibleMatches.length > 0,
   };
 }

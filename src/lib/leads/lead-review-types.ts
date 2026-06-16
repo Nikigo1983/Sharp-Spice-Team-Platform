@@ -38,11 +38,11 @@ export type LeadReviewStore = {
   reviews: Record<string, LeadReviewRecord>;
 };
 
-export type DuplicateMatchType = "strong" | "possible";
+export type DuplicateMatchType = "strong" | "medium" | "possible";
 
 export type LeadDuplicateMatch = {
   matchType: DuplicateMatchType;
-  source: "crm" | "formgrid";
+  source: "crm" | "formgrid" | "desk";
   name: string;
   sheetRow?: number;
   clientId?: string;
@@ -52,8 +52,10 @@ export type LeadDuplicateMatch = {
 
 export type LeadDedupAnalysis = {
   strongMatches: LeadDuplicateMatch[];
+  mediumMatches: LeadDuplicateMatch[];
   possibleMatches: LeadDuplicateMatch[];
   hasStrongMatch: boolean;
+  hasMediumMatch: boolean;
   hasPossibleMatch: boolean;
 };
 

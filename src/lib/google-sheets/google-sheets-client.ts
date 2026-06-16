@@ -25,6 +25,10 @@ function getRange(sheetEnvKey: string, fallback: string): string {
   return process.env[sheetEnvKey]?.trim() || fallback;
 }
 
+function getClientsWriteRange(): string {
+  return getRange("GOOGLE_SHEETS_CLIENTS_RANGE", "'В Работе'!A:M");
+}
+
 export class GoogleSheetsClient {
   private usesPublicClientsExport(): boolean {
     return isGoogleSheetsPublicClientsConfigured();
@@ -307,10 +311,7 @@ export class GoogleSheetsClient {
     const cached = getCached<string[][]>(cacheKey);
     if (cached) return cached;
 
-    const range = getRange(
-      "GOOGLE_SHEETS_CLIENTS_RANGE",
-      "Clients!A1:Z2000",
-    );
+    const range = getRange("GOOGLE_SHEETS_CLIENTS_RANGE", "Clients!A1:Z2000");
     const rows = await this.fetchRange(range);
     setCached(cacheKey, rows);
     return rows;
@@ -459,6 +460,11 @@ export class GoogleSheetsClient {
     )[0];
 
     return this.updateCell(`${sheet}!${colLetter}${client.rowIndex}`, value);
+  }
+
+  async appendExternalClientRow(values: string[]): Promise<boolean> {
+    const range = getClientsWriteRange();
+    return this.appendRow(range, values);
   }
 }
 

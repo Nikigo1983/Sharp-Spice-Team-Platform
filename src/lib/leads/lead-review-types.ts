@@ -25,17 +25,24 @@ export type LeadReviewRecord = {
   note?: string;
   /** Placeholder until Sheets write-path is implemented. */
   pendingCrmClientId?: string;
+  crmWritePreview?: {
+    mode: "status_only" | "dry_run" | "write_blocked" | "write";
+    targetRange?: string;
+    rowValues?: string[];
+    validationErrors?: string[];
+    duplicateReasons?: string[];
+  };
 };
 
 export type LeadReviewStore = {
   reviews: Record<string, LeadReviewRecord>;
 };
 
-export type DuplicateMatchType = "strong" | "possible";
+export type DuplicateMatchType = "strong" | "medium" | "possible";
 
 export type LeadDuplicateMatch = {
   matchType: DuplicateMatchType;
-  source: "crm" | "formgrid";
+  source: "crm" | "formgrid" | "desk";
   name: string;
   sheetRow?: number;
   clientId?: string;
@@ -45,8 +52,10 @@ export type LeadDuplicateMatch = {
 
 export type LeadDedupAnalysis = {
   strongMatches: LeadDuplicateMatch[];
+  mediumMatches: LeadDuplicateMatch[];
   possibleMatches: LeadDuplicateMatch[];
   hasStrongMatch: boolean;
+  hasMediumMatch: boolean;
   hasPossibleMatch: boolean;
 };
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   applyLeadReviewAction,
   getLeadReviewDetail,
+  LeadReviewActionError,
 } from "@/lib/leads/lead-review-service";
 import type { LeadReviewAction } from "@/lib/leads/lead-review-types";
 import { LEAD_REVIEW_STATUSES } from "@/lib/leads/lead-review-types";
@@ -83,6 +84,12 @@ export async function PATCH(
     }
     return NextResponse.json({ lead });
   } catch (error) {
+    if (error instanceof LeadReviewActionError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status },
+      );
+    }
     console.error("[api/crm/leads/[id]] PATCH", error);
     return NextResponse.json(
       { error: "Не удалось обновить статус лида" },

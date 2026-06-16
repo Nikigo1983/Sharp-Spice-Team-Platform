@@ -43,7 +43,7 @@ function desk(partial: Partial<EmigrantDeskClient>): EmigrantDeskClient {
 }
 
 describe("analyzeLeadDuplicates desk integration", () => {
-  it("adds Desk STRONG match when case_number equals passport", () => {
+  it("adds Desk STRONG match as informational hint when case_number equals passport", () => {
     const lead = ctx({
       source: "new_clients",
       name: "Белоногова Мария Павловна",
@@ -71,14 +71,15 @@ describe("analyzeLeadDuplicates desk integration", () => {
       },
     );
 
-    assert.equal(analysis.hasStrongMatch, true);
-    assert.equal(analysis.strongMatches.length, 1);
-    assert.equal(analysis.strongMatches[0].source, "desk");
-    assert.ok(analysis.strongMatches[0].reasons.includes("Desk case_number"));
-    assert.equal(analysis.hasMediumMatch, false);
+    assert.equal(analysis.hasBlockingStrongMatch, false);
+    assert.equal(analysis.hasDeskHint, true);
+    assert.equal(analysis.deskStrongMatches.length, 1);
+    assert.equal(analysis.deskStrongMatches[0].source, "desk");
+    assert.ok(analysis.deskStrongMatches[0].reasons.includes("Desk case_number"));
+    assert.equal(analysis.blockingStrongMatches.length, 0);
   });
 
-  it("keeps CRM strong and Desk strong separate without duplicates", () => {
+  it("keeps CRM blocking and Desk informational separate", () => {
     const lead = ctx({
       source: "new_clients",
       name: "Давлятова Лола Бахтиёровна",
@@ -109,12 +110,14 @@ describe("analyzeLeadDuplicates desk integration", () => {
       },
     );
 
-    assert.equal(analysis.strongMatches.length, 2);
-    assert.ok(analysis.strongMatches.some((m) => m.source === "crm"));
-    assert.ok(analysis.strongMatches.some((m) => m.source === "desk"));
+    assert.equal(analysis.hasBlockingStrongMatch, true);
+    assert.equal(analysis.blockingStrongMatches.length, 1);
+    assert.equal(analysis.blockingStrongMatches[0].source, "crm");
+    assert.equal(analysis.deskStrongMatches.length, 1);
+    assert.equal(analysis.hasDeskHint, true);
   });
 
-  it("adds Desk MEDIUM match for name-only overlap", () => {
+  it("adds Desk MEDIUM match as informational hint for name-only overlap", () => {
     const lead = ctx({
       source: "new_clients",
       name: "Иванов Иван Иванович",
@@ -141,13 +144,14 @@ describe("analyzeLeadDuplicates desk integration", () => {
       },
     );
 
-    assert.equal(analysis.hasStrongMatch, false);
-    assert.equal(analysis.hasMediumMatch, true);
-    assert.equal(analysis.mediumMatches[0].source, "desk");
-    assert.ok(analysis.mediumMatches[0].reasons.includes("Desk ФИО"));
+    assert.equal(analysis.hasBlockingStrongMatch, false);
+    assert.equal(analysis.hasDeskHint, true);
+    assert.equal(analysis.deskMediumMatches.length, 1);
+    assert.equal(analysis.deskMediumMatches[0].source, "desk");
+    assert.ok(analysis.deskMediumMatches[0].reasons.includes("Desk ФИО"));
   });
 
-  it("classifies clean lead as LOW risk (no strong/medium matches)", () => {
+  it("classifies clean lead as LOW risk (no blocking or desk hints)", () => {
     const lead = ctx({
       source: "new_clients",
       name: "Кулешова Леонелла Евгеньевна",
@@ -174,8 +178,8 @@ describe("analyzeLeadDuplicates desk integration", () => {
       },
     );
 
-    assert.equal(analysis.hasStrongMatch, false);
-    assert.equal(analysis.hasMediumMatch, false);
+    assert.equal(analysis.hasBlockingStrongMatch, false);
+    assert.equal(analysis.hasDeskHint, false);
     assert.equal(analysis.hasPossibleMatch, false);
   });
 });

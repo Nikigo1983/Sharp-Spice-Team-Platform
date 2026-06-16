@@ -51,11 +51,15 @@ export type LeadDuplicateMatch = {
 };
 
 export type LeadDedupAnalysis = {
-  strongMatches: LeadDuplicateMatch[];
-  mediumMatches: LeadDuplicateMatch[];
+  /** CRM and Formgrid strong matches that block create_in_crm. */
+  blockingStrongMatches: LeadDuplicateMatch[];
+  /** Emigrant Desk strong matches — informational only. */
+  deskStrongMatches: LeadDuplicateMatch[];
+  /** Emigrant Desk medium matches (name) — informational only. */
+  deskMediumMatches: LeadDuplicateMatch[];
   possibleMatches: LeadDuplicateMatch[];
-  hasStrongMatch: boolean;
-  hasMediumMatch: boolean;
+  hasBlockingStrongMatch: boolean;
+  hasDeskHint: boolean;
   hasPossibleMatch: boolean;
 };
 

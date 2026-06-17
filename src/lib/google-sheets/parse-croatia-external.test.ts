@@ -34,9 +34,10 @@ describe("parseCroatiaExternalClientsRows", () => {
         "",
         "",
         "",
+        "",
         "L@HF#fNfyxeX",
         "ЛЕНА МОСКВА",
-        "",
+        "дог.оказания услуг",
       ],
     ];
 
@@ -46,6 +47,8 @@ describe("parseCroatiaExternalClientsRows", () => {
     assert.equal(client.passportNumber, "КВ2719292");
     assert.equal(client.id, "КВ2719292");
     assert.equal(client.createdAt, "01.04.2026");
+    assert.equal(client.partnerName, "ЛЕНА МОСКВА");
+    assert.equal(client.contract, "дог.оказания услуг");
   });
 
   it("parses numeric passport for another row", () => {
@@ -62,14 +65,17 @@ describe("parseCroatiaExternalClientsRows", () => {
         "",
         "",
         "",
+        "",
         "XLFKDrP3A57y",
         "ШАРИПА",
-        "",
+        "дог.оказания услуг",
       ],
     ];
 
     const [client] = parseCroatiaExternalClientsRows(rows);
     assert.equal(client.passportNumber, "АС3522461");
     assert.equal(client.citizenship, "Akunov");
+    assert.equal(client.partnerName, "ШАРИПА");
+    assert.equal(client.contract, "дог.оказания услуг");
   });
 });

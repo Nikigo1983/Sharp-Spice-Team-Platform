@@ -103,9 +103,12 @@ function crmClientToSearchFields(client: Client): SearchField[] {
   pushField(fields, "ФИО / фамилия", client.name, "name");
   appendNormalizedNameFields(fields, client.name);
   if (client.citizenship && client.citizenship !== "—") {
+    pushField(fields, "латиница", client.citizenship, "name");
     pushField(fields, "ФИО (латиница)", client.citizenship, "name");
     appendNormalizedNameFields(fields, client.citizenship);
   }
+  pushField(fields, "партнер от кого клиент", client.partnerName, "other");
+  pushField(fields, "договор", client.contract, "other");
   pushField(fields, "телефон", client.phone, "phone");
   pushField(fields, "email", client.email, "email");
   pushField(fields, "паспорт", client.passportNumber, "other");
@@ -150,6 +153,8 @@ function buildCrmRawRow(client: Client): Record<string, string> {
   return {
     name: client.name,
     latinName: client.citizenship !== "—" ? client.citizenship : "",
+    partner: client.partnerName ?? "",
+    contract: client.contract ?? "",
     passport: client.passportNumber ?? "",
     submittedAt: client.submittedAt ?? "",
     expectedApprovalAt: client.expectedApprovalAt ?? "",

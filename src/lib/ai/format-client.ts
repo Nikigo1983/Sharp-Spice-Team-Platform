@@ -4,10 +4,25 @@ import {
 } from "@/lib/ai/client-status";
 import type { Client } from "@/lib/google-sheets/types";
 
+function crmExtraFieldLines(client: Client): string[] {
+  return [
+    client.citizenship && client.citizenship !== "—"
+      ? `Латиница: ${client.citizenship}`
+      : "",
+    client.partnerName && client.partnerName !== "—"
+      ? `Партнер от кого клиент: ${client.partnerName}`
+      : "",
+    client.contract && client.contract !== "—"
+      ? `Договор: ${client.contract}`
+      : "",
+  ].filter(Boolean);
+}
+
 /** Поля клиента для AI — все колонки таблицы «Клиенты Хорватия». */
 export function formatClientForAi(client: Client): string {
   const lines = [
     `ФИО/фамилия: ${client.name}`,
+    ...crmExtraFieldLines(client),
     client.passportNumber && client.passportNumber !== "—"
       ? `Паспорт: ${client.passportNumber}`
       : "",
@@ -52,7 +67,19 @@ export function formatClientOneLiner(client: Client): string {
     sanitizeCrmClientStatus(client.status),
     "clients",
   );
-  return `- ${client.name} | паспорт ${client.passportNumber ?? "—"} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
+  const latin =
+    client.citizenship && client.citizenship !== "—"
+      ? client.citizenship
+      : "латиница не указана";
+  const partner =
+    client.partnerName && client.partnerName !== "—"
+      ? client.partnerName
+      : "партнер не указан";
+  const contract =
+    client.contract && client.contract !== "—"
+      ? client.contract
+      : "договор не указан";
+  return `- ${client.name} | латиница ${latin} | паспорт ${client.passportNumber ?? "—"} | партнер ${partner} | договор ${contract} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
 }
 
 /** Отсекает латиницу ФИО, ошибочно попавшую в колонку паспорта. */

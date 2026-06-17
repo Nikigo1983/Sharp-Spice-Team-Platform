@@ -165,6 +165,7 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
   } as const;
 
   const idxFamily = findHeaderIndex(headers, ["фамилия", "surname", "last name"]);
+  const idxLatin = findHeaderIndex(headers, ["латиница", "latin", "family latin"]);
   const idxPassport = findHeaderIndex(headers, ["номер паспорта", "паспорт", "passport"]);
   const idxRef = findHeaderIndex(headers, ["имя референта", "референт", "менеджер", "manager"]);
 
@@ -216,7 +217,10 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
 
   return rows.slice(1).flatMap((row, index) => {
     const family = pickExternalCell(row, idxFamily, COL.family, useFixedLayout);
-    const familyLatin = pickCell(row, -1, COL.familyLatin);
+    const familyLatin =
+      idxLatin >= 0
+        ? pickCell(row, idxLatin, COL.familyLatin)
+        : pickCell(row, -1, COL.familyLatin);
     const passport = pickExternalCell(
       row,
       idxPassport,

@@ -75,6 +75,33 @@ describe("resolveClientContextAttribution", () => {
     assert.match(attribution.managerSummary, /анкеты Formgrid/);
   });
 
+  it("includes latin, partner and contract from CRM debug row", () => {
+    const crm = ctx({
+      source: "clients",
+      name: "Белоус Екатерина",
+      debugRow: {
+        latinName: "Belavus Katsiaryna",
+        partner: "ЛЕНА МОСКВА",
+        contract: "дог.оказания услуг",
+      },
+    });
+
+    const attribution = resolveClientContextAttribution([crm]);
+    assert.equal(
+      attribution.fields.find((field) => field.label === "Латиница")?.value,
+      "Belavus Katsiaryna",
+    );
+    assert.equal(
+      attribution.fields.find((field) => field.label === "Партнер от кого клиент")
+        ?.value,
+      "ЛЕНА МОСКВА",
+    );
+    assert.equal(
+      attribution.fields.find((field) => field.label === "Договор")?.value,
+      "дог.оказания услуг",
+    );
+  });
+
   it("detects phone conflicts between CRM and Formgrid", () => {
     const crm = ctx({
       source: "clients",

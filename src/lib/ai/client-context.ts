@@ -90,6 +90,15 @@ export function crmClientToContext(
   matchedFields: string[] = [],
 ): ClientContext {
   const surveyParts = [
+    client.citizenship && client.citizenship !== "—"
+      ? `Латиница: ${client.citizenship}`
+      : "",
+    client.partnerName && client.partnerName !== "—"
+      ? `Партнер от кого клиент: ${client.partnerName}`
+      : "",
+    client.contract && client.contract !== "—"
+      ? `Договор: ${client.contract}`
+      : "",
     client.passportNumber && client.passportNumber !== "—"
       ? `Паспорт: ${client.passportNumber}`
       : "",
@@ -132,6 +141,9 @@ export function crmClientToContext(
     debugRow: {
       id: client.id,
       name: client.name,
+      latinName: client.citizenship ?? "",
+      partner: client.partnerName ?? "",
+      contract: client.contract ?? "",
       passport: client.passportNumber ?? "",
       manager: client.manager ?? "",
       status: rawStatus,

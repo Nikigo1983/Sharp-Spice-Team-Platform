@@ -179,6 +179,31 @@ export function resolveClientContextAttribution(
         source: "CRM",
       });
     }
+
+    const pickDebug = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = crmPart.debugRow[key]?.trim();
+        if (value) return value;
+      }
+      return "";
+    };
+
+    const latin = pickDebug("latinName", "латиница");
+    if (latin) {
+      fields.push({ label: "Латиница", value: latin, source: "CRM" });
+    }
+    const partner = pickDebug("partner", "partnerName", "партнер");
+    if (partner) {
+      fields.push({
+        label: "Партнер от кого клиент",
+        value: partner,
+        source: "CRM",
+      });
+    }
+    const contract = pickDebug("contract", "договор");
+    if (contract) {
+      fields.push({ label: "Договор", value: contract, source: "CRM" });
+    }
   }
 
   const formPart = parts.find((part) => part.source === "new_clients");

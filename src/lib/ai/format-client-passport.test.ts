@@ -24,3 +24,28 @@ describe("formatPassportLookupReply", () => {
     );
   });
 });
+
+describe("formatClientForAi", () => {
+  it("includes latin, partner and contract fields", async () => {
+    const { formatClientForAi } = await import("@/lib/ai/format-client");
+    const text = formatClientForAi({
+      id: "КВ2719292",
+      name: "Белоус Екатерина",
+      phone: "—",
+      email: "—",
+      country: "Хорватия",
+      citizenship: "Belavus Katsiaryna",
+      direction: "Хорватия",
+      status: "—",
+      manager: "—",
+      lastActivity: "—",
+      createdAt: "—",
+      passportNumber: "КВ2719292",
+      partnerName: "ЛЕНА МОСКВА",
+      contract: "дог.оказания услуг",
+    });
+    assert.match(text, /Латиница: Belavus Katsiaryna/);
+    assert.match(text, /Партнер от кого клиент: ЛЕНА МОСКВА/);
+    assert.match(text, /Договор: дог\.оказания услуг/);
+  });
+});

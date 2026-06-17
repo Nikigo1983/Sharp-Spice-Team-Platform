@@ -17,9 +17,7 @@ type QueueResponse = {
 const STATUS_FILTERS: Array<LeadReviewStatus | "all"> = [
   "all",
   "new",
-  "reviewed",
   "created_in_crm",
-  "rejected",
 ];
 
 export function LeadReviewQueueView() {
@@ -57,6 +55,9 @@ export function LeadReviewQueueView() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
+      if (item.reviewStatus === "reviewed" || item.reviewStatus === "rejected") {
+        return false;
+      }
       if (statusFilter !== "all" && item.reviewStatus !== statusFilter) {
         return false;
       }

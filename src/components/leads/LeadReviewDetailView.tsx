@@ -2,73 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { LeadReviewStatusBadge } from "@/components/leads/LeadReviewStatusBadge";
-import type {
-  LeadDetail,
-  LeadDuplicateMatch,
-  LeadReviewAction,
-} from "@/lib/leads/lead-review-types";
-import { formatLeadReviewActionUserMessage } from "@/lib/leads/lead-review-action-errors";
+import type { LeadDetail } from "@/lib/leads/lead-review-types";
 import styles from "./LeadReviewQueue.module.css";
-
-function MatchBlock({
-  title,
-  matches,
-}: {
-  title: string;
-  matches: LeadDuplicateMatch[];
-}) {
-  if (matches.length === 0) {
-    return (
-      <div>
-        <h3 className={styles.panelTitle}>{title}</h3>
-        <p className={styles.fieldValue}>Совпадений не найдено.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className={styles.panelTitle}>{title}</h3>
-      <ul className={styles.matchList}>
-        {matches.map((match) => (
-          <li
-            key={`${match.source}-${match.sheetRow ?? match.clientId}-${match.name}`}
-            className={styles.matchItem}
-          >
-            <strong>{match.name}</strong>
-            <div className={styles.matchMeta}>
-              {match.source === "crm"
-                ? "CRM"
-                : match.source === "desk"
-                  ? "Emigrant Desk"
-                  : "Formgrid"}
-              {match.sheetRow ? ` · строка ${match.sheetRow}` : ""}
-              {match.clientId ? ` · id ${match.clientId}` : ""}
-            </div>
-            {match.reasons.length > 0 ? (
-              <div className={styles.matchMeta}>
-                Совпадение: {match.reasons.join(", ")}
-              </div>
-            ) : null}
-            {match.possibleReasons && match.possibleReasons.length > 0 ? (
-              <div className={styles.matchMeta}>
-                Возможно: {match.possibleReasons.join(", ")}
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export function LeadReviewDetailView({ leadId }: { leadId: string }) {
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchLead = useCallback(async () => {
@@ -91,33 +32,6 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
     void fetchLead();
   }, [fetchLead]);
 
-  async function runAction(action: LeadReviewAction) {
-    if (!lead || acting) return;
-    setActing(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        lead?: LeadDetail;
-        error?: string;
-        code?: string;
-      };
-      if (!res.ok) {
-        setError(formatLeadReviewActionUserMessage(data.code, data.error));
-        return;
-      }
-      setLead(data.lead ?? null);
-    } catch {
-      setError("Не удалось выполнить действие. Проверьте подключение и попробуйте ещё раз.");
-    } finally {
-      setActing(false);
-    }
-  }
-
   if (loading) {
     return <p className={styles.meta}>Загрузка лида…</p>;
   }
@@ -132,26 +46,6 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
       </div>
     );
   }
-
-  const crmStrong = lead.dedup.blockingStrongMatches.filter(
-    (m) => m.source === "crm",
-  );
-  const fgStrong = lead.dedup.blockingStrongMatches.filter(
-    (m) => m.source === "formgrid",
-  );
-  const crmPossible = lead.dedup.possibleMatches.filter(
-    (m) => m.source === "crm",
-  );
-  const fgPossible = lead.dedup.possibleMatches.filter(
-    (m) => m.source === "formgrid",
-  );
-  const deskStrong = lead.dedup.deskStrongMatches;
-  const deskMedium = lead.dedup.deskMediumMatches;
-
-  const actionsDisabled =
-    acting ||
-    lead.reviewStatus === "created_in_crm" ||
-    lead.reviewStatus === "rejected";
 
   return (
     <div className={styles.wrap}>
@@ -171,36 +65,6 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
           </span>
         </div>
       </div>
-
-      {lead.dedup.hasBlockingStrongMatch ? (
-        <div className={styles.alertStrong}>
-          <i className="fa-solid fa-triangle-exclamation" aria-hidden />
-          <div>
-            <strong>Найдено совпадение</strong>
-            <div>
-              Найдено надёжное совпадение (
-              {lead.dedup.blockingStrongMatches
-                .flatMap((m) => m.reasons)
-                .filter((v, i, a) => a.indexOf(v) === i)
-                .join(", ") || "идентификатор"}
-              ). Проверьте перед созданием клиента в CRM.
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {lead.dedup.hasDeskHint ? (
-        <div className={styles.alertInfo}>
-          <i className="fa-solid fa-circle-info" aria-hidden />
-          <div>
-            <strong>Информация: возможное совпадение с Emigrant Desk</strong>
-            <div>
-              Проверьте case number, email или ФИО. Это не блокирует создание
-              клиента в CRM.
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <div className={styles.detailLayout}>
         <Card className={styles.panel}>
@@ -246,77 +110,6 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
             ))}
           </div>
         </Card>
-
-        <div className={styles.wrap}>
-          <Card className={styles.panel}>
-            <h2 className={styles.panelTitle}>Проверка дублей</h2>
-            <MatchBlock title="CRM — надёжные совпадения" matches={crmStrong} />
-            <MatchBlock
-              title="Formgrid — надёжные совпадения"
-              matches={fgStrong}
-            />
-            <MatchBlock
-              title="Emigrant Desk — совпадение (информация)"
-              matches={deskStrong}
-            />
-            <MatchBlock
-              title="Emigrant Desk — похожее ФИО (информация)"
-              matches={deskMedium}
-            />
-            <MatchBlock
-              title="CRM — возможные совпадения"
-              matches={crmPossible}
-            />
-            <MatchBlock
-              title="Formgrid — возможные совпадения"
-              matches={fgPossible}
-            />
-          </Card>
-
-          <Card className={styles.panel}>
-            <h2 className={styles.panelTitle}>Действия</h2>
-            <div className={styles.actions}>
-              <Button
-                type="button"
-                disabled={actionsDisabled}
-                onClick={() => void runAction("create_in_crm")}
-              >
-                Создать клиента в CRM
-              </Button>
-              <Button
-                type="button"
-                disabled={acting || lead.reviewStatus === "rejected"}
-                onClick={() => void runAction("reject")}
-              >
-                Отклонить
-              </Button>
-              <Button
-                type="button"
-                disabled={acting || lead.reviewStatus === "reviewed"}
-                onClick={() => void runAction("mark_reviewed")}
-              >
-                Пометить проверенным
-              </Button>
-            </div>
-
-            {lead.review?.note ? (
-              <div className={styles.noteBox}>{lead.review.note}</div>
-            ) : null}
-
-            {lead.reviewStatus === "created_in_crm" &&
-            lead.review?.pendingCrmClientId ? (
-              <div className={styles.noteBox}>
-                Планируемый CRM id: {lead.review.pendingCrmClientId}
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className={styles.alertError} role="alert">
-                {error}
-              </div>
-            ) : null}
-          </Card>
-        </div>
       </div>
     </div>
   );

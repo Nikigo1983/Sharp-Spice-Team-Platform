@@ -83,6 +83,12 @@
   border-bottom: 1px solid var(--border-soft);
 }
 
+.panelActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .panelTitle {
   margin: 0;
   font-family: Sora, sans-serif;
@@ -102,6 +108,20 @@
 }
 
 .markAll:hover {
+  color: var(--white);
+}
+
+.clearRead {
+  border: none;
+  background: transparent;
+  color: var(--gray-300);
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.clearRead:hover {
   color: var(--white);
 }
 
@@ -129,7 +149,6 @@
   border-radius: 12px;
   background: rgba(15, 20, 28, 0.35);
   padding: 0.75rem 0.875rem;
-  cursor: pointer;
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
@@ -188,10 +207,31 @@
   color: var(--accent-burgundy-light);
 }
 
+.itemTypeBtn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
 .itemTime {
   font-family: Inter, sans-serif;
   font-size: 0.6875rem;
   color: var(--gray-400);
+}
+
+.closeBtn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--gray-400);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  color: var(--white);
 }
 
 .itemTitle {

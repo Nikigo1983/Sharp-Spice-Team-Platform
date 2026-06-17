@@ -40,6 +40,8 @@ export function NotificationBell() {
 
   const unread = ctx?.unread ?? 0;
   const notifications = ctx?.notifications ?? [];
+  const unreadNotifications = notifications.filter((item) => !item.is_read);
+  const hasRead = notifications.length > unreadNotifications.length;
   const loading = ctx?.loading ?? false;
 
   async function handleOpenItem(
@@ -85,29 +87,39 @@ export function NotificationBell() {
         >
           <header className={styles.panelHeader}>
             <h3 className={styles.panelTitle}>Уведомления</h3>
-            {unread > 0 ? (
-              <button
-                type="button"
-                className={styles.markAll}
-                onClick={() => void ctx.markAllRead()}
-              >
-                Прочитать все
-              </button>
-            ) : null}
+            <div className={styles.panelActions}>
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  className={styles.markAll}
+                  onClick={() => void ctx.markAllRead()}
+                >
+                  Прочитать все
+                </button>
+              ) : null}
+              {hasRead ? (
+                <button
+                  type="button"
+                  className={styles.clearRead}
+                  onClick={() => void ctx.clearRead()}
+                >
+                  Очистить просмотренные
+                </button>
+              ) : null}
+            </div>
           </header>
 
           <div className={styles.list}>
-            {loading && notifications.length === 0 ? (
+            {loading && unreadNotifications.length === 0 ? (
               <p className={styles.empty}>Загрузка…</p>
-            ) : notifications.length === 0 ? (
-              <p className={styles.empty}>Пока нет уведомлений.</p>
+            ) : unreadNotifications.length === 0 ? (
+              <p className={styles.empty}>Новых уведомлений нет.</p>
             ) : (
-              notifications.map((item) => {
+              unreadNotifications.map((item) => {
                 const isSuccess = isSuccessNotification(item.type);
                 return (
-                <button
+                <div
                   key={item.id}
-                  type="button"
                   className={[
                     styles.item,
                     item.is_read ? styles.itemRead : styles.itemUnread,
@@ -116,25 +128,38 @@ export function NotificationBell() {
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  onClick={() =>
-                    void handleOpenItem(item.id, item.is_read, item.type)
-                  }
                 >
                   <div className={styles.itemTop}>
-                    <span
-                      className={[
-                        styles.itemType,
-                        isSuccess ? styles.itemTypeSuccess : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
+                    <button
+                      type="button"
+                      className={styles.itemTypeBtn}
+                      onClick={() =>
+                        void handleOpenItem(item.id, item.is_read, item.type)
+                      }
                     >
-                      {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
-                      {NOTIFICATION_TYPE_LABELS[item.type]}
-                    </span>
+                      <span
+                        className={[
+                          styles.itemType,
+                          isSuccess ? styles.itemTypeSuccess : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
+                        {NOTIFICATION_TYPE_LABELS[item.type]}
+                      </span>
+                    </button>
                     <span className={styles.itemTime}>
                       {formatNotificationTime(item.created_at)}
                     </span>
+                    <button
+                      type="button"
+                      className={styles.closeBtn}
+                      aria-label="Закрыть уведомление"
+                      onClick={() => void ctx.removeNotification(item.id)}
+                    >
+                      ×
+                    </button>
                   </div>
                   <p className={styles.itemTitle}>{item.title}</p>
                   {item.author_name ? (
@@ -150,7 +175,7 @@ export function NotificationBell() {
                   >
                     {item.message}
                   </p>
-                </button>
+                </div>
               );
               })
             )}

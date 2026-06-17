@@ -187,3 +187,48 @@ export async function markAllNotificationsRead(userId: string): Promise<number> 
 
   return count;
 }
+
+export async function deleteNotification(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbNotifications.sbDeleteNotification(id, userId);
+    } catch (error) {
+      console.error("[notifications] supabase delete one", error);
+      return false;
+    }
+  }
+
+  const store = await readStore();
+  const before = store.notifications.length;
+  store.notifications = store.notifications.filter(
+    (item) => !(item.id === id && item.user_id === userId),
+  );
+  if (store.notifications.length === before) return false;
+  await writeStore(store);
+  return true;
+}
+
+export async function deleteReadNotifications(userId: string): Promise<number> {
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbNotifications.sbDeleteReadNotifications(userId);
+    } catch (error) {
+      console.error("[notifications] supabase clear read", error);
+      return 0;
+    }
+  }
+
+  const store = await readStore();
+  const before = store.notifications.length;
+  store.notifications = store.notifications.filter(
+    (item) => !(item.user_id === userId && item.is_read),
+  );
+  const removed = before - store.notifications.length;
+  if (removed > 0) {
+    await writeStore(store);
+  }
+  return removed;
+}

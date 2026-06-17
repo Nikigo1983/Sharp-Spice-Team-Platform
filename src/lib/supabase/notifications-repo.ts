@@ -111,3 +111,31 @@ export async function sbMarkAllNotificationsRead(
   if (error) throw error;
   return data?.length ?? 0;
 }
+
+export async function sbDeleteNotification(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("notifications")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id")
+    .limit(1);
+
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+export async function sbDeleteReadNotifications(userId: string): Promise<number> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("notifications")
+    .delete()
+    .eq("user_id", userId)
+    .eq("is_read", true)
+    .select("id");
+
+  if (error) throw error;
+  return data?.length ?? 0;
+}

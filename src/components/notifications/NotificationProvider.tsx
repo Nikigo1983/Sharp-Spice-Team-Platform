@@ -253,6 +253,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setUnread(0);
   }, []);
 
+  const removeNotification = useCallback(async (id: string) => {
+    const res = await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) return;
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
+  const clearRead = useCallback(async () => {
+    const res = await fetch("/api/notifications/read-all", {
+      method: "DELETE",
+    });
+    if (!res.ok) return;
+    setNotifications((prev) => prev.filter((item) => !item.is_read));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -308,6 +325,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         loading,
         markRead,
         markAllRead,
+        removeNotification,
+        clearRead,
         refresh,
       }}
     >

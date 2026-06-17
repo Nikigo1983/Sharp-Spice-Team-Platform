@@ -28,6 +28,8 @@ export type NotificationContextValue = {
   loading: boolean;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
+  removeNotification: (id: string) => Promise<void>;
+  clearRead: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 

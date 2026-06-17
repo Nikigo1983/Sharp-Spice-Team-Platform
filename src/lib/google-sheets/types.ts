@@ -40,6 +40,8 @@ export type Client = {
   notes?: string;
   residenceCardIssuedAt?: string;
   appPassword?: string;
+  partnerName?: string;
+  contract?: string;
   rowIndex?: number;
 };
 

@@ -161,6 +161,7 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     residenceCardIssuedAt: 10,
     appPassword: 11,
     partner: 12,
+    contract: 13,
   } as const;
 
   const idxFamily = findHeaderIndex(headers, ["фамилия", "surname", "last name"]);
@@ -195,6 +196,13 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     "дата выдачи карточки",
   ]);
   const idxAppPassword = findHeaderIndex(headers, ["пароль для приложения", "пароль"]);
+  const idxPartner = findHeaderIndex(headers, [
+    "партнер от кого клиент",
+    "портнер от кого клиент",
+    "партнер",
+    "partner",
+  ]);
+  const idxContract = findHeaderIndex(headers, ["договор", "contract"]);
 
   const useFixedLayout = isExternalLatinColumnShift(
     idxFamily,
@@ -312,6 +320,10 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
             COL.appPassword,
             useFixedLayout,
           ) || "—",
+        partnerName:
+          pickExternalCell(row, idxPartner, COL.partner, useFixedLayout) || "—",
+        contract:
+          pickExternalCell(row, idxContract, COL.contract, useFixedLayout) || "—",
         rowIndex: index + 2,
       },
     ];

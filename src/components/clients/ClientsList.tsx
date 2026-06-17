@@ -95,6 +95,7 @@ export function ClientsList() {
             <thead>
               <tr>
                 <th>Имя</th>
+                <th>Латиница</th>
                 <th>Номер паспорта</th>
                 <th>Дата подачи</th>
                 <th>Дата подачи 2</th>
@@ -113,13 +114,13 @@ export function ClientsList() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={14} className={styles.empty}>
+                  <td colSpan={15} className={styles.empty}>
                     Загрузка клиентов…
                   </td>
                 </tr>
               ) : clients.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className={styles.empty}>
+                  <td colSpan={15} className={styles.empty}>
                     Клиенты не найдены
                   </td>
                 </tr>
@@ -134,6 +135,7 @@ export function ClientsList() {
                         {client.name}
                       </Link>
                     </td>
+                    <td>{client.citizenship ?? "—"}</td>
                     <td>{client.passportNumber ?? client.id}</td>
                     <td>{client.submittedAt ?? "—"}</td>
                     <td>{client.submittedAt2 ?? "—"}</td>

@@ -66,7 +66,7 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
         </div>
       </div>
 
-      <div className={styles.detailLayout}>
+      <div className={`${styles.detailLayout} ${styles.detailLayoutSingle}`}>
         <Card className={styles.panel}>
           <h2 className={styles.panelTitle}>Данные анкеты</h2>
           <div className={styles.fieldGrid}>

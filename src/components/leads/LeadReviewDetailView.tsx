@@ -176,7 +176,7 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
         <div className={styles.alertStrong}>
           <i className="fa-solid fa-triangle-exclamation" aria-hidden />
           <div>
-            <strong>Возможный дубликат</strong>
+            <strong>Найдено совпадение</strong>
             <div>
               Найдено надёжное совпадение (
               {lead.dedup.blockingStrongMatches
@@ -282,13 +282,6 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
                 onClick={() => void runAction("create_in_crm")}
               >
                 Создать клиента в CRM
-              </Button>
-              <Button
-                type="button"
-                disabled={acting || lead.reviewStatus === "duplicate"}
-                onClick={() => void runAction("mark_duplicate")}
-              >
-                Пометить как дубликат
               </Button>
               <Button
                 type="button"

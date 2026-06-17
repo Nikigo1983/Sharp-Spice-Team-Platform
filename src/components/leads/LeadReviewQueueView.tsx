@@ -19,7 +19,6 @@ const STATUS_FILTERS: Array<LeadReviewStatus | "all"> = [
   "new",
   "reviewed",
   "created_in_crm",
-  "duplicate",
   "rejected",
 ];
 
@@ -144,12 +143,6 @@ export function LeadReviewQueueView() {
                       >
                         {item.name}
                       </Link>
-                      {item.hasStrongDuplicate ? (
-                        <span className={styles.warnBadge}>
-                          <i className="fa-solid fa-triangle-exclamation" />
-                          Возможный дубликат
-                        </span>
-                      ) : null}
                     </td>
                     <td>{item.passport || "—"}</td>
                     <td>{item.phone || "—"}</td>

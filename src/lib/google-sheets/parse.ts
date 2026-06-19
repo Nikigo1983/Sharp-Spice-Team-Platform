@@ -146,27 +146,34 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
   if (rows.length < 2) return [];
 
   const headers = rows[0].map(normalizeHeader);
-  // Актуальная раскладка вкладки External (Google Sheets, gid=1431336126).
+  // Актуальная раскладка вкладки External (Google Sheets).
   const COL = {
     family: 0,
     familyLatin: 1,
     passport: 2,
-    submittedAt: 3,
-    expectedApproval: 4,
-    referent: 5,
-    bookingAddress: 6,
-    bookingRange: 7,
-    approvalAt: 8,
-    notes: 9,
-    residenceCardIssuedAt: 10,
-    appPassword: 11,
-    partner: 12,
-    contract: 13,
+    email: 3,
+    submittedAt: 4,
+    expectedApproval: 5,
+    referent: 6,
+    bookingAddress: 7,
+    bookingRange: 8,
+    approvalAt: 9,
+    notes: 10,
+    residenceCardIssuedAt: 11,
+    appPassword: 12,
+    partner: 13,
+    contract: 14,
   } as const;
 
   const idxFamily = findHeaderIndex(headers, ["фамилия", "surname", "last name"]);
   const idxLatin = findHeaderIndex(headers, ["латиница", "latin", "family latin"]);
   const idxPassport = findHeaderIndex(headers, ["номер паспорта", "паспорт", "passport"]);
+  const idxEmail = findHeaderIndex(headers, [
+    "электронная почта",
+    "e-mail",
+    "email",
+    "почта",
+  ]);
   const idxRef = findHeaderIndex(headers, ["имя референта", "референт", "менеджер", "manager"]);
 
   const idxDateSubmit = findHeaderIndex(headers, [
@@ -174,7 +181,6 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
     "дата подачи клиента",
     "created at",
   ]);
-  const idxDateSubmit2 = findHeaderIndex(headers, ["дата подачи 2"]);
   const idxExpectedApproval = findHeaderIndex(headers, [
     "дата предпологаемого одобрения",
     "дата предполагаемого одобрения",
@@ -252,9 +258,8 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
       pickExternalCell(row, idxDateSubmit, COL.submittedAt, useFixedLayout) ||
       "—";
 
-    const submittedAt2Raw = pickCell(row, idxDateSubmit2);
-    const submittedAt2 =
-      idxDateSubmit2 >= 0 && submittedAt2Raw ? submittedAt2Raw : "—";
+    const email =
+      pickExternalCell(row, idxEmail, COL.email, useFixedLayout) || "—";
 
     const expectedApprovalAt =
       pickExternalCell(
@@ -293,7 +298,7 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
         id: clientId,
         name: familyName,
         phone: "—",
-        email: "—",
+        email,
         country,
         citizenship: familyLatin || "—",
         direction,
@@ -303,7 +308,6 @@ export function parseCroatiaExternalClientsRows(rows: string[][]): Client[] {
         createdAt,
         passportNumber: passport || "—",
         submittedAt: createdAt,
-        submittedAt2,
         expectedApprovalAt,
         referentName,
         bookingAddress,
@@ -420,9 +424,18 @@ export function parseNoteRows(rows: string[][]): ClientNote[] {
 export function clientMatchesSearch(client: Client, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
-  return [client.name, client.phone, client.email, client.country].some((field) =>
-    field.toLowerCase().includes(q),
-  );
+  return [
+    client.name,
+    client.citizenship,
+    client.passportNumber,
+    client.phone,
+    client.email,
+    client.country,
+    client.partnerName,
+    client.contract,
+    client.referentName,
+    client.manager,
+  ].some((field) => (field ?? "").toLowerCase().includes(q));
 }
 
 export function clientMatchesFilters(

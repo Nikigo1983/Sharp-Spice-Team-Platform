@@ -97,8 +97,8 @@ export function ClientsList() {
                 <th>Имя</th>
                 <th>Латиница</th>
                 <th>Номер паспорта</th>
+                <th>Электронная почта</th>
                 <th>Дата подачи</th>
-                <th>Дата подачи 2</th>
                 <th>Предполагаемое одобрение</th>
                 <th>Имя референта</th>
                 <th>Адрес букинга</th>
@@ -137,8 +137,8 @@ export function ClientsList() {
                     </td>
                     <td>{client.citizenship ?? "—"}</td>
                     <td>{client.passportNumber ?? client.id}</td>
+                    <td>{client.email ?? "—"}</td>
                     <td>{client.submittedAt ?? "—"}</td>
-                    <td>{client.submittedAt2 ?? "—"}</td>
                     <td>{client.expectedApprovalAt ?? "—"}</td>
                     <td>{client.referentName ?? client.manager}</td>
                     <td>{client.bookingAddress ?? "—"}</td>

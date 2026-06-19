@@ -31,7 +31,6 @@ export type Client = {
   // Доп. поля из таблицы "Клиенты Хорватия".
   passportNumber?: string;
   submittedAt?: string;
-  submittedAt2?: string;
   expectedApprovalAt?: string;
   referentName?: string;
   bookingAddress?: string;

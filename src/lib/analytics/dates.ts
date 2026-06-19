@@ -75,12 +75,10 @@ export function parseAnyDate(raw: string | undefined | null): Date | null {
 
 export function pickSubmissionDate(client: {
   submittedAt?: string;
-  submittedAt2?: string;
   createdAt?: string;
 }): Date | null {
   return (
     parseFlexibleDate(client.submittedAt) ??
-    parseFlexibleDate(client.submittedAt2) ??
     parseFlexibleDate(client.createdAt)
   );
 }

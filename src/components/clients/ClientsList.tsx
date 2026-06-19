@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type Client,
@@ -12,6 +13,7 @@ import styles from "./ClientsList.module.css";
 const PAGE_SIZE = 25;
 
 export function ClientsList() {
+  const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -66,6 +68,13 @@ export function ClientsList() {
   }, [search]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const openClient = useCallback(
+    (clientId: string) => {
+      router.push(`/clients/${encodeURIComponent(clientId)}`);
+    },
+    [router],
+  );
 
   return (
     <div className={styles.wrap}>
@@ -126,11 +135,25 @@ export function ClientsList() {
                 </tr>
               ) : (
                 clients.map((client) => (
-                  <tr key={client.id}>
+                  <tr
+                    key={client.id}
+                    className={styles.clickableRow}
+                    onClick={() => openClient(client.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openClient(client.id);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Открыть карточку клиента ${client.name}`}
+                  >
                     <td>
                       <Link
                         href={`/clients/${encodeURIComponent(client.id)}`}
                         className={styles.nameLink}
+                        onClick={(event) => event.stopPropagation()}
                       >
                         {client.name}
                       </Link>

@@ -113,6 +113,15 @@
   background: rgba(145, 13, 13, 0.06);
 }
 
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:focus-visible {
+  outline: 2px solid var(--accent-burgundy-light);
+  outline-offset: -2px;
+}
+
 .nameLink {
   color: var(--white);
   font-weight: 600;

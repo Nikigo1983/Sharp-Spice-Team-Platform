@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ClientDetailView } from "@/components/clients/ClientDetailView";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getClientDetail } from "@/lib/google-sheets/service";
 
 type ClientPageProps = {
@@ -16,7 +17,11 @@ export default async function ClientPage({ params }: ClientPageProps) {
   }
 
   return (
-    <AppShell sectionTitle={detail.client.name}>
+    <AppShell sectionTitle={`Клиенты · ${detail.client.name}`}>
+      <SectionHeader
+        title={detail.client.name}
+        subtitle="Все данные клиента из Google Sheets"
+      />
       <ClientDetailView detail={detail} />
     </AppShell>
   );

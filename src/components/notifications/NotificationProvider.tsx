@@ -15,7 +15,11 @@ import {
   pathnameMatchesNotificationSection,
   shouldShowNotificationToast,
 } from "@/lib/notifications/navigation";
-import { playNotificationSound } from "@/lib/notifications/play-sound";
+import {
+  isNotificationSoundEnabled,
+  playNotificationSound,
+  unlockNotificationAudio,
+} from "@/lib/notifications/play-sound";
 import {
   NotificationContext,
   type NotificationItem,
@@ -134,7 +138,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         return [...prev, { id: notification.id, notification }];
       });
 
-      if (added) {
+      if (added && isNotificationSoundEnabled()) {
         playNotificationSound();
       }
     },
@@ -268,6 +272,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
     if (!res.ok) return;
     setNotifications((prev) => prev.filter((item) => !item.is_read));
+  }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      void unlockNotificationAudio();
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
   }, []);
 
   useEffect(() => {

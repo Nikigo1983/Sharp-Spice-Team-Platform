@@ -9,6 +9,11 @@ import {
   isSuccessNotification,
 } from "./constants";
 import { getNotificationHref } from "@/lib/notifications/navigation";
+import {
+  isNotificationSoundEnabled,
+  setNotificationSoundEnabled,
+  unlockNotificationAudio,
+} from "@/lib/notifications/play-sound";
 import { useNotificationsOptional } from "./notification-context";
 import styles from "./NotificationBell.module.css";
 
@@ -17,10 +22,12 @@ export function NotificationBell() {
   const ctx = useNotificationsOptional();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    setSoundEnabled(isNotificationSoundEnabled());
   }, []);
 
   useEffect(() => {
@@ -67,6 +74,7 @@ export function NotificationBell() {
         className={styles.bellButton}
         onClick={() => {
           if (!ctx) return;
+          void unlockNotificationAudio();
           setOpen((value) => !value);
         }}
         aria-label="Уведомления"
@@ -88,6 +96,23 @@ export function NotificationBell() {
           <header className={styles.panelHeader}>
             <h3 className={styles.panelTitle}>Уведомления</h3>
             <div className={styles.panelActions}>
+              <button
+                type="button"
+                className={styles.soundToggle}
+                onClick={() => {
+                  const next = !soundEnabled;
+                  setSoundEnabled(next);
+                  setNotificationSoundEnabled(next);
+                  if (next) void unlockNotificationAudio();
+                }}
+                title={
+                  soundEnabled
+                    ? "Отключить звук уведомлений"
+                    : "Включить звук уведомлений"
+                }
+              >
+                {soundEnabled ? "🔔 Звук вкл." : "🔕 Звук выкл."}
+              </button>
               {unread > 0 ? (
                 <button
                   type="button"

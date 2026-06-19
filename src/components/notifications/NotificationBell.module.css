@@ -87,6 +87,23 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.soundToggle {
+  border: none;
+  background: transparent;
+  color: var(--gray-300);
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.soundToggle:hover {
+  color: var(--white);
 }
 
 .panelTitle {

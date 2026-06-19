@@ -31,6 +31,18 @@ type TeamChatViewProps = {
   initialHasMoreBefore: boolean;
 };
 
+type PendingAttachment = {
+  file: File;
+  kind: "image" | "file";
+  previewUrl: string | null;
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function TeamChatView({
   user,
   initialMessages,
@@ -54,6 +66,8 @@ export function TeamChatView({
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const [composerText, setComposerText] = useState("");
+  const [pendingAttachment, setPendingAttachment] =
+    useState<PendingAttachment | null>(null);
   const [sending, setSending] = useState(false);
   const voiceRecorder = useVoiceRecorder();
 
@@ -111,6 +125,14 @@ export function TeamChatView({
     }, PRESENCE_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pendingAttachment?.previewUrl) {
+        URL.revokeObjectURL(pendingAttachment.previewUrl);
+      }
+    };
+  }, [pendingAttachment?.previewUrl]);
 
   async function fetchInitialOrReset() {
     const res = await fetch("/api/team-chat?limit=100");
@@ -260,13 +282,39 @@ export function TeamChatView({
     return null;
   }
 
-  async function handleSendImage(file: File) {
+  function clearPendingAttachment() {
+    setPendingAttachment((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function stageAttachment(file: File) {
+    if (sending || voiceRecorder.state !== "idle") return;
+
+    const kind = file.type.startsWith("image/") ? "image" : "file";
+    const previewUrl = kind === "image" ? URL.createObjectURL(file) : null;
+
+    setPendingAttachment((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return { file, kind, previewUrl };
+    });
+
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleSendImage(file: File, caption = "") {
     setError(null);
     setSending(true);
     try {
       const formData = new FormData();
       const fallbackName = file.name?.trim() || "pasted-image.png";
       formData.append("image", file, fallbackName);
+      const trimmedCaption = caption.trim();
+      if (trimmedCaption) formData.append("text", trimmedCaption);
 
       const res = await fetch("/api/team-chat/image", {
         method: "POST",
@@ -278,25 +326,27 @@ export function TeamChatView({
           error?: string;
         } | null;
         setError(data?.error ?? "Не удалось отправить изображение.");
-        return;
+        return false;
       }
 
       const data = (await res.json()) as { message: TeamChatMessage };
       await appendMessage(data.message);
       setToast({ text: "Изображение отправлено." });
+      return true;
     } finally {
       setSending(false);
-      if (imageInputRef.current) imageInputRef.current.value = "";
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+    return false;
   }
 
-  async function handleSendFile(file: File) {
+  async function handleSendFile(file: File, caption = "") {
     setError(null);
     setSending(true);
     try {
       const formData = new FormData();
       formData.append("file", file, file.name || "file");
+      const trimmedCaption = caption.trim();
+      if (trimmedCaption) formData.append("text", trimmedCaption);
 
       const res = await fetch("/api/team-chat/file", {
         method: "POST",
@@ -308,24 +358,21 @@ export function TeamChatView({
           error?: string;
         } | null;
         setError(data?.error ?? "Не удалось отправить файл.");
-        return;
+        return false;
       }
 
       const data = (await res.json()) as { message: TeamChatMessage };
       await appendMessage(data.message);
       setToast({ text: "Файл отправлен." });
+      return true;
     } finally {
       setSending(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+    return false;
   }
 
   function handlePickAttachment(file: File) {
-    if (file.type.startsWith("image/")) {
-      void handleSendImage(file);
-      return;
-    }
-    void handleSendFile(file);
+    stageAttachment(file);
   }
 
   function handlePasteImage(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -333,7 +380,24 @@ export function TeamChatView({
     const image = extractImageFromClipboard(e.clipboardData);
     if (!image) return;
     e.preventDefault();
-    void handleSendImage(image);
+    stageAttachment(image);
+  }
+
+  async function handleSendPendingAttachment(caption: string) {
+    if (!pendingAttachment) return false;
+
+    const { file, kind } = pendingAttachment;
+    const sent =
+      kind === "image"
+        ? await handleSendImage(file, caption)
+        : await handleSendFile(file, caption);
+
+    if (sent) {
+      clearPendingAttachment();
+      setComposerText("");
+    }
+
+    return sent;
   }
 
   async function handleSendVoice() {
@@ -391,6 +455,16 @@ export function TeamChatView({
   async function handleSend() {
     setError(null);
     const text = composerText.trim();
+
+    if (pendingAttachment) {
+      if (text.length > 5000) {
+        setError("Подпись слишком длинная (макс. 5000 символов).");
+        return;
+      }
+      await handleSendPendingAttachment(text);
+      return;
+    }
+
     if (!text) {
       setError("Введите текст сообщения.");
       return;
@@ -419,6 +493,44 @@ export function TeamChatView({
     } finally {
       setSending(false);
     }
+  }
+
+  function renderMessageBody(message: TeamChatMessage) {
+    const caption = message.message_text?.trim();
+
+    if (message.message_type === "voice" && message.audio_url) {
+      return (
+        <VoiceMessageAudio
+          src={message.audio_url}
+          durationMs={message.audio_duration_ms}
+        />
+      );
+    }
+
+    if (message.message_type === "image" && message.image_url) {
+      return (
+        <>
+          <ChatImageMessage src={message.image_url} />
+          {caption ? <p className={styles.messageText}>{caption}</p> : null}
+        </>
+      );
+    }
+
+    if (message.message_type === "file" && message.file_url) {
+      return (
+        <>
+          <ChatFileMessage
+            src={message.file_url}
+            fileName={message.file_name ?? "Файл"}
+            fileSize={message.file_size}
+            contentType={message.file_content_type}
+          />
+          {caption ? <p className={styles.messageText}>{caption}</p> : null}
+        </>
+      );
+    }
+
+    return <p className={styles.messageText}>{message.message_text}</p>;
   }
 
   async function confirmDelete() {
@@ -525,23 +637,7 @@ export function TeamChatView({
                 <div className={styles.messageTime}>
                   {formatTeamChatDateTime(message.created_at)}
                 </div>
-                {message.message_type === "voice" && message.audio_url ? (
-                  <VoiceMessageAudio
-                    src={message.audio_url}
-                    durationMs={message.audio_duration_ms}
-                  />
-                ) : message.message_type === "image" && message.image_url ? (
-                  <ChatImageMessage src={message.image_url} />
-                ) : message.message_type === "file" && message.file_url ? (
-                  <ChatFileMessage
-                    src={message.file_url}
-                    fileName={message.file_name ?? "Файл"}
-                    fileSize={message.file_size}
-                    contentType={message.file_content_type}
-                  />
-                ) : (
-                  <p className={styles.messageText}>{message.message_text}</p>
-                )}
+                {renderMessageBody(message)}
               </Card>
             </div>
           );
@@ -579,9 +675,51 @@ export function TeamChatView({
           </div>
         ) : (
           <>
+            {pendingAttachment ? (
+              <div className={styles.attachmentPreview}>
+                {pendingAttachment.kind === "image" &&
+                pendingAttachment.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={pendingAttachment.previewUrl}
+                    alt=""
+                    className={styles.attachmentThumb}
+                  />
+                ) : (
+                  <span className={styles.attachmentFileIcon} aria-hidden>
+                    📎
+                  </span>
+                )}
+                <div className={styles.attachmentInfo}>
+                  <span className={styles.attachmentName}>
+                    {pendingAttachment.file.name || "Вложение"}
+                  </span>
+                  <span className={styles.attachmentMeta}>
+                    {pendingAttachment.kind === "image"
+                      ? "Изображение"
+                      : "Файл"}{" "}
+                    · {formatBytes(pendingAttachment.file.size)}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className={styles.attachmentRemove}
+                  disabled={sending || voiceRecorder.state === "uploading"}
+                  onClick={clearPendingAttachment}
+                  aria-label="Убрать вложение"
+                >
+                  ×
+                </Button>
+              </div>
+            ) : null}
             <textarea
               className={styles.composerInput}
-              placeholder="Сообщение… Ctrl+V — скриншот, 📎 — файл"
+              placeholder={
+                pendingAttachment
+                  ? "Подпись к вложению (необязательно)…"
+                  : "Сообщение… Ctrl+V — скриншот, 📎 — файл"
+              }
               value={composerText}
               maxLength={5000}
               rows={2}
@@ -626,7 +764,7 @@ export function TeamChatView({
                 disabled={sending || voiceRecorder.state === "uploading"}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) void handleSendImage(file);
+                  if (file) stageAttachment(file);
                 }}
               />
               <Button
@@ -644,7 +782,11 @@ export function TeamChatView({
                 type="button"
                 variant="secondary"
                 className={styles.micBtn}
-                disabled={sending || voiceRecorder.state === "uploading"}
+                disabled={
+                  sending ||
+                  voiceRecorder.state === "uploading" ||
+                  Boolean(pendingAttachment)
+                }
                 onClick={() => void handleToggleVoiceRecording()}
                 aria-label="Записать голосовое сообщение"
                 title="Голосовое сообщение"
@@ -653,7 +795,11 @@ export function TeamChatView({
               </Button>
               <Button
                 type="button"
-                disabled={sending || voiceRecorder.state === "uploading"}
+                disabled={
+                  sending ||
+                  voiceRecorder.state === "uploading" ||
+                  (!pendingAttachment && !composerText.trim())
+                }
                 onClick={() => void handleSend()}
               >
                 {sending || voiceRecorder.state === "uploading"
@@ -667,8 +813,8 @@ export function TeamChatView({
 
       {voiceRecorder.state === "idle" ? (
         <p className={styles.composerHint}>
-          Ctrl+V — вставить скриншот. Кнопка 📎 — PDF, Word, Excel, PowerPoint, TXT, CSV,
-          ZIP до 25 МБ. Кнопка 🖼 — фото.
+          Прикрепите файл или скриншот, добавьте подпись и нажмите «Отправить» — всё
+          уйдёт одним сообщением. Ctrl+V — вставить скриншот. 📎 — документы до 25 МБ.
         </p>
       ) : null}
 

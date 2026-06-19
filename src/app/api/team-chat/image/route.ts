@@ -30,18 +30,20 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await imageEntry.arrayBuffer());
+  const caption = String(formData.get("text") ?? formData.get("caption") ?? "");
 
   try {
     const message = await createImageTeamChatMessage(
       session,
       buffer,
       contentType,
+      caption,
     );
 
     await notifyTeamChatMessage({
       senderId: session.id,
       senderName: session.name,
-      text: "",
+      text: message.message_text,
       isImage: true,
     });
 

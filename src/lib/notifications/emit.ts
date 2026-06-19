@@ -14,9 +14,13 @@ export async function notifyTeamChatMessage(params: {
   const preview = params.isVoice
     ? "🎤 Голосовое сообщение"
     : params.isImage
-      ? "🖼 Изображение"
+      ? params.text.trim()
+        ? `🖼 ${params.text.trim()}`
+        : "🖼 Изображение"
       : params.isFile
-        ? `📎 ${params.text}`
+        ? params.text.trim()
+          ? `📎 ${params.text.trim()}`
+          : `📎 ${params.text || "Файл"}`
         : params.text.length > 200
           ? `${params.text.slice(0, 200)}…`
           : params.text;

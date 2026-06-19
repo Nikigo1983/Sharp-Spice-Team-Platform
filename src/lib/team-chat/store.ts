@@ -149,6 +149,15 @@ function validateText(text: string): string | null {
   return normalized;
 }
 
+function validateCaption(text: string | undefined): string {
+  const normalized = text?.trim() ?? "";
+  if (!normalized) return "";
+  if (normalized.length > MAX_MESSAGE_LENGTH) {
+    throw new Error("Caption too long");
+  }
+  return normalized;
+}
+
 export async function listTeamChatMessages(opts: {
   limit: number;
   beforeCreatedAt?: string;
@@ -176,9 +185,9 @@ export async function listTeamChatMessages(opts: {
         message.message_type === "voice"
           ? VOICE_MESSAGE_SEARCH_LABEL
           : message.message_type === "image"
-            ? IMAGE_MESSAGE_SEARCH_LABEL
+            ? `${IMAGE_MESSAGE_SEARCH_LABEL} ${message.message_text}`.trim()
             : message.message_type === "file"
-              ? `${FILE_MESSAGE_SEARCH_LABEL} ${message.file_name ?? ""}`.trim()
+              ? `${FILE_MESSAGE_SEARCH_LABEL} ${message.file_name ?? ""} ${message.message_text}`.trim()
               : message.message_text.toLowerCase();
       const haystack = text.toLowerCase();
       const name = message.user_name.toLowerCase();
@@ -320,6 +329,7 @@ export async function createImageTeamChatMessage(
   user: SessionUser,
   imageBuffer: Buffer,
   contentType: string,
+  caption?: string,
 ): Promise<TeamChatMessage> {
   const normalizedType = normalizeTeamChatImageContentType(contentType);
   if (!normalizedType) {
@@ -339,7 +349,7 @@ export async function createImageTeamChatMessage(
     user_name: user.name,
     user_role: user.role,
     message_type: "image",
-    message_text: "",
+    message_text: validateCaption(caption),
     ...emptyMessageMediaFields(),
     created_at: now,
     updated_at: now,
@@ -369,6 +379,7 @@ export async function createFileTeamChatMessage(
   fileBuffer: Buffer,
   fileName: string,
   contentType: string,
+  caption?: string,
 ): Promise<TeamChatMessage> {
   const normalizedName = fileName.trim() || "file";
   const normalizedType = normalizeTeamChatFileContentType(
@@ -392,7 +403,7 @@ export async function createFileTeamChatMessage(
     user_name: user.name,
     user_role: user.role,
     message_type: "file",
-    message_text: "",
+    message_text: validateCaption(caption),
     ...emptyMessageMediaFields(),
     created_at: now,
     updated_at: now,

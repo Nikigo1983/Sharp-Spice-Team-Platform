@@ -13,6 +13,10 @@ type MessageRow = {
   audio_url?: string | null;
   audio_duration_ms?: number | null;
   image_url?: string | null;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_content_type?: string | null;
+  file_size?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -23,7 +27,9 @@ function mapMessage(row: MessageRow): TeamChatMessage {
       ? "voice"
       : row.message_type === "image"
         ? "image"
-        : "text";
+        : row.message_type === "file"
+          ? "file"
+          : "text";
   return {
     id: row.id,
     user_id: row.user_id,
@@ -34,6 +40,10 @@ function mapMessage(row: MessageRow): TeamChatMessage {
     audio_url: row.audio_url ?? null,
     audio_duration_ms: row.audio_duration_ms ?? null,
     image_url: row.image_url ?? null,
+    file_url: row.file_url ?? null,
+    file_name: row.file_name ?? null,
+    file_content_type: row.file_content_type ?? null,
+    file_size: row.file_size ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -64,6 +74,10 @@ export async function sbInsertTeamChatMessage(
       audio_url: message.audio_url,
       audio_duration_ms: message.audio_duration_ms,
       image_url: message.image_url,
+      file_url: message.file_url,
+      file_name: message.file_name,
+      file_content_type: message.file_content_type,
+      file_size: message.file_size,
       created_at: message.created_at,
       updated_at: message.updated_at,
     })

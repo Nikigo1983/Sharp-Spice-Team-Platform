@@ -241,6 +241,57 @@
   color: var(--gray-500);
 }
 
+.fileSub,
+.pendingSize {
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.fileLink {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  max-width: min(100%, 420px);
+  padding: 0.625rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border-soft);
+  text-decoration: none;
+  color: inherit;
+}
+
+.fileLink:hover .fileName {
+  color: var(--white);
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  font-size: 1.125rem;
+}
+
+.fileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.fileName {
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-200);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSub {
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
 .error {
   margin: 0;
   color: #fca5a5;

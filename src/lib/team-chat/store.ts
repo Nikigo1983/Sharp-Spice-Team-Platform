@@ -20,12 +20,24 @@ import {
   deleteTeamChatImage,
   clearAllTeamChatImages,
 } from "./image-storage";
+import {
+  getTeamChatFileApiPath,
+  MAX_TEAM_CHAT_FILE_BYTES,
+  normalizeTeamChatFileContentType,
+  saveTeamChatFile,
+  deleteTeamChatFile,
+  clearAllTeamChatFiles,
+} from "./file-storage";
 import type {
   CreateTeamChatMessageInput,
   CreateVoiceTeamChatMessageInput,
   TeamChatMessage,
 } from "./types";
-import { IMAGE_MESSAGE_SEARCH_LABEL, VOICE_MESSAGE_SEARCH_LABEL } from "./types";
+import {
+  FILE_MESSAGE_SEARCH_LABEL,
+  IMAGE_MESSAGE_SEARCH_LABEL,
+  VOICE_MESSAGE_SEARCH_LABEL,
+} from "./types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbChat from "@/lib/supabase/team-chat-repo";
 
@@ -58,19 +70,38 @@ async function loadMessagesStore(): Promise<TeamChatStore> {
   return readMessagesStore();
 }
 
+function emptyMessageMediaFields() {
+  return {
+    audio_url: null as string | null,
+    audio_duration_ms: null as number | null,
+    image_url: null as string | null,
+    file_url: null as string | null,
+    file_name: null as string | null,
+    file_content_type: null as string | null,
+    file_size: null as number | null,
+  };
+}
+
 function normalizeTeamChatMessage(message: TeamChatMessage): TeamChatMessage {
   const messageType =
     message.message_type === "voice"
       ? "voice"
       : message.message_type === "image"
         ? "image"
-        : "text";
+        : message.message_type === "file"
+          ? "file"
+          : "text";
   return {
     ...message,
     message_type: messageType,
+    ...emptyMessageMediaFields(),
     audio_url: message.audio_url ?? null,
     audio_duration_ms: message.audio_duration_ms ?? null,
     image_url: message.image_url ?? null,
+    file_url: message.file_url ?? null,
+    file_name: message.file_name ?? null,
+    file_content_type: message.file_content_type ?? null,
+    file_size: message.file_size ?? null,
   };
 }
 
@@ -146,9 +177,12 @@ export async function listTeamChatMessages(opts: {
           ? VOICE_MESSAGE_SEARCH_LABEL
           : message.message_type === "image"
             ? IMAGE_MESSAGE_SEARCH_LABEL
-            : message.message_text.toLowerCase();
+            : message.message_type === "file"
+              ? `${FILE_MESSAGE_SEARCH_LABEL} ${message.file_name ?? ""}`.trim()
+              : message.message_text.toLowerCase();
+      const haystack = text.toLowerCase();
       const name = message.user_name.toLowerCase();
-      return text.includes(q) || name.includes(q);
+      return haystack.includes(q) || name.includes(q);
     });
   } else if (opts.beforeCreatedAt) {
     const beforeCreatedAt = opts.beforeCreatedAt;
@@ -211,9 +245,7 @@ export async function createTeamChatMessage(
     user_role: user.role,
     message_type: "text",
     message_text: text,
-    audio_url: null,
-    audio_duration_ms: null,
-    image_url: null,
+    ...emptyMessageMediaFields(),
     created_at: now,
     updated_at: now,
   };
@@ -259,9 +291,8 @@ export async function createVoiceTeamChatMessage(
     user_role: user.role,
     message_type: "voice",
     message_text: "",
-    audio_url: null,
+    ...emptyMessageMediaFields(),
     audio_duration_ms: durationMs,
-    image_url: null,
     created_at: now,
     updated_at: now,
   };
@@ -309,9 +340,7 @@ export async function createImageTeamChatMessage(
     user_role: user.role,
     message_type: "image",
     message_text: "",
-    audio_url: null,
-    audio_duration_ms: null,
-    image_url: null,
+    ...emptyMessageMediaFields(),
     created_at: now,
     updated_at: now,
   };
@@ -325,6 +354,62 @@ export async function createImageTeamChatMessage(
     } catch (error) {
       await deleteTeamChatImage(message.id);
       console.error("[team-chat] supabase create image", error);
+      throw error;
+    }
+  }
+
+  const store = await readMessagesStore();
+  store.messages.push(message);
+  await writeMessagesStore(store);
+  return message;
+}
+
+export async function createFileTeamChatMessage(
+  user: SessionUser,
+  fileBuffer: Buffer,
+  fileName: string,
+  contentType: string,
+): Promise<TeamChatMessage> {
+  const normalizedName = fileName.trim() || "file";
+  const normalizedType = normalizeTeamChatFileContentType(
+    contentType,
+    normalizedName,
+  );
+  if (!normalizedType) {
+    throw new Error("Invalid file type");
+  }
+  if (!fileBuffer.length) {
+    throw new Error("Empty file");
+  }
+  if (fileBuffer.length > MAX_TEAM_CHAT_FILE_BYTES) {
+    throw new Error("File too large");
+  }
+
+  const now = new Date().toISOString();
+  const message: TeamChatMessage = {
+    id: randomUUID(),
+    user_id: user.id,
+    user_name: user.name,
+    user_role: user.role,
+    message_type: "file",
+    message_text: "",
+    ...emptyMessageMediaFields(),
+    created_at: now,
+    updated_at: now,
+  };
+  message.file_url = getTeamChatFileApiPath(message.id);
+  message.file_name = normalizedName;
+  message.file_content_type = normalizedType;
+  message.file_size = fileBuffer.length;
+
+  await saveTeamChatFile(message.id, normalizedName, fileBuffer, normalizedType);
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbChat.sbInsertTeamChatMessage(message);
+    } catch (error) {
+      await deleteTeamChatFile(message.id, normalizedName);
+      console.error("[team-chat] supabase create file", error);
       throw error;
     }
   }
@@ -360,6 +445,9 @@ export async function deleteTeamChatMessage(
       if (ok && message.message_type === "image") {
         await deleteTeamChatImage(id);
       }
+      if (ok && message.message_type === "file" && message.file_name) {
+        await deleteTeamChatFile(id, message.file_name);
+      }
       return ok;
     } catch (error) {
       console.error("[team-chat] supabase delete", error);
@@ -376,6 +464,9 @@ export async function deleteTeamChatMessage(
   if (message.message_type === "image") {
     await deleteTeamChatImage(id);
   }
+  if (message.message_type === "file" && message.file_name) {
+    await deleteTeamChatFile(id, message.file_name);
+  }
   return true;
 }
 
@@ -387,6 +478,7 @@ export async function clearTeamChat(user: SessionUser): Promise<boolean> {
       await sbChat.sbClearTeamChatMessages();
       await clearAllTeamChatAudio();
       await clearAllTeamChatImages();
+      await clearAllTeamChatFiles();
       return true;
     } catch (error) {
       console.error("[team-chat] supabase clear", error);
@@ -399,6 +491,7 @@ export async function clearTeamChat(user: SessionUser): Promise<boolean> {
   await writeMessagesStore(store);
   await clearAllTeamChatAudio();
   await clearAllTeamChatImages();
+  await clearAllTeamChatFiles();
   return true;
 }
 
@@ -448,6 +541,20 @@ export async function getTeamChatUnreadCount(userId: string): Promise<number> {
   return store.messages.filter(
     (message) => message.created_at > entry.lastSeenAt,
   ).length;
+}
+
+export async function getTeamChatFileMeta(
+  messageId: string,
+): Promise<{ fileName: string; contentType: string } | null> {
+  const store = await loadMessagesStore();
+  const message = store.messages.find((item) => item.id === messageId);
+  if (!message || message.message_type !== "file" || !message.file_name) {
+    return null;
+  }
+  return {
+    fileName: message.file_name,
+    contentType: message.file_content_type ?? "application/octet-stream",
+  };
 }
 
 export async function listLatestTeamChatForDashboard(

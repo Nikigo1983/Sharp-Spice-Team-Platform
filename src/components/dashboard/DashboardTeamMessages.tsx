@@ -62,7 +62,9 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
                   }`
                 : message.message_type === "image"
                   ? "🖼 Изображение"
-                  : message.message_text}
+                  : message.message_type === "file"
+                    ? `📎 ${message.file_name ?? "Файл"}`
+                    : message.message_text}
             </p>
           </Card>
         </li>

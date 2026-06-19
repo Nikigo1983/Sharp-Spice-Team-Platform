@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 import { VoiceMessageAudio } from "./VoiceMessageAudio";
 import { ChatImageMessage } from "./ChatImageMessage";
+import { ChatFileMessage, CHAT_DOCUMENT_ACCEPT } from "./ChatFileMessage";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
@@ -38,6 +39,7 @@ export function TeamChatView({
 }: TeamChatViewProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const skipInitialSearchRef = useRef(true);
 
   const [messages, setMessages] = useState<TeamChatMessage[]>(initialMessages);
@@ -285,7 +287,45 @@ export function TeamChatView({
     } finally {
       setSending(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  async function handleSendFile(file: File) {
+    setError(null);
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name || "file");
+
+      const res = await fetch("/api/team-chat/file", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(data?.error ?? "Не удалось отправить файл.");
+        return;
+      }
+
+      const data = (await res.json()) as { message: TeamChatMessage };
+      await appendMessage(data.message);
+      setToast({ text: "Файл отправлен." });
+    } finally {
+      setSending(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function handlePickAttachment(file: File) {
+    if (file.type.startsWith("image/")) {
+      void handleSendImage(file);
+      return;
+    }
+    void handleSendFile(file);
   }
 
   function handlePasteImage(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -492,6 +532,13 @@ export function TeamChatView({
                   />
                 ) : message.message_type === "image" && message.image_url ? (
                   <ChatImageMessage src={message.image_url} />
+                ) : message.message_type === "file" && message.file_url ? (
+                  <ChatFileMessage
+                    src={message.file_url}
+                    fileName={message.file_name ?? "Файл"}
+                    fileSize={message.file_size}
+                    contentType={message.file_content_type}
+                  />
                 ) : (
                   <p className={styles.messageText}>{message.message_text}</p>
                 )}
@@ -534,7 +581,7 @@ export function TeamChatView({
           <>
             <textarea
               className={styles.composerInput}
-              placeholder="Сообщение… Ctrl+V — вставить скриншот"
+              placeholder="Сообщение… Ctrl+V — скриншот, 📎 — файл"
               value={composerText}
               maxLength={5000}
               rows={2}
@@ -549,6 +596,28 @@ export function TeamChatView({
               }}
             />
             <div className={styles.composerActions}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={CHAT_DOCUMENT_ACCEPT}
+                className={styles.hiddenInput}
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handlePickAttachment(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className={styles.micBtn}
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Прикрепить файл"
+                title="PDF, Word, Excel и др."
+              >
+                📎
+              </Button>
               <input
                 ref={imageInputRef}
                 type="file"
@@ -598,8 +667,8 @@ export function TeamChatView({
 
       {voiceRecorder.state === "idle" ? (
         <p className={styles.composerHint}>
-          Скопируйте скриншот или фото и нажмите Ctrl+V в поле сообщения — оно отправится
-          сразу. PNG, JPG, GIF, WebP до 10 МБ.
+          Ctrl+V — вставить скриншот. Кнопка 📎 — PDF, Word, Excel, PowerPoint, TXT, CSV,
+          ZIP до 25 МБ. Кнопка 🖼 — фото.
         </p>
       ) : null}
 

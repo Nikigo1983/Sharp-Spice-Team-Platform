@@ -23,6 +23,7 @@ import {
   getLatestRevisionComment,
 } from "@/lib/tasks/workflow";
 import { TaskStatusBadge } from "./TaskStatusBadge";
+import { TaskAttachmentsSection } from "./TaskAttachments";
 import styles from "./TaskDetailModal.module.css";
 
 type TaskDetailModalProps = {
@@ -36,6 +37,7 @@ type TaskDetailModalProps = {
   onSubmitForApproval: (task: Task) => void;
   onApprove: (task: Task) => void;
   onRequestRevision: (task: Task, comment: string) => void;
+  onTaskUpdated?: (task: Task) => void;
   workflowLoading?: boolean;
 };
 
@@ -50,6 +52,7 @@ export function TaskDetailModal({
   onSubmitForApproval,
   onApprove,
   onRequestRevision,
+  onTaskUpdated,
   workflowLoading = false,
 }: TaskDetailModalProps) {
   const [revisionComment, setRevisionComment] = useState("");
@@ -145,6 +148,12 @@ export function TaskDetailModal({
         ) : (
           <p className={styles.noDescription}>Описание не указано.</p>
         )}
+
+        <TaskAttachmentsSection
+          task={task}
+          user={user}
+          onTaskUpdated={onTaskUpdated}
+        />
 
         <dl className={styles.meta}>
           <div>

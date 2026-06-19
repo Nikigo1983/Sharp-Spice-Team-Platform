@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { TaskForm, type TaskFormValues } from "@/components/tasks/TaskForm";
+import { uploadTaskFiles } from "@/components/tasks/TaskAttachments";
 import styles from "./NewTaskPage.module.css";
 
 type NewTaskPageViewProps = {
@@ -13,7 +14,7 @@ type NewTaskPageViewProps = {
 export function NewTaskPageView({ teamMembers }: NewTaskPageViewProps) {
   const router = useRouter();
 
-  async function handleCreate(values: TaskFormValues) {
+  async function handleCreate(values: TaskFormValues, files?: File[]) {
     const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -29,6 +30,12 @@ export function NewTaskPageView({ teamMembers }: NewTaskPageViewProps) {
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Не удалось сохранить задачу");
     }
+
+    const data = (await res.json()) as { task?: { id: string } };
+    if (data.task?.id && files?.length) {
+      await uploadTaskFiles(data.task.id, files);
+    }
+
     router.push("/tasks?created=1");
   }
 

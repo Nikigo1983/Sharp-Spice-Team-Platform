@@ -17,6 +17,7 @@ import { formatTeamChatDateTime, formatVoiceDuration } from "@/lib/team-chat/for
 import { Button } from "@/components/ui/Button";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 import { VoiceMessageAudio } from "./VoiceMessageAudio";
+import { ChatImageMessage } from "./ChatImageMessage";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
@@ -36,6 +37,7 @@ export function TeamChatView({
   initialHasMoreBefore,
 }: TeamChatViewProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const skipInitialSearchRef = useRef(true);
 
   const [messages, setMessages] = useState<TeamChatMessage[]>(initialMessages);
@@ -235,6 +237,65 @@ export function TeamChatView({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  async function appendMessage(message: TeamChatMessage) {
+    setMessages((prev) => [...prev, message]);
+    setLatestCreatedAt(message.created_at);
+    const el = listRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }
+
+  function extractImageFromClipboard(clipboardData: DataTransfer): File | null {
+    for (const item of clipboardData.items) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) return file;
+      }
+    }
+    return null;
+  }
+
+  async function handleSendImage(file: File) {
+    setError(null);
+    setSending(true);
+    try {
+      const formData = new FormData();
+      const fallbackName = file.name?.trim() || "pasted-image.png";
+      formData.append("image", file, fallbackName);
+
+      const res = await fetch("/api/team-chat/image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(data?.error ?? "Не удалось отправить изображение.");
+        return;
+      }
+
+      const data = (await res.json()) as { message: TeamChatMessage };
+      await appendMessage(data.message);
+      setToast({ text: "Изображение отправлено." });
+    } finally {
+      setSending(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  function handlePasteImage(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (sending || voiceRecorder.state !== "idle") return;
+    const image = extractImageFromClipboard(e.clipboardData);
+    if (!image) return;
+    e.preventDefault();
+    void handleSendImage(image);
+  }
+
   async function handleSendVoice() {
     setError(null);
     voiceRecorder.clearError();
@@ -266,16 +327,8 @@ export function TeamChatView({
       }
 
       const data = (await res.json()) as { message: TeamChatMessage };
-      setMessages((prev) => [...prev, data.message]);
-      setLatestCreatedAt(data.message.created_at);
+      await appendMessage(data.message);
       setToast({ text: "Голосовое сообщение отправлено." });
-
-      const el = listRef.current;
-      if (el) {
-        requestAnimationFrame(() => {
-          el.scrollTop = el.scrollHeight;
-        });
-      }
     } finally {
       voiceRecorder.setUploading(false);
       setSending(false);
@@ -321,16 +374,8 @@ export function TeamChatView({
 
       const data = (await res.json()) as { message: TeamChatMessage };
       setComposerText("");
-      setMessages((prev) => [...prev, data.message]);
-      setLatestCreatedAt(data.message.created_at);
+      await appendMessage(data.message);
       setToast({ text: "Сообщение отправлено." });
-
-      const el = listRef.current;
-      if (el) {
-        requestAnimationFrame(() => {
-          el.scrollTop = el.scrollHeight;
-        });
-      }
     } finally {
       setSending(false);
     }
@@ -445,6 +490,8 @@ export function TeamChatView({
                     src={message.audio_url}
                     durationMs={message.audio_duration_ms}
                   />
+                ) : message.message_type === "image" && message.image_url ? (
+                  <ChatImageMessage src={message.image_url} />
                 ) : (
                   <p className={styles.messageText}>{message.message_text}</p>
                 )}
@@ -487,12 +534,13 @@ export function TeamChatView({
           <>
             <textarea
               className={styles.composerInput}
-              placeholder="Введите текст сообщения…"
+              placeholder="Сообщение… Ctrl+V — вставить скриншот"
               value={composerText}
               maxLength={5000}
               rows={2}
               disabled={sending || voiceRecorder.state === "uploading"}
               onChange={(e) => setComposerText(e.target.value)}
+              onPaste={handlePasteImage}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault();
@@ -501,6 +549,28 @@ export function TeamChatView({
               }}
             />
             <div className={styles.composerActions}>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                className={styles.hiddenInput}
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleSendImage(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className={styles.micBtn}
+                disabled={sending || voiceRecorder.state === "uploading"}
+                onClick={() => imageInputRef.current?.click()}
+                aria-label="Прикрепить изображение"
+                title="Изображение"
+              >
+                🖼
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -525,6 +595,13 @@ export function TeamChatView({
           </>
         )}
       </div>
+
+      {voiceRecorder.state === "idle" ? (
+        <p className={styles.composerHint}>
+          Скопируйте скриншот или фото и нажмите Ctrl+V в поле сообщения — оно отправится
+          сразу. PNG, JPG, GIF, WebP до 10 МБ.
+        </p>
+      ) : null}
 
       {voiceRecorder.error ? (
         <p className={styles.error}>{voiceRecorder.error}</p>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TASK_STATUS_OPTIONS } from "@/lib/tasks/format";
+import { TaskAttachmentPicker } from "./TaskAttachments";
 import styles from "./TaskForm.module.css";
 
 export type TaskFormValues = {
@@ -21,7 +22,7 @@ type TaskFormProps = {
   teamMembers: TeamMemberOption[];
   submitLabel: string;
   isEditing?: boolean;
-  onSubmit: (values: TaskFormValues) => Promise<void>;
+  onSubmit: (values: TaskFormValues, files?: File[]) => Promise<void>;
   onCancel: () => void;
 };
 
@@ -47,6 +48,7 @@ export function TaskForm({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,7 +59,7 @@ export function TaskForm({
     setLoading(true);
     setError("");
     try {
-      await onSubmit(values);
+      await onSubmit(values, pendingFiles.length ? pendingFiles : undefined);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Не удалось сохранить задачу";
@@ -102,6 +104,12 @@ export function TaskForm({
           onChange={(e) => setValues({ ...values, dueDate: e.target.value })}
         />
       </label>
+
+      <TaskAttachmentPicker
+        files={pendingFiles}
+        onChange={setPendingFiles}
+        disabled={loading}
+      />
 
       <fieldset className={styles.field}>
         <legend className={styles.label}>Исполнители</legend>

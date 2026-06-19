@@ -32,6 +32,16 @@ export type TaskAssignee = {
   name: string;
 };
 
+export type TaskAttachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  uploadedByUserId: string;
+  uploadedByName: string;
+  uploadedAt: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -45,6 +55,7 @@ export type Task = {
   completedAt: string | null;
   updatedAt: string;
   reviewHistory: TaskReviewEvent[];
+  attachments: TaskAttachment[];
 };
 
 export type TaskStats = {

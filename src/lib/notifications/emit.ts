@@ -8,12 +8,15 @@ export async function notifyTeamChatMessage(params: {
   senderName: string;
   text: string;
   isVoice?: boolean;
+  isImage?: boolean;
 }) {
   const preview = params.isVoice
     ? "🎤 Голосовое сообщение"
-    : params.text.length > 200
-      ? `${params.text.slice(0, 200)}…`
-      : params.text;
+    : params.isImage
+      ? "🖼 Изображение"
+      : params.text.length > 200
+        ? `${params.text.slice(0, 200)}…`
+        : params.text;
 
   await createNotificationsForTeam(
     {

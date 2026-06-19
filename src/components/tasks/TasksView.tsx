@@ -14,6 +14,7 @@ import { formatTaskDate, TASK_FILTER_STATUS_OPTIONS } from "@/lib/tasks/format";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TaskCard } from "./TaskCard";
 import { TaskDetailModal } from "./TaskDetailModal";
+import { uploadTaskFiles } from "./TaskAttachments";
 import { TaskForm, taskToFormValues, type TaskFormValues } from "./TaskForm";
 import { Toast, type ToastMessage } from "./Toast";
 import styles from "./TasksView.module.css";
@@ -248,7 +249,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
     router.replace("/tasks", { scroll: false });
   }
 
-  async function handleCreate(values: TaskFormValues) {
+  async function handleCreate(values: TaskFormValues, files?: File[]) {
     const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -264,12 +265,31 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Не удалось сохранить задачу");
     }
+
+    const data = (await res.json()) as { task?: Task };
+    if (data.task && files?.length) {
+      try {
+        await uploadTaskFiles(data.task.id, files);
+      } catch (err) {
+        setCreateOpen(false);
+        setToast({
+          text:
+            err instanceof Error
+              ? `Задача создана, но файлы не прикреплены: ${err.message}`
+              : "Задача создана, но файлы не прикреплены.",
+          type: "error",
+        });
+        await fetchTasks();
+        return;
+      }
+    }
+
     setCreateOpen(false);
     setToast({ text: "Задача успешно создана." });
     await fetchTasks();
   }
 
-  async function handleUpdate(values: TaskFormValues) {
+  async function handleUpdate(values: TaskFormValues, files?: File[]) {
     if (!editTask) return;
     const res = await fetch(`/api/tasks/${encodeURIComponent(editTask.id)}`, {
       method: "PUT",
@@ -282,9 +302,19 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
       }),
     });
     if (!res.ok) throw new Error("update failed");
+
+    if (files?.length) {
+      await uploadTaskFiles(editTask.id, files);
+    }
+
     setEditTask(null);
     setToast({ text: "Задача обновлена." });
     await fetchTasks();
+  }
+
+  function handleTaskUpdated(updated: Task) {
+    setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    setViewTask((prev) => (prev?.id === updated.id ? updated : prev));
   }
 
   async function runWorkflow(
@@ -676,6 +706,7 @@ export function TasksView({ user, teamMembers }: TasksViewProps) {
           onSubmitForApproval={(t) => void handleSubmitForApproval(t)}
           onApprove={(t) => void handleApprove(t)}
           onRequestRevision={(t, comment) => void handleRequestRevision(t, comment)}
+          onTaskUpdated={handleTaskUpdated}
         />
       ) : null}
 

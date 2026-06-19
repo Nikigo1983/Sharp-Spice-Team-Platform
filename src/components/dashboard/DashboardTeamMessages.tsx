@@ -60,7 +60,9 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
                       ? ` · ${formatVoiceDuration(message.audio_duration_ms)}`
                       : ""
                   }`
-                : message.message_text}
+                : message.message_type === "image"
+                  ? "🖼 Изображение"
+                  : message.message_text}
             </p>
           </Card>
         </li>

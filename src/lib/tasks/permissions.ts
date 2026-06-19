@@ -1,5 +1,5 @@
 import type { SessionUser } from "@/lib/auth/types";
-import type { Task, TaskStatus } from "./types";
+import type { Task, TaskAttachment, TaskStatus } from "./types";
 import { taskNeedsApprovalWorkflow } from "./workflow";
 
 export function isTaskAssignee(task: Task, userId: string): boolean {
@@ -69,3 +69,25 @@ export function canDeleteTask(task: Task, user: SessionUser): boolean {
 
 /** Статусы, доступные при ручном редактировании задачи автором. */
 export const TASK_MANUAL_EDIT_STATUSES: TaskStatus[] = ["new", "in_progress"];
+
+/** Автор, исполнитель или владелец может прикреплять файлы. */
+export function canManageTaskAttachments(task: Task, user: SessionUser): boolean {
+  return (
+    user.role === "owner" ||
+    isTaskCreator(task, user) ||
+    isTaskAssignee(task, user.id)
+  );
+}
+
+/** Удалить вложение может автор задачи, владелец или тот, кто его загрузил. */
+export function canDeleteTaskAttachment(
+  task: Task,
+  attachment: TaskAttachment,
+  user: SessionUser,
+): boolean {
+  return (
+    user.role === "owner" ||
+    isTaskCreator(task, user) ||
+    attachment.uploadedByUserId === user.id
+  );
+}

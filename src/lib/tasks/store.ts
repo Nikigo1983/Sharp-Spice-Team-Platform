@@ -8,8 +8,10 @@ import { normalizeAssignees } from "./assignees";
 import { isTaskOverdue } from "./overdue";
 import {
   canDeleteTask,
+  canDeleteTaskAttachment,
   canDirectComplete,
   canEditTask,
+  canManageTaskAttachments,
   canReviewTask,
   canStartTask,
   canSubmitForApproval,
@@ -20,11 +22,21 @@ import type {
   CreateTaskInput,
   Task,
   TaskAssignee,
+  TaskAttachment,
   TaskReviewEvent,
   TaskStats,
   TaskStatus,
   UpdateTaskInput,
 } from "./types";
+import {
+  MAX_TASK_ATTACHMENT_BYTES,
+  MAX_TASK_ATTACHMENTS_PER_TASK,
+  normalizeTaskAttachmentContentType,
+} from "./attachment-formats";
+import {
+  deleteTaskAttachmentFile,
+  saveTaskAttachmentFile,
+} from "./attachment-storage";
 import { taskNeedsApprovalWorkflow } from "./workflow";
 import { listTeamMembers } from "@/lib/team/store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -35,6 +47,36 @@ const STORE_PATH = path.join(process.cwd(), ".data", "tasks.json");
 type TaskStore = {
   tasks: Task[];
 };
+
+function normalizeAttachments(raw: unknown): TaskAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const attachments: TaskAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const attachment = item as Partial<TaskAttachment>;
+    if (
+      !attachment.id ||
+      !attachment.fileName ||
+      !attachment.contentType ||
+      typeof attachment.size !== "number" ||
+      !attachment.uploadedByUserId ||
+      !attachment.uploadedByName ||
+      !attachment.uploadedAt
+    ) {
+      continue;
+    }
+    attachments.push({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      uploadedByUserId: attachment.uploadedByUserId,
+      uploadedByName: attachment.uploadedByName,
+      uploadedAt: attachment.uploadedAt,
+    });
+  }
+  return attachments;
+}
 
 function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
   if (!Array.isArray(raw)) return [];
@@ -68,6 +110,7 @@ function normalizeTask(task: Task): Task {
     ...task,
     assignees: normalizeAssignees(task.assignees),
     reviewHistory: normalizeReviewHistory(task.reviewHistory),
+    attachments: normalizeAttachments(task.attachments),
   };
 }
 
@@ -196,6 +239,7 @@ export async function createTask(
     completedAt: status === "completed" ? now : null,
     updatedAt: now,
     reviewHistory: [],
+    attachments: [],
   };
 
   store.tasks.unshift(task);
@@ -438,6 +482,12 @@ export async function deleteTask(
 
   if (!canDeleteTask(task, user)) return false;
 
+  for (const attachment of task.attachments) {
+    await deleteTaskAttachmentFile(attachment.id, attachment.fileName).catch(
+      () => undefined,
+    );
+  }
+
   if (isSupabaseConfigured()) {
     try {
       return await sbTasks.sbDeleteTask(id);
@@ -464,4 +514,88 @@ export async function getTaskStats(): Promise<TaskStats> {
     completed: tasks.filter((t) => t.status === "completed").length,
     overdue: tasks.filter((t) => isTaskOverdue(t)).length,
   };
+}
+
+export async function addTaskAttachment(
+  taskId: string,
+  file: { buffer: Buffer; fileName: string; contentType: string; size: number },
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = await getTask(taskId);
+  if (!current) return null;
+  if (!canManageTaskAttachments(current, user)) return null;
+
+  if (current.attachments.length >= MAX_TASK_ATTACHMENTS_PER_TASK) {
+    throw new Error("Too many attachments");
+  }
+
+  if (file.size > MAX_TASK_ATTACHMENT_BYTES) {
+    throw new Error("File too large");
+  }
+
+  const contentType = normalizeTaskAttachmentContentType(
+    file.contentType,
+    file.fileName,
+  );
+  if (!contentType) {
+    throw new Error("Unsupported file type");
+  }
+
+  const attachmentId = randomUUID();
+  const now = new Date().toISOString();
+  const attachment: TaskAttachment = {
+    id: attachmentId,
+    fileName: file.fileName.trim() || "file",
+    contentType,
+    size: file.size,
+    uploadedByUserId: user.id,
+    uploadedByName: user.name,
+    uploadedAt: now,
+  };
+
+  try {
+    await saveTaskAttachmentFile(
+      attachmentId,
+      attachment.fileName,
+      file.buffer,
+      contentType,
+    );
+  } catch (error) {
+    console.error("[tasks] attachment save", error);
+    throw new Error("Failed to save attachment");
+  }
+
+  const updated: Task = {
+    ...current,
+    attachments: [...current.attachments, attachment],
+    updatedAt: now,
+  };
+
+  return persistTask(updated);
+}
+
+export async function removeTaskAttachment(
+  taskId: string,
+  attachmentId: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = await getTask(taskId);
+  if (!current) return null;
+
+  const attachment = current.attachments.find((item) => item.id === attachmentId);
+  if (!attachment) return null;
+  if (!canDeleteTaskAttachment(current, attachment, user)) return null;
+
+  await deleteTaskAttachmentFile(attachment.id, attachment.fileName).catch(
+    () => undefined,
+  );
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...current,
+    attachments: current.attachments.filter((item) => item.id !== attachmentId),
+    updatedAt: now,
+  };
+
+  return persistTask(updated);
 }

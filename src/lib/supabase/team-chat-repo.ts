@@ -12,23 +12,28 @@ type MessageRow = {
   message_text: string;
   audio_url?: string | null;
   audio_duration_ms?: number | null;
+  image_url?: string | null;
   created_at: string;
   updated_at: string;
 };
 
 function mapMessage(row: MessageRow): TeamChatMessage {
+  const messageType =
+    row.message_type === "voice"
+      ? "voice"
+      : row.message_type === "image"
+        ? "image"
+        : "text";
   return {
     id: row.id,
     user_id: row.user_id,
     user_name: row.user_name,
     user_role: row.user_role as TeamChatMessage["user_role"],
-    message_type:
-      row.message_type === "voice"
-        ? "voice"
-        : "text",
+    message_type: messageType,
     message_text: row.message_text,
     audio_url: row.audio_url ?? null,
     audio_duration_ms: row.audio_duration_ms ?? null,
+    image_url: row.image_url ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -58,6 +63,7 @@ export async function sbInsertTeamChatMessage(
       message_text: message.message_text,
       audio_url: message.audio_url,
       audio_duration_ms: message.audio_duration_ms,
+      image_url: message.image_url,
       created_at: message.created_at,
       updated_at: message.updated_at,
     })

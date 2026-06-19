@@ -2,7 +2,7 @@ import "server-only";
 
 import { getSupabaseAdmin } from "./server";
 import { normalizeAssignees } from "@/lib/tasks/assignees";
-import type { Task, TaskReviewEvent, TaskStatus } from "@/lib/tasks/types";
+import type { Task, TaskAttachment, TaskReviewEvent, TaskStatus } from "@/lib/tasks/types";
 
 type TaskRow = {
   id: string;
@@ -17,6 +17,7 @@ type TaskRow = {
   completed_at: string | null;
   updated_at: string;
   review_history?: unknown;
+  attachments?: unknown;
 };
 
 function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
@@ -46,6 +47,36 @@ function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
   return events;
 }
 
+function normalizeAttachments(raw: unknown): TaskAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const attachments: TaskAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const attachment = item as Partial<TaskAttachment>;
+    if (
+      !attachment.id ||
+      !attachment.fileName ||
+      !attachment.contentType ||
+      typeof attachment.size !== "number" ||
+      !attachment.uploadedByUserId ||
+      !attachment.uploadedByName ||
+      !attachment.uploadedAt
+    ) {
+      continue;
+    }
+    attachments.push({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      uploadedByUserId: attachment.uploadedByUserId,
+      uploadedByName: attachment.uploadedByName,
+      uploadedAt: attachment.uploadedAt,
+    });
+  }
+  return attachments;
+}
+
 function mapRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -60,6 +91,7 @@ function mapRow(row: TaskRow): Task {
     completedAt: row.completed_at,
     updatedAt: row.updated_at,
     reviewHistory: normalizeReviewHistory(row.review_history),
+    attachments: normalizeAttachments(row.attachments),
   };
 }
 
@@ -77,6 +109,7 @@ function mapTask(task: Task): TaskRow {
     completed_at: task.completedAt,
     updated_at: task.updatedAt,
     review_history: task.reviewHistory,
+    attachments: task.attachments,
   };
 }
 

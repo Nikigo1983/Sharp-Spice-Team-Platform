@@ -16,6 +16,7 @@ import {
   canStartTask,
   canSubmitForApproval,
   canChangeTaskStatus,
+  canViewTask,
   isTaskCreator,
 } from "./permissions";
 import type {
@@ -185,10 +186,15 @@ export {
   canSubmitForApproval,
   canDirectComplete,
   canStartTask,
+  canViewTask,
   isTaskCreator,
 };
 
-export async function listTasks(): Promise<Task[]> {
+function filterTasksForUser(tasks: Task[], user: SessionUser): Task[] {
+  return tasks.filter((task) => canViewTask(task, user));
+}
+
+async function listAllTasks(): Promise<Task[]> {
   if (isSupabaseConfigured()) {
     try {
       return await sbTasks.sbListTasks();
@@ -200,6 +206,11 @@ export async function listTasks(): Promise<Task[]> {
 
   const store = await readStore();
   return store.tasks.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function listTasksForUser(user: SessionUser): Promise<Task[]> {
+  const tasks = await listAllTasks();
+  return filterTasksForUser(tasks, user);
 }
 
 export async function getTask(id: string): Promise<Task | null> {
@@ -214,6 +225,15 @@ export async function getTask(id: string): Promise<Task | null> {
 
   const store = await readStore();
   return store.tasks.find((t) => t.id === id) ?? null;
+}
+
+export async function getTaskForUser(
+  id: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const task = await getTask(id);
+  if (!task || !canViewTask(task, user)) return null;
+  return task;
 }
 
 export async function createTask(
@@ -503,8 +523,8 @@ export async function deleteTask(
   return true;
 }
 
-export async function getTaskStats(): Promise<TaskStats> {
-  const tasks = await listTasks();
+export async function getTaskStats(user: SessionUser): Promise<TaskStats> {
+  const tasks = await listTasksForUser(user);
   return {
     total: tasks.length,
     inProgress: tasks.filter(

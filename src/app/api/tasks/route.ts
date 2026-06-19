@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { notifyTaskCreated } from "@/lib/notifications/emit";
-import { createTask, getTaskStats, listTasks } from "@/lib/tasks/store";
+import { createTask, getTaskStats, listTasksForUser } from "@/lib/tasks/store";
 import type { CreateTaskInput } from "@/lib/tasks/types";
 
 export async function GET(request: Request) {
@@ -12,11 +12,11 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   if (searchParams.get("stats") === "1") {
-    const stats = await getTaskStats();
+    const stats = await getTaskStats(session);
     return NextResponse.json({ stats });
   }
 
-  const tasks = await listTasks();
+  const tasks = await listTasksForUser(session);
   return NextResponse.json({ tasks });
 }
 

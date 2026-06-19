@@ -6,6 +6,7 @@ import {
   completeTask,
   deleteTask,
   getTask,
+  getTaskForUser,
   requestTaskRevision,
   setTaskStatus,
   submitTaskForApproval,
@@ -28,7 +29,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const task = await getTask(id);
+  const task = await getTaskForUser(id, session);
   if (!task) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -44,7 +45,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   const body = (await request.json()) as UpdateTaskInput;
-  const existing = await getTask(id);
+  const existing = await getTaskForUser(id, session);
   const task = await updateTask(id, body, session);
 
   if (!task) {
@@ -77,9 +78,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
+  const existing = await getTaskForUser(id, session);
   const ok = await deleteTask(id, session);
   if (!ok) {
-    const existing = await getTask(id);
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -122,7 +123,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     comment?: string;
   };
 
-  const existing = await getTask(id);
+  const existing = await getTaskForUser(id, session);
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

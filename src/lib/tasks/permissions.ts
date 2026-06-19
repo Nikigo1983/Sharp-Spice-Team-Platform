@@ -6,6 +6,12 @@ export function isTaskAssignee(task: Task, userId: string): boolean {
   return task.assignees.some((assignee) => assignee.id === userId);
 }
 
+/** Задачу видят только автор и назначенные исполнители. */
+export function canViewTask(task: Task, user: SessionUser): boolean {
+  if (isTaskCreator(task, user)) return true;
+  return isTaskAssignee(task, user.id);
+}
+
 /** Кто создал и назначил задачу (автор). */
 export function isTaskCreator(task: Task, user: SessionUser): boolean {
   const creatorId = task.createdByUserId?.trim();

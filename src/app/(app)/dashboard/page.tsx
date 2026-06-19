@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   }
 
   const [taskStats, teamRecentMessages, dashboardStats] = await Promise.all([
-    getTaskStats(),
+    getTaskStats(session),
     listLatestTeamChatForDashboard(5),
     getDashboardStats(),
   ]);

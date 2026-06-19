@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { addTaskAttachment, getTask } from "@/lib/tasks/store";
+import { addTaskAttachment, getTaskForUser } from "@/lib/tasks/store";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,7 +11,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const existing = await getTask(id);
+  const existing = await getTaskForUser(id, session);
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

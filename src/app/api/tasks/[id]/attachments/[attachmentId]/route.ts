@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { canPreviewInline } from "@/lib/tasks/attachment-formats";
 import { readTaskAttachmentFile } from "@/lib/tasks/attachment-storage";
-import { getTask, removeTaskAttachment } from "@/lib/tasks/store";
+import { getTaskForUser, removeTaskAttachment } from "@/lib/tasks/store";
+import type { Task } from "@/lib/tasks/types";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
 
-function findAttachment(task: NonNullable<Awaited<ReturnType<typeof getTask>>>, attachmentId: string) {
+function findAttachment(task: Task, attachmentId: string) {
   return task.attachments.find((item) => item.id === attachmentId) ?? null;
 }
 
@@ -17,7 +18,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { id, attachmentId } = await context.params;
-  const task = await getTask(id);
+  const task = await getTaskForUser(id, session);
   if (!task) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -54,7 +55,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   const { id, attachmentId } = await context.params;
-  const existing = await getTask(id);
+  const existing = await getTaskForUser(id, session);
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

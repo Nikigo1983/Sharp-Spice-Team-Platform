@@ -19,6 +19,7 @@ import { useVoiceRecorder } from "./useVoiceRecorder";
 import { VoiceMessageAudio } from "./VoiceMessageAudio";
 import { ChatImageMessage } from "./ChatImageMessage";
 import { ChatFileMessage, CHAT_DOCUMENT_ACCEPT } from "./ChatFileMessage";
+import { ChatMessageText } from "./ChatMessageText";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
@@ -511,7 +512,7 @@ export function TeamChatView({
       return (
         <>
           <ChatImageMessage src={message.image_url} />
-          {caption ? <p className={styles.messageText}>{caption}</p> : null}
+          {caption ? <ChatMessageText text={caption} /> : null}
         </>
       );
     }
@@ -525,12 +526,12 @@ export function TeamChatView({
             fileSize={message.file_size}
             contentType={message.file_content_type}
           />
-          {caption ? <p className={styles.messageText}>{caption}</p> : null}
+          {caption ? <ChatMessageText text={caption} /> : null}
         </>
       );
     }
 
-    return <p className={styles.messageText}>{message.message_text}</p>;
+    return <ChatMessageText text={message.message_text} />;
   }
 
   async function confirmDelete() {

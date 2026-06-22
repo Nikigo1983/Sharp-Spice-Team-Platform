@@ -47,6 +47,10 @@ import {
   resolveClientSelectionFollowUp,
 } from "@/lib/ai/client-selection-followup";
 import { mergeClientContexts } from "@/lib/ai/client-deduplication";
+import {
+  redactSensitiveText,
+  sanitizeClientContextsForTransport,
+} from "@/lib/ai/context-redaction";
 import { buildWorkspaceSystemPrompt } from "@/lib/ai/workspace-prompt";
 import { buildWorkspaceContext } from "@/lib/ai/workspace-context";
 import {
@@ -86,6 +90,12 @@ export type WorkspaceAiStreamMeta = {
 export type WorkspaceAiStreamStatus = {
   status: "context" | "generating";
 };
+
+function pendingCandidatesForTransport(
+  pending: ClientContext[] | null | undefined,
+): ClientContext[] | undefined {
+  return sanitizeClientContextsForTransport(pending ?? undefined);
+}
 
 function buildSources(
   context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
@@ -307,6 +317,10 @@ async function prepareWorkspaceRequest(
     return { kind: "empty" };
   }
 
+  const safePendingCandidates =
+    sanitizeClientContextsForTransport(pendingClientCandidates ?? undefined) ??
+    null;
+
   if (isDebugClientCommand(trimmed)) {
     const debugQuery = parseDebugClientQuery(trimmed) || trimmed;
     const searchQuery = buildClientSearchQuery(debugQuery);
@@ -335,14 +349,14 @@ async function prepareWorkspaceRequest(
     }
     return {
       kind: "direct",
-      reply: debugReply,
+      reply: redactSensitiveText(debugReply),
       sources: ["Клиенты", "Новые клиенты"],
     };
   }
 
   const followUp = resolveClientSelectionFollowUp(
     trimmed,
-    pendingClientCandidates,
+    safePendingCandidates,
     history,
   );
 
@@ -538,7 +552,7 @@ async function prepareWorkspaceRequest(
     context,
     trimmed,
     clientContext,
-    pendingClientCandidates: pendingForUi,
+    pendingClientCandidates: pendingCandidatesForTransport(pendingForUi),
     needsClientSelection,
   };
 }

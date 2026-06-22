@@ -3,6 +3,11 @@ import {
   type NormalizedNameParts,
 } from "@/lib/ai/russian-name-morphology";
 import {
+  isSensitiveFieldKey,
+  redactDebugRow,
+  REDACTED_VALUE,
+} from "@/lib/ai/context-redaction";
+import {
   formatFormgridRowDetailed,
   getFormgridClientFields,
 } from "@/lib/google-sheets/formgrid-lookup";
@@ -165,7 +170,7 @@ export function formgridRowToContext(
   const debugRow: Record<string, string> = {};
   headers.forEach((header, index) => {
     const value = (row[index] ?? "").trim();
-    if (header && value) {
+    if (header && value && !isSensitiveFieldKey(header)) {
       debugRow[header.slice(0, 80)] = value.slice(0, 200);
     }
   });
@@ -330,8 +335,11 @@ export function formatDebugClientReply(
   if (rawHits.length > 0) {
     lines.push("**Raw scan (token in row):**");
     for (const hit of rawHits.slice(0, 12)) {
+      const displayValue = isSensitiveFieldKey(hit.column)
+        ? REDACTED_VALUE
+        : hit.value.slice(0, 120);
       lines.push(
-        `- ${hit.source}, строка ${hit.rowIndex}, колонка «${hit.column}»: «${hit.value.slice(0, 120)}» (token: ${hit.matchedToken})`,
+        `- ${hit.source}, строка ${hit.rowIndex}, колонка «${hit.column}»: «${displayValue}» (token: ${hit.matchedToken})`,
       );
     }
     lines.push("");
@@ -399,7 +407,7 @@ export function formatDebugClientReply(
           client.matchedFields.length > 0
             ? client.matchedFields.map((field) => `- ${field}`).join("\n")
             : "- (нет детализации полей)";
-        const rowJson = JSON.stringify(client.debugRow, null, 2);
+        const rowJson = JSON.stringify(redactDebugRow(client.debugRow), null, 2);
 
         return [
           `Найден клиент: ${client.name}`,

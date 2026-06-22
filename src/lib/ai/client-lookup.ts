@@ -1,6 +1,11 @@
 import "server-only";
 
 import {
+  isSensitiveFieldKey,
+  redactDebugRow,
+  redactForLogging,
+} from "@/lib/ai/context-redaction";
+import {
   crmClientToContext,
   formgridRowToContext,
   isMergedClientContext,
@@ -164,7 +169,6 @@ function buildCrmRawRow(client: Client): Record<string, string> {
     approvalAt: client.approvalAt ?? "",
     notes: client.notes ?? "",
     residenceCardIssuedAt: client.residenceCardIssuedAt ?? "",
-    appPassword: client.appPassword ?? "",
     manager: client.manager ?? "",
     status: client.status ?? "",
   };
@@ -317,13 +321,13 @@ function logAiSearchAudit(payload: {
   console.log(`Found clients: ${payload.foundClients}`);
   console.log(`Sent to Claude: ${payload.sentToClaude}`);
   console.log(`Intent type: ${payload.intentType}`);
-  console.log("[ai-client-search]", {
+  console.log("[ai-client-search]", redactForLogging({
     query: payload.query,
     intentType: payload.intentType,
     foundClients: payload.foundClients,
     sentToClaude: payload.sentToClaude,
     structuredCount: payload.structuredCount,
-  });
+  }));
 }
 
 function structuredToLookupResult(
@@ -461,10 +465,10 @@ async function collectClientMatches(
     const { score, matchedFields } = scoreClientRecord(searchQuery, fields);
     if (score >= minScore) {
       const ctx = crmClientToContext(client, score, matchedFields);
-      ctx.debugRow = {
+      ctx.debugRow = redactDebugRow({
         ...buildCrmRawRow(client),
         ...ctx.debugRow,
-      };
+      });
       matches.push(ctx);
     }
   }
@@ -502,6 +506,7 @@ export async function scanRawRowsForTokens(
   for (const client of crmClients) {
     const raw = buildCrmRawRow(client);
     for (const [column, value] of Object.entries(raw)) {
+      if (isSensitiveFieldKey(column)) continue;
       const hay = value.toLowerCase();
       for (const token of tokenLower) {
         if (hay.includes(token)) {
@@ -521,7 +526,7 @@ export async function scanRawRowsForTokens(
   formgrid.rows.forEach((row, index) => {
     formgrid.headers.forEach((header, colIndex) => {
       const value = (row[colIndex] ?? "").trim();
-      if (!value) return;
+      if (!value || isSensitiveFieldKey(header)) return;
       const hay = value.toLowerCase();
       for (const token of tokenLower) {
         if (hay.includes(token)) {

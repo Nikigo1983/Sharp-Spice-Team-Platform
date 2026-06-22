@@ -6,6 +6,9 @@ import {
 } from "@/lib/ai/workspace-assistant";
 import type { ClientContext } from "@/lib/ai/client-context";
 import {
+  sanitizeClientContextsForTransport,
+} from "@/lib/ai/context-redaction";
+import {
   getWorkspaceAiConfig,
   isWorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
@@ -34,7 +37,8 @@ export async function POST(request: Request) {
   const mode = parseMode(body.mode);
   const message = body.message ?? "";
   const history = body.history ?? [];
-  const pendingClientCandidates = body.pendingClientCandidates ?? null;
+  const pendingClientCandidates =
+    sanitizeClientContextsForTransport(body.pendingClientCandidates) ?? null;
   const { stream } = getWorkspaceAiConfig();
 
   if (stream) {
@@ -71,7 +75,9 @@ export async function POST(request: Request) {
                 `event: meta\ndata: ${JSON.stringify({
                   sources: chunk.sources,
                   demo: chunk.demo,
-                  pendingClientCandidates: chunk.pendingClientCandidates,
+                  pendingClientCandidates: sanitizeClientContextsForTransport(
+                    chunk.pendingClientCandidates,
+                  ),
                   needsClientSelection: chunk.needsClientSelection,
                 })}\n\n`,
               ),
@@ -111,7 +117,12 @@ export async function POST(request: Request) {
       mode,
       pendingClientCandidates,
     );
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      pendingClientCandidates: sanitizeClientContextsForTransport(
+        result.pendingClientCandidates,
+      ),
+    });
   } catch (error) {
     console.error("[api/ai-workspace]", error);
     return NextResponse.json(

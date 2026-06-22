@@ -1,5 +1,6 @@
 import type { ClientContext, MergedClientContext } from "@/lib/ai/client-context";
 import { collectSheetFieldConflict } from "@/lib/ai/client-field-sources";
+import { redactDebugRow } from "@/lib/ai/context-redaction";
 import {
   extractPassportFromClientRecord,
   passportsMatch,
@@ -274,12 +275,14 @@ export function mergeClientContexts(parts: ClientContext[]): MergedClientContext
     mergeReasons: [...mergeReasons],
     parts,
     conflicts,
-    debugRow: Object.fromEntries(
-      parts.flatMap((part) =>
-        Object.entries(part.debugRow).map(([key, value]) => [
-          `${part.sourceLabel}:${key}`,
-          value,
-        ]),
+    debugRow: redactDebugRow(
+      Object.fromEntries(
+        parts.flatMap((part) =>
+          Object.entries(part.debugRow).map(([key, value]) => [
+            `${part.sourceLabel}:${key}`,
+            value,
+          ]),
+        ),
       ),
     ),
   };

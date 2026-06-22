@@ -7,6 +7,7 @@ import {
   lemmatizeRussianNameWord,
   type NormalizedNameParts,
 } from "@/lib/ai/russian-name-morphology";
+import { redactForLogging } from "@/lib/ai/context-redaction";
 import { normalizeText } from "@/lib/ai/search-normalize";
 
 const QUERY_STOP_WORDS = new Set([
@@ -200,7 +201,7 @@ export function logClientEntityExtraction(
   result?: { kind: string; clientName?: string },
 ): void {
   console.log("=== CLIENT LOOKUP ===");
-  console.log("Запрос:", rawQuery);
+  console.log("Запрос:", redactForLogging(rawQuery));
   console.log("Извлечено:", extraction?.extractedPhrase ?? "—");
   console.log("Нормализовано:", extraction?.normalizedPhrase ?? "—");
   console.log("Поиск:", extraction?.searchPhrase ?? "—");

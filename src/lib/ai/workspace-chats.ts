@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { WorkspaceChatTurn } from "@/lib/ai/workspace-assistant";
+import { sanitizeWorkspaceChatTurns } from "@/lib/ai/context-redaction";
 import {
   MAX_WORKSPACE_CHATS,
   type WorkspaceChatSession,
@@ -93,17 +94,24 @@ export async function getWorkspaceChat(
   userId: string,
   chatId: string,
 ): Promise<WorkspaceChatSession | null> {
+  let session: WorkspaceChatSession | null = null;
   if (isSupabaseConfigured()) {
     try {
-      return await sbChats.sbGetWorkspaceChatSession(userId, chatId);
+      session = await sbChats.sbGetWorkspaceChatSession(userId, chatId);
     } catch (error) {
       console.error("[workspace-chats] supabase get", error);
       return null;
     }
+  } else {
+    const store = await readStore(userId);
+    session = store.sessions.find((s) => s.id === chatId) ?? null;
   }
 
-  const store = await readStore(userId);
-  return store.sessions.find((s) => s.id === chatId) ?? null;
+  if (!session) return null;
+  return {
+    ...session,
+    messages: sanitizeWorkspaceChatTurns(session.messages),
+  };
 }
 
 export async function createWorkspaceChat(
@@ -152,7 +160,7 @@ export async function updateWorkspaceChat(
   const updated: WorkspaceChatSession = {
     ...existing,
     title,
-    messages,
+    messages: sanitizeWorkspaceChatTurns(messages),
     updatedAt: new Date().toISOString(),
   };
 

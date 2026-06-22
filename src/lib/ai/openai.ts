@@ -1,4 +1,10 @@
 import { getAiRuntimeConfig } from "@/lib/ai/config";
+import {
+  assertOpenRouterPayloadSafe,
+  redactForLogging,
+  redactSensitiveText,
+  sanitizeChatMessagesForProvider,
+} from "@/lib/ai/context-redaction";
 import { fetchWithTlsFallback } from "@/lib/google-fetch";
 
 export type ChatMessage = {
@@ -76,10 +82,13 @@ function buildRequestBody(
   options: ChatCompletionOptions | undefined,
   stream: boolean,
 ): string {
+  const safeMessages = sanitizeChatMessagesForProvider(messages);
+  assertOpenRouterPayloadSafe(safeMessages);
+
   const payload: Record<string, unknown> = {
     model: resolveModel(config, options),
     temperature: options?.temperature ?? 0.35,
-    messages,
+    messages: safeMessages,
     stream,
   };
 
@@ -120,7 +129,7 @@ export async function createChatCompletion(
       console.error(
         `[ai/${config.provider}] error`,
         response.status,
-        errBody,
+        redactSensitiveText(errBody),
       );
 
       if (response.status === 429 && attempt < maxAttempts) {
@@ -134,7 +143,7 @@ export async function createChatCompletion(
 
       return null;
     } catch (error) {
-      console.error(`[ai/${config.provider}] request failed`, error);
+      console.error(`[ai/${config.provider}] request failed`, redactForLogging(error));
       if (attempt < maxAttempts) {
         await sleep(2000);
         continue;
@@ -178,7 +187,7 @@ export async function* streamChatCompletion(
     console.error(
       `[ai/${config.provider}] stream error`,
       response.status,
-      errBody,
+      redactSensitiveText(errBody),
     );
     return;
   }

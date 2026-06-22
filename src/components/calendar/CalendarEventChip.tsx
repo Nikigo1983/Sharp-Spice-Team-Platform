@@ -8,12 +8,34 @@ import styles from "./CalendarEventChip.module.css";
 
 type CalendarEventChipProps = {
   event: CalendarEvent;
+  variant?: "agenda" | "month";
   onClick?: (event: CalendarEvent) => void;
 };
 
-export function CalendarEventChip({ event, onClick }: CalendarEventChipProps) {
+export function CalendarEventChip({
+  event,
+  variant = "agenda",
+  onClick,
+}: CalendarEventChipProps) {
   const scopeClass =
     event.scope === "personal" ? styles.personal : styles.company;
+
+  if (variant === "month") {
+    return (
+      <button
+        type="button"
+        className={[styles.monthChip, scopeClass].join(" ")}
+        onClick={(clickEvent) => {
+          clickEvent.stopPropagation();
+          onClick?.(event);
+        }}
+        aria-label={`${event.title}, ${formatScopeLabel(event.scope)}`}
+        title={event.title}
+      >
+        <span className={styles.monthTitle}>{event.title}</span>
+      </button>
+    );
+  }
 
   return (
     <button

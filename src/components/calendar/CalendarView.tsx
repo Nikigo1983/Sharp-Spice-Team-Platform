@@ -23,6 +23,7 @@ import type { CalendarEvent } from "@/lib/calendar/types";
 import { CalendarDayAgenda } from "./CalendarDayAgenda";
 import { CalendarEmptyState } from "./CalendarEmptyState";
 import { CalendarLayerFilters } from "./CalendarLayerFilters";
+import { CalendarMonthGrid } from "./CalendarMonthGrid";
 import { CalendarToolbar } from "./CalendarToolbar";
 import { CalendarViewPlaceholder } from "./CalendarViewPlaceholder";
 import styles from "./CalendarView.module.css";
@@ -161,6 +162,19 @@ export function CalendarView({ user: _user }: CalendarViewProps) {
     updateAnchorDate(new Date());
   }, [updateAnchorDate]);
 
+  const openDayView = useCallback(
+    (dateKey: string) => {
+      const nextDate = parseDateKey(dateKey);
+      setView("day");
+      setAnchorDate(nextDate);
+      syncUrl("day", nextDate);
+    },
+    [syncUrl],
+  );
+
+  const showEmptyState =
+    view === "day" && events.length === 0 && hasActiveLayer(layers);
+
   return (
     <div className={styles.wrap}>
       <CalendarToolbar
@@ -189,10 +203,16 @@ export function CalendarView({ user: _user }: CalendarViewProps) {
           <div className={styles.loading} role="status">
             Выберите хотя бы один слой событий, чтобы загрузить календарь.
           </div>
-        ) : events.length === 0 ? (
+        ) : showEmptyState ? (
           <CalendarEmptyState />
         ) : view === "day" ? (
           <CalendarDayAgenda events={events} />
+        ) : view === "month" ? (
+          <CalendarMonthGrid
+            anchorDate={anchorDate}
+            events={events}
+            onDayClick={openDayView}
+          />
         ) : (
           <CalendarViewPlaceholder view={view} events={events} />
         )}

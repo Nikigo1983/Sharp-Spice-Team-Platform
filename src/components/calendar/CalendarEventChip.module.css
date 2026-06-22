@@ -65,3 +65,40 @@
   height: 0.55rem;
   border-radius: 999px;
 }
+
+.monthChip {
+  display: block;
+  width: 100%;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: none;
+  font-family: Inter, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.monthChip.personal {
+  background: rgba(59, 130, 246, 0.88);
+}
+
+.monthChip.company {
+  background: rgba(34, 197, 94, 0.88);
+}
+
+.monthChip:hover {
+  filter: brightness(1.08);
+}
+
+.monthTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

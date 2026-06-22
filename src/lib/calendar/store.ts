@@ -9,11 +9,14 @@ import {
 } from "./constants";
 import type {
   CalendarEvent,
-  CalendarScope,
   CreateCalendarEventInput,
   ListCalendarEventsOptions,
   UpdateCalendarEventInput,
 } from "./types";
+import {
+  validateCreateInput,
+  validateUpdateInput,
+} from "./validation";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbCalendar from "@/lib/supabase/calendar-events-repo";
 
@@ -23,40 +26,8 @@ type CalendarEventStore = {
   events: CalendarEvent[];
 };
 
-export class CalendarStoreError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "CalendarStoreError";
-  }
-}
-
-function isCalendarScope(value: string): value is CalendarScope {
-  return value === "personal" || value === "company";
-}
-
-function assertEventInvariants(
-  event: Pick<
-    CalendarEvent,
-    "scope" | "ownerUserId" | "title" | "startAt" | "endAt"
-  >,
-): void {
-  const title = event.title.trim();
-  if (!title) {
-    throw new CalendarStoreError("Title is required");
-  }
-
-  if (!isCalendarScope(event.scope)) {
-    throw new CalendarStoreError("Invalid scope");
-  }
-
-  if (event.scope === "personal" && !event.ownerUserId?.trim()) {
-    throw new CalendarStoreError("Personal events require ownerUserId");
-  }
-
-  if (event.endAt < event.startAt) {
-    throw new CalendarStoreError("endAt must be greater than or equal to startAt");
-  }
-}
+/** @deprecated Use CalendarValidationError from ./validation */
+export { CalendarValidationError as CalendarStoreError } from "./validation";
 
 function eventOverlapsRange(
   event: CalendarEvent,
@@ -142,6 +113,8 @@ export async function getEvent(id: string): Promise<CalendarEvent | null> {
 export async function createEvent(
   input: CreateCalendarEventInput,
 ): Promise<CalendarEvent> {
+  validateCreateInput(input);
+
   const now = new Date().toISOString();
   const event: CalendarEvent = {
     id: randomUUID(),
@@ -161,8 +134,6 @@ export async function createEvent(
     createdAt: now,
     updatedAt: now,
   };
-
-  assertEventInvariants(event);
 
   if (isSupabaseConfigured()) {
     try {
@@ -205,7 +176,7 @@ export async function updateEvent(
     updatedAt: new Date().toISOString(),
   };
 
-  assertEventInvariants(updated);
+  validateUpdateInput(existing, input);
 
   if (isSupabaseConfigured()) {
     try {

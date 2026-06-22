@@ -5,9 +5,10 @@ import styles from "./CalendarDayAgenda.module.css";
 
 type CalendarDayAgendaProps = {
   events: CalendarEvent[];
+  onEventClick?: (event: CalendarEvent) => void;
 };
 
-export function CalendarDayAgenda({ events }: CalendarDayAgendaProps) {
+export function CalendarDayAgenda({ events, onEventClick }: CalendarDayAgendaProps) {
   const { allDay, timed } = partitionDayAgenda(events);
 
   return (
@@ -18,7 +19,7 @@ export function CalendarDayAgenda({ events }: CalendarDayAgendaProps) {
           <ul className={styles.list}>
             {allDay.map((event) => (
               <li key={event.id}>
-                <CalendarEventChip event={event} />
+                <CalendarEventChip event={event} onClick={onEventClick} />
               </li>
             ))}
           </ul>
@@ -33,7 +34,7 @@ export function CalendarDayAgenda({ events }: CalendarDayAgendaProps) {
           <ul className={styles.list}>
             {timed.map((event) => (
               <li key={event.id}>
-                <CalendarEventChip event={event} />
+                <CalendarEventChip event={event} onClick={onEventClick} />
               </li>
             ))}
           </ul>

@@ -15,6 +15,7 @@ type CalendarMonthGridProps = {
   anchorDate: Date;
   events: CalendarEvent[];
   onDayClick: (dateKey: string) => void;
+  onEventClick?: (event: CalendarEvent) => void;
 };
 
 function dayNumber(dateKey: string): string {
@@ -25,6 +26,7 @@ export function CalendarMonthGrid({
   anchorDate,
   events,
   onDayClick,
+  onEventClick,
 }: CalendarMonthGridProps) {
   const todayKey = useMemo(() => formatDateKey(new Date()), []);
   const weeks = useMemo(
@@ -75,6 +77,7 @@ export function CalendarMonthGrid({
                       key={event.id}
                       event={event}
                       variant="month"
+                      onClick={onEventClick}
                     />
                   ))}
                   {overflow > 0 ? (

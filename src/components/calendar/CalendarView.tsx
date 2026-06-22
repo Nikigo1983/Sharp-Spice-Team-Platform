@@ -20,6 +20,7 @@ import {
   type CalendarViewMode,
 } from "@/lib/calendar/range";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { CalendarDayAgenda } from "./CalendarDayAgenda";
 import { CalendarEmptyState } from "./CalendarEmptyState";
 import { CalendarLayerFilters } from "./CalendarLayerFilters";
 import { CalendarToolbar } from "./CalendarToolbar";
@@ -190,6 +191,8 @@ export function CalendarView({ user: _user }: CalendarViewProps) {
           </div>
         ) : events.length === 0 ? (
           <CalendarEmptyState />
+        ) : view === "day" ? (
+          <CalendarDayAgenda events={events} />
         ) : (
           <CalendarViewPlaceholder view={view} events={events} />
         )}

@@ -1,0 +1,27 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.body {
+  min-height: 24rem;
+}
+
+.loading {
+  padding: 2rem 1rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.errorBanner {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: #fecaca;
+}

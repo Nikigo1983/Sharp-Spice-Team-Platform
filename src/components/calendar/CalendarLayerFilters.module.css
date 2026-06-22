@@ -1,0 +1,80 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+
+.filterItem {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: #e2e8f0;
+}
+
+.filterItem input {
+  margin-top: 0.2rem;
+}
+
+.filterItem strong {
+  display: block;
+  font-family: Sora, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.filterItem small {
+  display: block;
+  margin-top: 0.125rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.warning {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: #fcd34d;
+}
+
+.legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+}
+
+.legendDot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .row {
+    flex-direction: column;
+  }
+}

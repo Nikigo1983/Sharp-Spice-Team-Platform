@@ -44,6 +44,12 @@ const NAV_TASKS: NavItem = {
   icon: "fa-solid fa-list-check",
 };
 
+const NAV_CALENDAR: NavItem = {
+  href: "/calendar",
+  label: "Календарь",
+  icon: "fa-solid fa-calendar-days",
+};
+
 const NAV_TEAM_CHAT: NavItem = {
   href: "/team-chat",
   label: "Командный чат",
@@ -95,6 +101,7 @@ const MANAGER_NAV: NavItem[] = [
   NAV_AI,
   NAV_KB,
   NAV_TASKS,
+  NAV_CALENDAR,
   NAV_TEAM_CHAT,
   NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,
@@ -110,6 +117,7 @@ const OWNER_NAV: NavItem[] = [
   NAV_AI,
   NAV_KB,
   NAV_TASKS,
+  NAV_CALENDAR,
   NAV_TEAM_CHAT,
   NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,

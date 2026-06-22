@@ -1,0 +1,127 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field,
+.readonlyScope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.scopeFieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.label {
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-300);
+}
+
+.input,
+.textarea {
+  font-family: Inter, sans-serif;
+  font-size: 0.9375rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-600);
+  background: var(--gray-900);
+  color: var(--white);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent-burgundy);
+}
+
+.scopeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.scopeButton {
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scopeButton.scopePersonal {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.scopeButton.scopeCompany {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.scopeBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.scopeBadge.scopePersonal {
+  background: rgba(59, 130, 246, 0.88);
+}
+
+.scopeBadge.scopeCompany {
+  background: rgba(34, 197, 94, 0.88);
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-300);
+}
+
+.dateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .dateGrid {
+    grid-template-columns: 1fr;
+  }
+}

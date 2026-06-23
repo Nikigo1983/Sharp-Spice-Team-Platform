@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/Button";
 import type { CalendarFormValues } from "@/lib/calendar/form";
 import { validateFormValues } from "@/lib/calendar/form";
 import type { CalendarScope } from "@/lib/calendar/types";
+import { CalendarDateSelect } from "./CalendarDateSelect";
+import { CalendarTimeSelect } from "./CalendarTimeSelect";
 import styles from "./CalendarEventForm.module.css";
 
 export type { CalendarFormValues };
@@ -145,63 +147,41 @@ export function CalendarEventForm({
         <span>Весь день</span>
       </label>
 
-      <div className={styles.dateGrid}>
-        <label className={styles.field}>
-          <span className={styles.label}>Дата начала *</span>
-          <input
-            type="date"
-            className={styles.input}
-            value={values.startDate}
-            onChange={(changeEvent) =>
-              setValues({ ...values, startDate: changeEvent.target.value })
-            }
-            required
-          />
-        </label>
+      <section className={styles.dateTimeSection} aria-labelledby="calendar-datetime-heading">
+        <h3 id="calendar-datetime-heading" className={styles.sectionTitle}>
+          Когда
+        </h3>
 
-        {!values.allDay ? (
-          <label className={styles.field}>
-            <span className={styles.label}>Время начала *</span>
-            <input
-              type="time"
-              className={styles.input}
-              value={values.startTime}
-              onChange={(changeEvent) =>
-                setValues({ ...values, startTime: changeEvent.target.value })
-              }
-              required
+        <div className={styles.dateTimeGrid}>
+          <div className={styles.field}>
+            <span className={styles.label}>Начало *</span>
+            <CalendarDateSelect
+              value={values.startDate}
+              onChange={(startDate) => setValues({ ...values, startDate })}
             />
-          </label>
-        ) : null}
+            {!values.allDay ? (
+              <CalendarTimeSelect
+                value={values.startTime}
+                onChange={(startTime) => setValues({ ...values, startTime })}
+              />
+            ) : null}
+          </div>
 
-        <label className={styles.field}>
-          <span className={styles.label}>Дата окончания *</span>
-          <input
-            type="date"
-            className={styles.input}
-            value={values.endDate}
-            onChange={(changeEvent) =>
-              setValues({ ...values, endDate: changeEvent.target.value })
-            }
-            required
-          />
-        </label>
-
-        {!values.allDay ? (
-          <label className={styles.field}>
-            <span className={styles.label}>Время окончания *</span>
-            <input
-              type="time"
-              className={styles.input}
-              value={values.endTime}
-              onChange={(changeEvent) =>
-                setValues({ ...values, endTime: changeEvent.target.value })
-              }
-              required
+          <div className={styles.field}>
+            <span className={styles.label}>Окончание *</span>
+            <CalendarDateSelect
+              value={values.endDate}
+              onChange={(endDate) => setValues({ ...values, endDate })}
             />
-          </label>
-        ) : null}
-      </div>
+            {!values.allDay ? (
+              <CalendarTimeSelect
+                value={values.endTime}
+                onChange={(endTime) => setValues({ ...values, endTime })}
+              />
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       <label className={styles.field}>
         <span className={styles.label}>Место</span>

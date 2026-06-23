@@ -28,10 +28,13 @@
   font-family: Inter, sans-serif;
   font-size: 0.9375rem;
   padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--gray-600);
-  background: var(--gray-900);
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.85));
   color: var(--white);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .textarea {
@@ -42,7 +45,38 @@
 .input:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--accent-burgundy);
+  border-color: rgba(190, 18, 60, 0.65);
+  box-shadow: 0 0 0 3px rgba(190, 18, 60, 0.12);
+}
+
+.dateTimeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.dateTimeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dateTimeGrid .field {
+  gap: 0.5rem;
 }
 
 .scopeSwitch {
@@ -117,12 +151,6 @@
   color: #94a3b8;
 }
 
-.dateGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
 .error {
   margin: 0;
   color: #fca5a5;
@@ -136,7 +164,7 @@
 }
 
 @media (max-width: 640px) {
-  .dateGrid {
+  .dateTimeGrid {
     grid-template-columns: 1fr;
   }
 }

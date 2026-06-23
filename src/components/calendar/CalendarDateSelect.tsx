@@ -42,7 +42,7 @@ export function CalendarDateSelect({ value, onChange, id }: CalendarDateSelectPr
     <div className={styles.dateWrap} id={id}>
       <div className={styles.selectRow}>
         <select
-          className={styles.select}
+          className={[styles.select, styles.selectDay].join(" ")}
           aria-label="День"
           value={parsed.day}
           onChange={(event) => update({ day: Number(event.target.value) })}
@@ -68,7 +68,7 @@ export function CalendarDateSelect({ value, onChange, id }: CalendarDateSelectPr
         </select>
 
         <select
-          className={styles.select}
+          className={[styles.select, styles.selectYear].join(" ")}
           aria-label="Год"
           value={parsed.year}
           onChange={(event) => update({ year: Number(event.target.value) })}

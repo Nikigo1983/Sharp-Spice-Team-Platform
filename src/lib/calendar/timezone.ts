@@ -1,8 +1,8 @@
 import { CALENDAR_TIMEZONE } from "./constants";
 
-export function isValidIanaTimeZone(timeZone: string): boolean {
+export function isValidIanaTimeZone(ianaTimeZone: string): boolean {
   try {
-    Intl.DateTimeFormat(undefined, { timeZone });
+    Intl.DateTimeFormat(undefined, { timeZone: ianaTimeZone });
     return true;
   } catch {
     return false;
@@ -20,33 +20,43 @@ export function resolveBrowserTimeZone(): string {
   return CALENDAR_TIMEZONE;
 }
 
+function readTimeZoneNamePart(
+  ianaTimeZone: string,
+  locale: string,
+  timeZoneName: "long" | "longGeneric",
+): string | undefined {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      timeZone: ianaTimeZone,
+      timeZoneName,
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "timeZoneName")?.value;
+  } catch {
+    return undefined;
+  }
+}
+
 export function formatTimeZoneLabel(
-  timeZone: string,
+  ianaTimeZone: string,
   locale = "ru-RU",
 ): string {
-  const now = new Date();
-  const name =
-    new Intl.DateTimeFormat(locale, {
-      timeZone,
-      timeZoneName: "longGeneric",
-    })
-      .formatToParts(now)
-      .find((part) => part.type === "timeZoneName")?.value ??
-    new Intl.DateTimeFormat(locale, {
-      timeZone,
-      timeZoneName: "long",
-    })
-      .formatToParts(now)
-      .find((part) => part.type === "timeZoneName")?.value ??
-    timeZone;
+  try {
+    const name =
+      readTimeZoneNamePart(ianaTimeZone, locale, "long") ??
+      readTimeZoneNamePart(ianaTimeZone, locale, "longGeneric") ??
+      ianaTimeZone.replace(/_/g, " ");
 
-  const offset =
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone,
-      timeZoneName: "shortOffset",
-    })
-      .formatToParts(now)
-      .find((part) => part.type === "timeZoneName")?.value ?? "UTC";
+    const offset =
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: ianaTimeZone,
+        timeZoneName: "shortOffset",
+      })
+        .formatToParts(new Date())
+        .find((part) => part.type === "timeZoneName")?.value ?? "UTC";
 
-  return `${name} (${offset})`;
+    return `${name} (${offset})`;
+  } catch {
+    return ianaTimeZone;
+  }
 }

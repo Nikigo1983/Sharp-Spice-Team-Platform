@@ -12,9 +12,11 @@ type CalendarTimeZoneContextValue = {
   timeZoneLabel: string;
 };
 
+const DEFAULT_TIME_ZONE_LABEL = CALENDAR_TIMEZONE.replace(/_/g, " ");
+
 const CalendarTimeZoneContext = createContext<CalendarTimeZoneContextValue>({
   timeZone: CALENDAR_TIMEZONE,
-  timeZoneLabel: formatTimeZoneLabel(CALENDAR_TIMEZONE),
+  timeZoneLabel: DEFAULT_TIME_ZONE_LABEL,
 });
 
 export function CalendarTimeZoneProvider({

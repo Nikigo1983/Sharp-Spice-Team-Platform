@@ -7,6 +7,7 @@ import { validateFormValues } from "@/lib/calendar/form";
 import type { CalendarScope } from "@/lib/calendar/types";
 import { CalendarDateSelect } from "./CalendarDateSelect";
 import { CalendarTimeSelect } from "./CalendarTimeSelect";
+import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import styles from "./CalendarEventForm.module.css";
 
 export type { CalendarFormValues };
@@ -28,13 +29,14 @@ export function CalendarEventForm({
   onSubmit,
   onCancel,
 }: CalendarEventFormProps) {
+  const { timeZone } = useCalendarTimeZone();
   const [values, setValues] = useState<CalendarFormValues>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const validationError = validateFormValues(values);
+    const validationError = validateFormValues(values, timeZone);
     if (validationError) {
       setError(validationError);
       return;

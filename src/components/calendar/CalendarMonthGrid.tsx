@@ -8,6 +8,7 @@ import {
   partitionMonthDayEvents,
 } from "@/lib/calendar/month";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import { CalendarEventChip } from "./CalendarEventChip";
 import styles from "./CalendarMonthGrid.module.css";
 
@@ -28,10 +29,14 @@ export function CalendarMonthGrid({
   onDayClick,
   onEventClick,
 }: CalendarMonthGridProps) {
-  const todayKey = useMemo(() => formatDateKey(new Date()), []);
+  const { timeZone } = useCalendarTimeZone();
+  const todayKey = useMemo(
+    () => formatDateKey(new Date(), timeZone),
+    [timeZone],
+  );
   const weeks = useMemo(
-    () => buildMonthMatrix(anchorDate, todayKey),
-    [anchorDate, todayKey],
+    () => buildMonthMatrix(anchorDate, todayKey, timeZone),
+    [anchorDate, todayKey, timeZone],
   );
 
   return (
@@ -54,6 +59,7 @@ export function CalendarMonthGrid({
             const { visible, overflow } = partitionMonthDayEvents(
               events,
               cell.dateKey,
+              timeZone,
             );
 
             return (

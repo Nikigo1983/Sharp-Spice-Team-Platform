@@ -3,6 +3,7 @@ import { eventsForDay, sortEventsByStartAt } from "./format";
 import { addDaysToDateKey, formatDateKey, parseDateKey } from "./range";
 import type { CalendarEvent } from "./types";
 import { MONTH_WEEKDAY_LABELS } from "./month";
+import { getZonedParts, getZonedWeekday } from "./zoned-time";
 
 export const WEEK_GRID_START_HOUR = 7;
 export const WEEK_GRID_END_HOUR = 20;
@@ -11,62 +12,20 @@ export const WEEK_SLOT_MINUTES = 30;
 export const WEEK_GRID_TOTAL_MINUTES =
   (WEEK_GRID_END_HOUR - WEEK_GRID_START_HOUR) * 60;
 
-const zonedFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CALENDAR_TIMEZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CALENDAR_TIMEZONE,
-  weekday: "short",
-});
-
-const WEEKDAY_INDEX: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
-
-type ZonedParts = {
-  hour: number;
-  minute: number;
-};
-
-function getZonedParts(date: Date): ZonedParts {
-  const parts = zonedFormatter.formatToParts(date);
-  const map = Object.fromEntries(
-    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
-  );
-
-  return {
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-  };
-}
-
-function getZonedWeekday(dateKey: string): number {
-  const weekday = weekdayFormatter.format(parseDateKey(dateKey));
-  return WEEKDAY_INDEX[weekday] ?? 0;
-}
-
-function getMondayOfWeek(dateKey: string): string {
-  const weekday = getZonedWeekday(dateKey);
+function getMondayOfWeek(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const weekday = getZonedWeekday(parseDateKey(dateKey, timeZone), timeZone);
   const diff = weekday === 0 ? -6 : 1 - weekday;
-  return addDaysToDateKey(dateKey, diff);
+  return addDaysToDateKey(dateKey, diff, timeZone);
 }
 
-function getMinutesFromMidnight(iso: string): number {
-  const { hour, minute } = getZonedParts(new Date(iso));
+function getMinutesFromMidnight(
+  iso: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): number {
+  const { hour, minute } = getZonedParts(new Date(iso), timeZone);
   return hour * 60 + minute;
 }
 
@@ -88,12 +47,13 @@ export type WeekTimedLayout = {
 export function buildWeekColumns(
   anchorDate: Date,
   todayKey: string = formatDateKey(new Date()),
+  timeZone: string = CALENDAR_TIMEZONE,
 ): WeekDayColumn[] {
-  const monday = getMondayOfWeek(formatDateKey(anchorDate));
+  const monday = getMondayOfWeek(formatDateKey(anchorDate, timeZone), timeZone);
   const columns: WeekDayColumn[] = [];
 
   for (let index = 0; index < 7; index++) {
-    const dateKey = addDaysToDateKey(monday, index);
+    const dateKey = addDaysToDateKey(monday, index, timeZone);
     columns.push({
       dateKey,
       weekdayLabel: MONTH_WEEKDAY_LABELS[index],
@@ -116,27 +76,31 @@ export function getWeekHourLabels(): string[] {
 export function getAllDayEventsForWeekDay(
   events: CalendarEvent[],
   dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): CalendarEvent[] {
   return sortEventsByStartAt(
-    eventsForDay(events, dateKey).filter((event) => event.allDay),
+    eventsForDay(events, dateKey, timeZone).filter((event) => event.allDay),
   );
 }
 
 export function getEventDayTimeRange(
   event: CalendarEvent,
   dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): { startMinutes: number; endMinutes: number } | null {
-  const startKey = formatDateKey(new Date(event.startAt));
-  const endKey = formatDateKey(new Date(event.endAt));
+  const startKey = formatDateKey(new Date(event.startAt), timeZone);
+  const endKey = formatDateKey(new Date(event.endAt), timeZone);
 
   if (dateKey < startKey || dateKey > endKey) {
     return null;
   }
 
   const startMinutes =
-    dateKey === startKey ? getMinutesFromMidnight(event.startAt) : 0;
+    dateKey === startKey
+      ? getMinutesFromMidnight(event.startAt, timeZone)
+      : 0;
   const endMinutes =
-    dateKey === endKey ? getMinutesFromMidnight(event.endAt) : 24 * 60;
+    dateKey === endKey ? getMinutesFromMidnight(event.endAt, timeZone) : 24 * 60;
 
   if (endMinutes <= startMinutes) {
     return null;
@@ -148,13 +112,14 @@ export function getEventDayTimeRange(
 export function layoutWeekTimedEvents(
   events: CalendarEvent[],
   dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): WeekTimedLayout[] {
   const gridStart = WEEK_GRID_START_HOUR * 60;
   const gridEnd = WEEK_GRID_END_HOUR * 60;
   const gridSpan = WEEK_GRID_TOTAL_MINUTES;
 
   const timed = sortEventsByStartAt(
-    eventsForDay(events, dateKey).filter((event) => !event.allDay),
+    eventsForDay(events, dateKey, timeZone).filter((event) => !event.allDay),
   );
 
   const placements: Array<{
@@ -165,7 +130,7 @@ export function layoutWeekTimedEvents(
   }> = [];
 
   for (const event of timed) {
-    const range = getEventDayTimeRange(event, dateKey);
+    const range = getEventDayTimeRange(event, dateKey, timeZone);
     if (!range) continue;
 
     const start = Math.max(range.startMinutes, gridStart);
@@ -207,8 +172,10 @@ export function layoutWeekTimedEvents(
 export function weekGridHasAllDayEvents(
   events: CalendarEvent[],
   columns: WeekDayColumn[],
+  timeZone: string = CALENDAR_TIMEZONE,
 ): boolean {
   return columns.some(
-    (column) => getAllDayEventsForWeekDay(events, column.dateKey).length > 0,
+    (column) =>
+      getAllDayEventsForWeekDay(events, column.dateKey, timeZone).length > 0,
   );
 }

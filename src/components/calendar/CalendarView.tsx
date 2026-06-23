@@ -39,6 +39,10 @@ import { CalendarMonthGrid } from "./CalendarMonthGrid";
 import { CalendarToolbar } from "./CalendarToolbar";
 import { CalendarViewPlaceholder } from "./CalendarViewPlaceholder";
 import { CalendarWeekGrid } from "./CalendarWeekGrid";
+import {
+  CalendarTimeZoneProvider,
+  useCalendarTimeZone,
+} from "./CalendarTimeZoneContext";
 import styles from "./CalendarView.module.css";
 
 type CalendarViewProps = {
@@ -61,11 +65,12 @@ function readDateFromParams(searchParams: URLSearchParams): Date {
 function buildCalendarUrl(
   nextView: CalendarViewMode,
   nextAnchor: Date,
+  timeZone: string,
   eventId?: string | null,
 ): string {
   const params = new URLSearchParams();
   params.set("view", nextView);
-  params.set("date", formatDateKey(nextAnchor));
+  params.set("date", formatDateKey(nextAnchor, timeZone));
   if (eventId) {
     params.set("event", eventId);
   }
@@ -82,6 +87,15 @@ async function readApiError(response: Response, fallback: string): Promise<strin
 }
 
 export function CalendarView({ user }: CalendarViewProps) {
+  return (
+    <CalendarTimeZoneProvider>
+      <CalendarViewContent user={user} />
+    </CalendarTimeZoneProvider>
+  );
+}
+
+function CalendarViewContent({ user }: CalendarViewProps) {
+  const { timeZone, timeZoneLabel } = useCalendarTimeZone();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<CalendarViewMode>(() =>
@@ -102,20 +116,20 @@ export function CalendarView({ user }: CalendarViewProps) {
   const [deleteEvent, setDeleteEvent] = useState<CalendarEvent | null>(null);
 
   const toolbarLabel = useMemo(
-    () => formatToolbarLabel(view, anchorDate),
-    [view, anchorDate],
+    () => formatToolbarLabel(view, anchorDate, timeZone),
+    [view, anchorDate, timeZone],
   );
 
   const createInitialValues = useMemo(
-    () => defaultFormValues(anchorDate),
-    [anchorDate, createOpen],
+    () => defaultFormValues(anchorDate, timeZone),
+    [anchorDate, createOpen, timeZone],
   );
 
   const syncUrl = useCallback(
     (nextView: CalendarViewMode, nextAnchor: Date, eventId?: string | null) => {
-      router.replace(buildCalendarUrl(nextView, nextAnchor, eventId));
+      router.replace(buildCalendarUrl(nextView, nextAnchor, timeZone, eventId));
     },
-    [router],
+    [router, timeZone],
   );
 
   const updateView = useCallback(
@@ -154,7 +168,7 @@ export function CalendarView({ user }: CalendarViewProps) {
     }
 
     const controller = new AbortController();
-    const range = getRangeForView(view, anchorDate);
+    const range = getRangeForView(view, anchorDate, timeZone);
     const scopes = layersToScopes(layers);
     const params = new URLSearchParams({
       from: range.from,
@@ -191,7 +205,7 @@ export function CalendarView({ user }: CalendarViewProps) {
     })();
 
     return () => controller.abort();
-  }, [anchorDate, layers, reloadToken, view]);
+  }, [anchorDate, layers, reloadToken, timeZone, view]);
 
   const handleLayersChange = useCallback((nextLayers: CalendarLayers) => {
     setLayers(nextLayers);
@@ -199,12 +213,12 @@ export function CalendarView({ user }: CalendarViewProps) {
   }, []);
 
   const handlePrev = useCallback(() => {
-    updateAnchorDate(shiftAnchorDate(view, anchorDate, -1));
-  }, [anchorDate, updateAnchorDate, view]);
+    updateAnchorDate(shiftAnchorDate(view, anchorDate, -1, timeZone));
+  }, [anchorDate, timeZone, updateAnchorDate, view]);
 
   const handleNext = useCallback(() => {
-    updateAnchorDate(shiftAnchorDate(view, anchorDate, 1));
-  }, [anchorDate, updateAnchorDate, view]);
+    updateAnchorDate(shiftAnchorDate(view, anchorDate, 1, timeZone));
+  }, [anchorDate, timeZone, updateAnchorDate, view]);
 
   const handleToday = useCallback(() => {
     updateAnchorDate(new Date());
@@ -212,12 +226,12 @@ export function CalendarView({ user }: CalendarViewProps) {
 
   const openDayView = useCallback(
     (dateKey: string) => {
-      const nextDate = parseDateKey(dateKey);
+      const nextDate = parseDateKey(dateKey, timeZone);
       setView("day");
       setAnchorDate(nextDate);
       syncUrl("day", nextDate);
     },
-    [syncUrl],
+    [syncUrl, timeZone],
   );
 
   const openCreate = useCallback(() => {
@@ -287,10 +301,10 @@ export function CalendarView({ user }: CalendarViewProps) {
 
       setViewEvent(resolved);
 
-      const eventDateKey = formatDateKey(new Date(resolved.startAt));
-      const currentDateKey = formatDateKey(anchorDate);
+      const eventDateKey = formatDateKey(new Date(resolved.startAt), timeZone);
+      const currentDateKey = formatDateKey(anchorDate, timeZone);
       if (eventDateKey !== currentDateKey) {
-        const nextAnchor = parseDateKey(eventDateKey);
+        const nextAnchor = parseDateKey(eventDateKey, timeZone);
         setAnchorDate(nextAnchor);
         syncUrl(view, nextAnchor, deepLinkEventId);
       }
@@ -307,6 +321,7 @@ export function CalendarView({ user }: CalendarViewProps) {
     router,
     searchParams,
     syncUrl,
+    timeZone,
     view,
   ]);
 
@@ -315,7 +330,7 @@ export function CalendarView({ user }: CalendarViewProps) {
       const response = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValuesToCreatePayload(values)),
+        body: JSON.stringify(formValuesToCreatePayload(values, timeZone)),
       });
 
       if (!response.ok) {
@@ -328,7 +343,7 @@ export function CalendarView({ user }: CalendarViewProps) {
       refetchEvents();
       setToast({ text: "Событие создано", type: "success" });
     },
-    [refetchEvents],
+    [refetchEvents, timeZone],
   );
 
   const handleUpdate = useCallback(
@@ -340,7 +355,7 @@ export function CalendarView({ user }: CalendarViewProps) {
       const response = await fetch(`/api/calendar/events/${editEvent.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValuesToUpdatePayload(values)),
+        body: JSON.stringify(formValuesToUpdatePayload(values, timeZone)),
       });
 
       if (!response.ok) {
@@ -355,7 +370,7 @@ export function CalendarView({ user }: CalendarViewProps) {
       refetchEvents();
       setToast({ text: "Событие обновлено", type: "success" });
     },
-    [editEvent, refetchEvents],
+    [editEvent, refetchEvents, timeZone],
   );
 
   const confirmDelete = useCallback(async () => {
@@ -389,6 +404,7 @@ export function CalendarView({ user }: CalendarViewProps) {
     <div className={styles.wrap}>
       <CalendarToolbar
         label={toolbarLabel}
+        timeZoneLabel={timeZoneLabel}
         view={view}
         createDisabled={false}
         onCreate={openCreate}
@@ -467,7 +483,7 @@ export function CalendarView({ user }: CalendarViewProps) {
         >
           <CalendarEventForm
             mode="edit"
-            initial={eventToFormValues(editEvent)}
+            initial={eventToFormValues(editEvent, timeZone)}
             submitLabel="Сохранить"
             scopeLocked
             onCancel={() => setEditEvent(null)}

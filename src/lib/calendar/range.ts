@@ -1,176 +1,131 @@
 import { CALENDAR_TIMEZONE } from "./constants";
+import {
+  getZonedParts,
+  getZonedWeekday,
+  zonedDateTimeToUtc,
+} from "./zoned-time";
 
 export const CALENDAR_VIEW_MODES = ["day", "week", "month"] as const;
 
 export type CalendarViewMode = (typeof CALENDAR_VIEW_MODES)[number];
 
-const zonedFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CALENDAR_TIMEZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CALENDAR_TIMEZONE,
-  weekday: "short",
-});
-
-const WEEKDAY_INDEX: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
-
-type ZonedParts = {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-};
-
-function getZonedParts(date: Date): ZonedParts {
-  const parts = zonedFormatter.formatToParts(date);
-  const map = Object.fromEntries(
-    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
-  );
-
-  return {
-    year: Number(map.year),
-    month: Number(map.month),
-    day: Number(map.day),
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-    second: Number(map.second),
-  };
-}
-
 export function isCalendarViewMode(value: string): value is CalendarViewMode {
   return CALENDAR_VIEW_MODES.includes(value as CalendarViewMode);
 }
 
-export function formatDateKey(date: Date): string {
-  const { year, month, day } = getZonedParts(date);
+export function formatDateKey(
+  date: Date,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const { year, month, day } = getZonedParts(date, timeZone);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function zonedDateTimeToUtc(
-  dateKey: string,
-  time: { hours: number; minutes: number; seconds: number },
+export function parseDateKey(
+  key: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): Date {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  let utcMs = Date.UTC(year, month - 1, day, time.hours, time.minutes, time.seconds);
-
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const parts = getZonedParts(new Date(utcMs));
-    const correctionSeconds =
-      ((year - parts.year) * 365 +
-        (month - parts.month) * 30 +
-        (day - parts.day)) *
-        86400 +
-      (time.hours - parts.hour) * 3600 +
-      (time.minutes - parts.minute) * 60 +
-      (time.seconds - parts.second);
-
-    if (correctionSeconds === 0) {
-      break;
-    }
-
-    utcMs += correctionSeconds * 1000;
-  }
-
-  return new Date(utcMs);
-}
-
-export function parseDateKey(key: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match) {
     return new Date();
   }
 
   const dateKey = `${match[1]}-${match[2]}-${match[3]}`;
-  return zonedDateTimeToUtc(dateKey, { hours: 12, minutes: 0, seconds: 0 });
+  return zonedDateTimeToUtc(
+    dateKey,
+    { hours: 12, minutes: 0, seconds: 0 },
+    timeZone,
+  );
 }
 
-function startOfZonedDay(dateKey: string): Date {
-  return zonedDateTimeToUtc(dateKey, { hours: 0, minutes: 0, seconds: 0 });
+function startOfZonedDay(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): Date {
+  return zonedDateTimeToUtc(
+    dateKey,
+    { hours: 0, minutes: 0, seconds: 0 },
+    timeZone,
+  );
 }
 
-/** Local calendar-day start (00:00) in CALENDAR_TIMEZONE for an ISO instant. */
-export function getZonedDayStartFromIso(iso: string): Date {
-  return startOfZonedDay(formatDateKey(new Date(iso)));
+/** Local calendar-day start (00:00) in the given time zone for an ISO instant. */
+export function getZonedDayStartFromIso(
+  iso: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): Date {
+  return startOfZonedDay(formatDateKey(new Date(iso), timeZone), timeZone);
 }
 
-function endOfZonedDay(dateKey: string): Date {
-  return startOfZonedDay(addDaysToDateKey(dateKey, 1));
+function endOfZonedDay(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): Date {
+  return startOfZonedDay(addDaysToDateKey(dateKey, 1, timeZone), timeZone);
 }
 
-export function addDaysToDateKey(dateKey: string, days: number): string {
-  const anchor = parseDateKey(dateKey);
-  return formatDateKey(new Date(anchor.getTime() + days * 86_400_000));
+export function addDaysToDateKey(
+  dateKey: string,
+  days: number,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const anchor = parseDateKey(dateKey, timeZone);
+  return formatDateKey(new Date(anchor.getTime() + days * 86_400_000), timeZone);
 }
 
-function getZonedWeekday(dateKey: string): number {
-  const weekday = weekdayFormatter.format(startOfZonedDay(dateKey));
-  return WEEKDAY_INDEX[weekday] ?? 0;
-}
-
-function getMondayOfWeek(dateKey: string): string {
-  const weekday = getZonedWeekday(dateKey);
+function getMondayOfWeek(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const weekday = getZonedWeekday(startOfZonedDay(dateKey, timeZone), timeZone);
   const diff = weekday === 0 ? -6 : 1 - weekday;
-  return addDaysToDateKey(dateKey, diff);
+  return addDaysToDateKey(dateKey, diff, timeZone);
 }
 
-function getMonthBounds(dateKey: string): { first: string; last: string } {
+function getMonthBounds(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): { first: string; last: string } {
   const [year, month] = dateKey.split("-").map(Number);
   const first = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth =
     month === 12
       ? `${year + 1}-01-01`
       : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const last = addDaysToDateKey(nextMonth, -1);
+  const last = addDaysToDateKey(nextMonth, -1, timeZone);
   return { first, last };
 }
 
 export function getRangeForView(
   view: CalendarViewMode,
   anchorDate: Date,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): { from: string; to: string } {
-  const anchorKey = formatDateKey(anchorDate);
+  const anchorKey = formatDateKey(anchorDate, timeZone);
 
   if (view === "day") {
     return {
-      from: startOfZonedDay(anchorKey).toISOString(),
-      to: endOfZonedDay(anchorKey).toISOString(),
+      from: startOfZonedDay(anchorKey, timeZone).toISOString(),
+      to: endOfZonedDay(anchorKey, timeZone).toISOString(),
     };
   }
 
   if (view === "week") {
-    const monday = getMondayOfWeek(anchorKey);
-    const sunday = addDaysToDateKey(monday, 6);
+    const monday = getMondayOfWeek(anchorKey, timeZone);
+    const sunday = addDaysToDateKey(monday, 6, timeZone);
     return {
-      from: startOfZonedDay(monday).toISOString(),
-      to: endOfZonedDay(sunday).toISOString(),
+      from: startOfZonedDay(monday, timeZone).toISOString(),
+      to: endOfZonedDay(sunday, timeZone).toISOString(),
     };
   }
 
-  const { first, last } = getMonthBounds(anchorKey);
-  const fromKey = addDaysToDateKey(first, -7);
-  const toKey = addDaysToDateKey(last, 7);
+  const { first, last } = getMonthBounds(anchorKey, timeZone);
+  const fromKey = addDaysToDateKey(first, -7, timeZone);
+  const toKey = addDaysToDateKey(last, 7, timeZone);
 
   return {
-    from: startOfZonedDay(fromKey).toISOString(),
-    to: endOfZonedDay(toKey).toISOString(),
+    from: startOfZonedDay(fromKey, timeZone).toISOString(),
+    to: endOfZonedDay(toKey, timeZone).toISOString(),
   };
 }
 
@@ -178,15 +133,19 @@ export function shiftAnchorDate(
   view: CalendarViewMode,
   anchorDate: Date,
   direction: -1 | 1,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): Date {
-  const anchorKey = formatDateKey(anchorDate);
+  const anchorKey = formatDateKey(anchorDate, timeZone);
 
   if (view === "day") {
-    return parseDateKey(addDaysToDateKey(anchorKey, direction));
+    return parseDateKey(addDaysToDateKey(anchorKey, direction, timeZone), timeZone);
   }
 
   if (view === "week") {
-    return parseDateKey(addDaysToDateKey(anchorKey, direction * 7));
+    return parseDateKey(
+      addDaysToDateKey(anchorKey, direction * 7, timeZone),
+      timeZone,
+    );
   }
 
   const [year, month] = anchorKey.split("-").map(Number);
@@ -197,27 +156,30 @@ export function shiftAnchorDate(
   const day = Number(anchorKey.split("-")[2]);
   const lastDay = Number(
     addDaysToDateKey(
-      shiftedMonth === 12
+      normalizedMonth === 12
         ? `${shiftedYear + 1}-01-01`
         : `${shiftedYear}-${String(normalizedMonth + 1).padStart(2, "0")}-01`,
       -1,
+      timeZone,
     ).split("-")[2],
   );
   const clampedDay = Math.min(day, lastDay);
   return parseDateKey(
     `${shiftedYear}-${String(normalizedMonth).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`,
+    timeZone,
   );
 }
 
 export function formatToolbarLabel(
   view: CalendarViewMode,
   anchorDate: Date,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): string {
-  const anchorKey = formatDateKey(anchorDate);
+  const anchorKey = formatDateKey(anchorDate, timeZone);
 
   if (view === "day") {
     return new Intl.DateTimeFormat("ru-RU", {
-      timeZone: CALENDAR_TIMEZONE,
+      timeZone,
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -226,17 +188,17 @@ export function formatToolbarLabel(
   }
 
   if (view === "week") {
-    const monday = getMondayOfWeek(anchorKey);
-    const sunday = addDaysToDateKey(monday, 6);
-    const mondayDate = startOfZonedDay(monday);
-    const sundayDate = startOfZonedDay(sunday);
+    const monday = getMondayOfWeek(anchorKey, timeZone);
+    const sunday = addDaysToDateKey(monday, 6, timeZone);
+    const mondayDate = startOfZonedDay(monday, timeZone);
+    const sundayDate = startOfZonedDay(sunday, timeZone);
     const fromLabel = new Intl.DateTimeFormat("ru-RU", {
-      timeZone: CALENDAR_TIMEZONE,
+      timeZone,
       day: "numeric",
       month: "short",
     }).format(mondayDate);
     const toLabel = new Intl.DateTimeFormat("ru-RU", {
-      timeZone: CALENDAR_TIMEZONE,
+      timeZone,
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -245,7 +207,7 @@ export function formatToolbarLabel(
   }
 
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone: CALENDAR_TIMEZONE,
+    timeZone,
     month: "long",
     year: "numeric",
   }).format(anchorDate);

@@ -1,9 +1,12 @@
+"use client";
+
 import { CALENDAR_SCOPE_COLORS } from "@/lib/calendar/constants";
 import {
   formatEventTimeRange,
   formatScopeLabel,
 } from "@/lib/calendar/format";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import styles from "./CalendarEventChip.module.css";
 
 type CalendarEventChipProps = {
@@ -17,8 +20,10 @@ export function CalendarEventChip({
   variant = "agenda",
   onClick,
 }: CalendarEventChipProps) {
+  const { timeZone } = useCalendarTimeZone();
   const scopeClass =
     event.scope === "personal" ? styles.personal : styles.company;
+  const timeRange = formatEventTimeRange(event, timeZone);
 
   if (variant === "month") {
     return (
@@ -42,9 +47,9 @@ export function CalendarEventChip({
       type="button"
       className={[styles.chip, scopeClass].join(" ")}
       onClick={() => onClick?.(event)}
-      aria-label={`${event.title}, ${formatScopeLabel(event.scope)}, ${formatEventTimeRange(event)}`}
+      aria-label={`${event.title}, ${formatScopeLabel(event.scope)}, ${timeRange}`}
     >
-      <span className={styles.time}>{formatEventTimeRange(event)}</span>
+      <span className={styles.time}>{timeRange}</span>
       <span className={styles.body}>
         <span className={styles.title}>{event.title}</span>
         <span className={styles.scope}>{formatScopeLabel(event.scope)}</span>

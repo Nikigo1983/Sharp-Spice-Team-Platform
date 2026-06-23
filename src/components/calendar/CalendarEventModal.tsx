@@ -12,6 +12,7 @@ import {
   canEditEvent,
 } from "@/lib/calendar/permissions-client";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import styles from "./CalendarEventModal.module.css";
 
 type CalendarEventModalProps = {
@@ -29,6 +30,7 @@ export function CalendarEventModal({
   onEdit,
   onDelete,
 }: CalendarEventModalProps) {
+  const { timeZone } = useCalendarTimeZone();
   const canEdit = canEditEvent(user, event);
   const canDelete = canDeleteEvent(user, event);
   const scopeClass =
@@ -55,7 +57,7 @@ export function CalendarEventModal({
         <dl className={styles.meta}>
           <div>
             <dt>Время</dt>
-            <dd>{formatEventTimeRange(event)}</dd>
+            <dd>{formatEventTimeRange(event, timeZone)}</dd>
           </div>
           {event.location ? (
             <div>

@@ -2,36 +2,54 @@ import { CALENDAR_TIMEZONE } from "./constants";
 import { formatDateKey } from "./range";
 import type { CalendarEvent, CalendarScope } from "./types";
 
-const timeFormatter = new Intl.DateTimeFormat("ru-RU", {
-  timeZone: CALENDAR_TIMEZONE,
-  hour: "2-digit",
-  minute: "2-digit",
-});
+function createTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-const dayLabelFormatter = new Intl.DateTimeFormat("ru-RU", {
-  timeZone: CALENDAR_TIMEZONE,
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+const dayLabelFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getDayLabelFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = dayLabelFormatterCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("ru-RU", {
+      timeZone,
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    dayLabelFormatterCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
 
 export function formatScopeLabel(scope: CalendarScope): string {
   return scope === "personal" ? "Личное" : "Компания";
 }
 
-export function formatEventTimeRange(event: CalendarEvent): string {
+export function formatEventTimeRange(
+  event: CalendarEvent,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
   if (event.allDay) {
     return "Весь день";
   }
 
-  const start = timeFormatter.format(new Date(event.startAt));
-  const end = timeFormatter.format(new Date(event.endAt));
+  const formatter = createTimeFormatter(timeZone);
+  const start = formatter.format(new Date(event.startAt));
+  const end = formatter.format(new Date(event.endAt));
   return `${start} – ${end}`;
 }
 
-export function formatDayLabel(date: Date): string {
-  const label = dayLabelFormatter.format(date);
+export function formatDayLabel(
+  date: Date,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const label = getDayLabelFormatter(timeZone).format(date);
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -39,18 +57,23 @@ export function sortEventsByStartAt(events: CalendarEvent[]): CalendarEvent[] {
   return [...events].sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
 
-export function eventOccursOnDate(event: CalendarEvent, dateKey: string): boolean {
-  const startKey = formatDateKey(new Date(event.startAt));
-  const endKey = formatDateKey(new Date(event.endAt));
+export function eventOccursOnDate(
+  event: CalendarEvent,
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): boolean {
+  const startKey = formatDateKey(new Date(event.startAt), timeZone);
+  const endKey = formatDateKey(new Date(event.endAt), timeZone);
   return startKey <= dateKey && endKey >= dateKey;
 }
 
 export function eventsForDay(
   events: CalendarEvent[],
   dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): CalendarEvent[] {
   return sortEventsByStartAt(
-    events.filter((event) => eventOccursOnDate(event, dateKey)),
+    events.filter((event) => eventOccursOnDate(event, dateKey, timeZone)),
   );
 }
 

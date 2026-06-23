@@ -2,6 +2,7 @@ import styles from "./CalendarToolbar.module.css";
 
 export type CalendarToolbarProps = {
   label: string;
+  timeZoneLabel?: string;
   view: "day" | "week" | "month";
   createDisabled?: boolean;
   onPrev: () => void;
@@ -13,6 +14,7 @@ export type CalendarToolbarProps = {
 
 export function CalendarToolbar({
   label,
+  timeZoneLabel,
   view,
   createDisabled = true,
   onPrev,
@@ -23,7 +25,8 @@ export function CalendarToolbar({
 }: CalendarToolbarProps) {
   return (
     <div className={styles.toolbar}>
-      <div className={styles.navGroup}>
+      <div className={styles.toolbarMain}>
+        <div className={styles.navGroup}>
         <button type="button" className={styles.navButton} onClick={onPrev} aria-label="Назад">
           ◀
         </button>
@@ -64,6 +67,11 @@ export function CalendarToolbar({
           + Создать событие
         </button>
       </div>
+      </div>
+
+      {timeZoneLabel ? (
+        <p className={styles.timeZoneLabel}>Ваше время: {timeZoneLabel}</p>
+      ) : null}
     </div>
   );
 }

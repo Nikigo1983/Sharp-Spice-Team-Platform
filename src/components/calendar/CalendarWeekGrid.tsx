@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { formatEventTimeRange } from "@/lib/calendar/format";
 import { formatDateKey } from "@/lib/calendar/range";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import {
   WEEK_GRID_END_HOUR,
   WEEK_GRID_START_HOUR,
@@ -34,6 +35,8 @@ function WeekEventBlock({
   layout: WeekTimedLayout;
   onEventClick?: (event: CalendarEvent) => void;
 }) {
+  const { timeZone } = useCalendarTimeZone();
+  const timeRange = formatEventTimeRange(layout.event, timeZone);
   const scopeClass =
     layout.event.scope === "personal"
       ? styles.weekEventPersonal
@@ -49,10 +52,10 @@ function WeekEventBlock({
       }}
       onClick={() => onEventClick?.(layout.event)}
       title={layout.event.title}
-      aria-label={`${layout.event.title}, ${formatEventTimeRange(layout.event)}`}
+      aria-label={`${layout.event.title}, ${timeRange}`}
     >
       <span className={styles.weekEventTime}>
-        {formatEventTimeRange(layout.event)}
+        {timeRange}
       </span>
       <span className={styles.weekEventTitle}>{layout.event.title}</span>
     </button>
@@ -65,24 +68,28 @@ export function CalendarWeekGrid({
   onDayClick,
   onEventClick,
 }: CalendarWeekGridProps) {
-  const todayKey = useMemo(() => formatDateKey(new Date()), []);
+  const { timeZone } = useCalendarTimeZone();
+  const todayKey = useMemo(
+    () => formatDateKey(new Date(), timeZone),
+    [timeZone],
+  );
   const columns = useMemo(
-    () => buildWeekColumns(anchorDate, todayKey),
-    [anchorDate, todayKey],
+    () => buildWeekColumns(anchorDate, todayKey, timeZone),
+    [anchorDate, todayKey, timeZone],
   );
   const hourLabels = useMemo(() => getWeekHourLabels(), []);
   const showAllDayRow = useMemo(
-    () => weekGridHasAllDayEvents(events, columns),
-    [columns, events],
+    () => weekGridHasAllDayEvents(events, columns, timeZone),
+    [columns, events, timeZone],
   );
 
   const layoutsByDay = useMemo(() => {
     const map = new Map<string, WeekTimedLayout[]>();
     for (const column of columns) {
-      map.set(column.dateKey, layoutWeekTimedEvents(events, column.dateKey));
+      map.set(column.dateKey, layoutWeekTimedEvents(events, column.dateKey, timeZone));
     }
     return map;
-  }, [columns, events]);
+  }, [columns, events, timeZone]);
 
   const gridStyle = {
     ["--week-slot-count" as string]: String(SLOT_COUNT),
@@ -117,7 +124,7 @@ export function CalendarWeekGrid({
           <div className={styles.allDayLabel}>Весь день</div>
           {columns.map((column) => (
             <div key={column.dateKey} className={styles.allDayCell}>
-              {getAllDayEventsForWeekDay(events, column.dateKey).map((event) => (
+              {getAllDayEventsForWeekDay(events, column.dateKey, timeZone).map((event) => (
                 <button
                   key={event.id}
                   type="button"

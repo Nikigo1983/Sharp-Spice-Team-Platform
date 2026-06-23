@@ -2,23 +2,9 @@ import { CALENDAR_TIMEZONE } from "./constants";
 import { eventsForDay } from "./format";
 import { addDaysToDateKey, formatDateKey, parseDateKey } from "./range";
 import type { CalendarEvent } from "./types";
+import { getZonedWeekday } from "./zoned-time";
 
 export const MONTH_MAX_VISIBLE_CHIPS = 3;
-
-const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CALENDAR_TIMEZONE,
-  weekday: "short",
-});
-
-const WEEKDAY_INDEX: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
 
 export type MonthDayCell = {
   dateKey: string;
@@ -26,39 +12,41 @@ export type MonthDayCell = {
   isToday: boolean;
 };
 
-function getZonedWeekday(dateKey: string): number {
-  const weekday = weekdayFormatter.format(parseDateKey(dateKey));
-  return WEEKDAY_INDEX[weekday] ?? 0;
-}
-
-function getMondayOfWeek(dateKey: string): string {
-  const weekday = getZonedWeekday(dateKey);
+function getMondayOfWeek(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): string {
+  const weekday = getZonedWeekday(parseDateKey(dateKey, timeZone), timeZone);
   const diff = weekday === 0 ? -6 : 1 - weekday;
-  return addDaysToDateKey(dateKey, diff);
+  return addDaysToDateKey(dateKey, diff, timeZone);
 }
 
-function getMonthBounds(dateKey: string): { first: string; last: string } {
+function getMonthBounds(
+  dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
+): { first: string; last: string } {
   const [year, month] = dateKey.split("-").map(Number);
   const first = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth =
     month === 12
       ? `${year + 1}-01-01`
       : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const last = addDaysToDateKey(nextMonth, -1);
+  const last = addDaysToDateKey(nextMonth, -1, timeZone);
   return { first, last };
 }
 
 export function buildMonthMatrix(
   anchorDate: Date,
   todayKey: string = formatDateKey(new Date()),
+  timeZone: string = CALENDAR_TIMEZONE,
 ): MonthDayCell[][] {
-  const anchorKey = formatDateKey(anchorDate);
+  const anchorKey = formatDateKey(anchorDate, timeZone);
   const [year, month] = anchorKey.split("-").map(Number);
-  const { first, last } = getMonthBounds(anchorKey);
-  const startKey = getMondayOfWeek(first);
-  const lastWeekday = getZonedWeekday(last);
+  const { first, last } = getMonthBounds(anchorKey, timeZone);
+  const startKey = getMondayOfWeek(first, timeZone);
+  const lastWeekday = getZonedWeekday(parseDateKey(last, timeZone), timeZone);
   const daysToSunday = lastWeekday === 0 ? 0 : 7 - lastWeekday;
-  const endKey = addDaysToDateKey(last, daysToSunday);
+  const endKey = addDaysToDateKey(last, daysToSunday, timeZone);
 
   const weeks: MonthDayCell[][] = [];
   let cursor = startKey;
@@ -72,7 +60,7 @@ export function buildMonthMatrix(
         inCurrentMonth: cellYear === year && cellMonth === month,
         isToday: cursor === todayKey,
       });
-      cursor = addDaysToDateKey(cursor, 1);
+      cursor = addDaysToDateKey(cursor, 1, timeZone);
     }
     weeks.push(week);
   }
@@ -83,11 +71,12 @@ export function buildMonthMatrix(
 export function partitionMonthDayEvents(
   events: CalendarEvent[],
   dateKey: string,
+  timeZone: string = CALENDAR_TIMEZONE,
 ): {
   visible: CalendarEvent[];
   overflow: number;
 } {
-  const dayEvents = eventsForDay(events, dateKey);
+  const dayEvents = eventsForDay(events, dateKey, timeZone);
   const visible = dayEvents.slice(0, MONTH_MAX_VISIBLE_CHIPS);
   const overflow = Math.max(0, dayEvents.length - MONTH_MAX_VISIBLE_CHIPS);
   return { visible, overflow };

@@ -53,6 +53,12 @@ describe("shiftAnchorDate", () => {
     assert.equal(formatDateKey(next), addDaysToDateKey("2026-06-20", 1));
   });
 
+  it("shifts by one week in week view", () => {
+    const anchor = parseDateKey("2026-06-20");
+    const next = shiftAnchorDate("week", anchor, 1);
+    assert.equal(formatDateKey(next), addDaysToDateKey("2026-06-20", 7));
+  });
+
   it("shifts by one month in month view", () => {
     const anchor = parseDateKey("2026-06-20");
     const next = shiftAnchorDate("month", anchor, 1);

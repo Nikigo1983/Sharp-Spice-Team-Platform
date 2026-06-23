@@ -38,6 +38,7 @@ import { CalendarLayerFilters } from "./CalendarLayerFilters";
 import { CalendarMonthGrid } from "./CalendarMonthGrid";
 import { CalendarToolbar } from "./CalendarToolbar";
 import { CalendarViewPlaceholder } from "./CalendarViewPlaceholder";
+import { CalendarWeekGrid } from "./CalendarWeekGrid";
 import styles from "./CalendarView.module.css";
 
 type CalendarViewProps = {
@@ -420,6 +421,13 @@ export function CalendarView({ user }: CalendarViewProps) {
           <CalendarDayAgenda events={events} onEventClick={openEvent} />
         ) : view === "month" ? (
           <CalendarMonthGrid
+            anchorDate={anchorDate}
+            events={events}
+            onDayClick={openDayView}
+            onEventClick={openEvent}
+          />
+        ) : view === "week" ? (
+          <CalendarWeekGrid
             anchorDate={anchorDate}
             events={events}
             onDayClick={openDayView}

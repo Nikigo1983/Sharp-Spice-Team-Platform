@@ -2,9 +2,9 @@ import { CALENDAR_TIMEZONE } from "./constants";
 import { formatDateKey } from "./range";
 import type { CalendarEvent, CalendarScope } from "./types";
 
-function createTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+function createTimeFormatter(ianaTimeZone: string): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone,
+    timeZone: ianaTimeZone,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -12,17 +12,17 @@ function createTimeFormatter(timeZone: string): Intl.DateTimeFormat {
 
 const dayLabelFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
-function getDayLabelFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = dayLabelFormatterCache.get(timeZone);
+function getDayLabelFormatter(ianaTimeZone: string): Intl.DateTimeFormat {
+  let formatter = dayLabelFormatterCache.get(ianaTimeZone);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat("ru-RU", {
-      timeZone,
+      timeZone: ianaTimeZone,
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-    dayLabelFormatterCache.set(timeZone, formatter);
+    dayLabelFormatterCache.set(ianaTimeZone, formatter);
   }
   return formatter;
 }

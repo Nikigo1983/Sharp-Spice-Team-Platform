@@ -22,11 +22,11 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Sat: 6,
 };
 
-function getPartsFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = partsFormatterCache.get(timeZone);
+function getPartsFormatter(ianaTimeZone: string): Intl.DateTimeFormat {
+  let formatter = partsFormatterCache.get(ianaTimeZone);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
+      timeZone: ianaTimeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -35,19 +35,19 @@ function getPartsFormatter(timeZone: string): Intl.DateTimeFormat {
       second: "2-digit",
       hour12: false,
     });
-    partsFormatterCache.set(timeZone, formatter);
+    partsFormatterCache.set(ianaTimeZone, formatter);
   }
   return formatter;
 }
 
-function getWeekdayFormatter(timeZone: string): Intl.DateTimeFormat {
-  let formatter = weekdayFormatterCache.get(timeZone);
+function getWeekdayFormatter(ianaTimeZone: string): Intl.DateTimeFormat {
+  let formatter = weekdayFormatterCache.get(ianaTimeZone);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
+      timeZone: ianaTimeZone,
       weekday: "short",
     });
-    weekdayFormatterCache.set(timeZone, formatter);
+    weekdayFormatterCache.set(ianaTimeZone, formatter);
   }
   return formatter;
 }

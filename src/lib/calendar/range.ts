@@ -179,7 +179,7 @@ export function formatToolbarLabel(
 
   if (view === "day") {
     return new Intl.DateTimeFormat("ru-RU", {
-      timeZone,
+      timeZone: timeZone,
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -193,12 +193,12 @@ export function formatToolbarLabel(
     const mondayDate = startOfZonedDay(monday, timeZone);
     const sundayDate = startOfZonedDay(sunday, timeZone);
     const fromLabel = new Intl.DateTimeFormat("ru-RU", {
-      timeZone,
+      timeZone: timeZone,
       day: "numeric",
       month: "short",
     }).format(mondayDate);
     const toLabel = new Intl.DateTimeFormat("ru-RU", {
-      timeZone,
+      timeZone: timeZone,
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -207,7 +207,7 @@ export function formatToolbarLabel(
   }
 
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone,
+    timeZone: timeZone,
     month: "long",
     year: "numeric",
   }).format(anchorDate);

@@ -39,6 +39,8 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     title: "Test",
     description: "",
     eventType: "general",
+    videoInviteMode: null,
+    participantUserIds: [],
     startAt: "2026-06-20T08:00:00.000Z",
     endAt: "2026-06-20T09:00:00.000Z",
     allDay: false,
@@ -70,6 +72,34 @@ describe("canViewEvent", () => {
     assert.equal(canViewEvent(managerA, personal), true);
     assert.equal(canViewEvent(managerB, personal), false);
     assert.equal(canViewEvent(owner, personal), false);
+  });
+
+  it("allows invited users to view selected personal video meetings", () => {
+    const personalVideo = event({
+      scope: "personal",
+      ownerUserId: owner.id,
+      eventType: "video_meeting",
+      videoInviteMode: "selected",
+      participantUserIds: [managerA.id],
+      createdByUserId: owner.id,
+      createdByName: owner.name,
+    });
+    assert.equal(canViewEvent(managerA, personalVideo), true);
+    assert.equal(canViewEvent(managerB, personalVideo), false);
+  });
+
+  it("hides selected company video meetings from non-invited users", () => {
+    const selectedVideo = event({
+      scope: "company",
+      ownerUserId: null,
+      eventType: "video_meeting",
+      videoInviteMode: "selected",
+      participantUserIds: [managerA.id],
+      createdByUserId: owner.id,
+      createdByName: owner.name,
+    });
+    assert.equal(canViewEvent(managerA, selectedVideo), true);
+    assert.equal(canViewEvent(managerB, selectedVideo), false);
   });
 });
 

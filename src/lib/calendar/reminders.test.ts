@@ -23,6 +23,8 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     title: "Meeting",
     description: "",
     eventType: "general",
+    videoInviteMode: null,
+    participantUserIds: [],
     startAt: "2026-06-25T08:00:00.000Z",
     endAt: "2026-06-25T09:00:00.000Z",
     allDay: false,
@@ -172,6 +174,23 @@ describe("resolveReminderRecipientIds", () => {
         activeUserIds,
       ),
       activeUserIds,
+    );
+  });
+
+  it("returns only invited users for selected video meetings", () => {
+    assert.deepEqual(
+      resolveReminderRecipientIds(
+        event({
+          scope: "company",
+          ownerUserId: null,
+          eventType: "video_meeting",
+          videoInviteMode: "selected",
+          participantUserIds: ["manager-2"],
+          createdByUserId: "manager-1",
+        }),
+        activeUserIds,
+      ),
+      ["manager-1", "manager-2"],
     );
   });
 });

@@ -18,8 +18,8 @@ import type {
   CreateCalendarEventInput,
   UpdateCalendarEventInput,
 } from "./types";
-import { CALENDAR_EVENT_TYPES, CALENDAR_SCOPES } from "./types";
-import type { CalendarEventType } from "./types";
+import { CALENDAR_EVENT_TYPES, CALENDAR_SCOPES, VIDEO_INVITE_MODES } from "./types";
+import type { CalendarEventType, VideoInviteMode } from "./types";
 import {
   CalendarValidationError,
   parseIsoRange,
@@ -86,6 +86,35 @@ export function parseScopesParam(raw: string | null): CalendarScope[] {
   return [...new Set(scopes)];
 }
 
+function isVideoInviteMode(value: string): value is VideoInviteMode {
+  return VIDEO_INVITE_MODES.includes(value as VideoInviteMode);
+}
+
+function parseParticipantUserIds(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new CalendarValidationError("participantUserIds must be an array");
+  }
+  if (!value.every((item) => typeof item === "string")) {
+    throw new CalendarValidationError("participantUserIds must contain strings");
+  }
+  return value;
+}
+
+function parseOptionalVideoInviteMode(
+  value: unknown,
+): VideoInviteMode | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !isVideoInviteMode(value)) {
+    throw new CalendarValidationError("Invalid videoInviteMode");
+  }
+  return value;
+}
+
 function parseCreateBody(body: unknown): Omit<
   CreateCalendarEventInput,
   "ownerUserId" | "createdByUserId" | "createdByName"
@@ -124,6 +153,8 @@ function parseCreateBody(body: unknown): Omit<
         ? record.sendReminders
         : undefined,
     eventType: parseOptionalEventType(record.eventType),
+    videoInviteMode: parseOptionalVideoInviteMode(record.videoInviteMode),
+    participantUserIds: parseParticipantUserIds(record.participantUserIds),
   };
 }
 
@@ -135,6 +166,8 @@ const UPDATE_FIELDS = new Set([
   "allDay",
   "location",
   "sendReminders",
+  "videoInviteMode",
+  "participantUserIds",
 ]);
 
 function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
@@ -193,6 +226,12 @@ function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
     }
     input.sendReminders = record.sendReminders;
   }
+  if ("videoInviteMode" in record) {
+    input.videoInviteMode = parseOptionalVideoInviteMode(record.videoInviteMode);
+  }
+  if ("participantUserIds" in record) {
+    input.participantUserIds = parseParticipantUserIds(record.participantUserIds);
+  }
 
   if (Object.keys(input).length === 0) {
     throw new CalendarValidationError("No updatable fields provided");
@@ -227,6 +266,7 @@ export async function handleListCalendarEvents(
       to: range.to,
       scopes,
       ownerUserId: session.id,
+      viewerUserId: session.id,
     });
     return { events };
   } catch (error) {

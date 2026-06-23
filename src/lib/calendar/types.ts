@@ -10,6 +10,10 @@ export const CALENDAR_EVENT_TYPES = ["general", "video_meeting"] as const;
 
 export type CalendarEventType = (typeof CALENDAR_EVENT_TYPES)[number];
 
+export const VIDEO_INVITE_MODES = ["all_team", "selected"] as const;
+
+export type VideoInviteMode = (typeof VIDEO_INVITE_MODES)[number];
+
 export type CalendarEvent = {
   id: string;
   companyId: string;
@@ -18,6 +22,8 @@ export type CalendarEvent = {
   title: string;
   description: string;
   eventType: CalendarEventType;
+  videoInviteMode: VideoInviteMode | null;
+  participantUserIds: string[];
   startAt: string;
   endAt: string;
   allDay: boolean;
@@ -36,6 +42,8 @@ export type CreateCalendarEventInput = {
   title: string;
   description?: string;
   eventType?: CalendarEventType;
+  videoInviteMode?: VideoInviteMode;
+  participantUserIds?: string[];
   startAt: string;
   endAt: string;
   allDay?: boolean;
@@ -53,6 +61,8 @@ export type UpdateCalendarEventInput = {
   allDay?: boolean;
   location?: string;
   sendReminders?: boolean;
+  videoInviteMode?: VideoInviteMode;
+  participantUserIds?: string[];
   updatedByUserId?: string | null;
 };
 
@@ -105,4 +115,5 @@ export type ListCalendarEventsOptions = {
   scopes?: CalendarScope[];
   /** Required to include personal events for a specific user. */
   ownerUserId?: string;
+  viewerUserId?: string;
 };

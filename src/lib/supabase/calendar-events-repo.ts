@@ -22,7 +22,9 @@ export async function sbListEventsInRange(
     .order("start_at", { ascending: true });
 
   if (error) throw error;
-  return (data as CalendarEventRow[]).map(mapCalendarEventRowToEvent);
+  return (data as CalendarEventRow[]).map((row) =>
+    mapCalendarEventRowToEvent(row),
+  );
 }
 
 export async function sbGetCalendarEvent(

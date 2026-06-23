@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import type { CalendarFormValues } from "@/lib/calendar/form";
 import { validateFormValues } from "@/lib/calendar/form";
 import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
-import type { CalendarEventType, CalendarScope } from "@/lib/calendar/types";
+import type { CalendarEventType, CalendarScope, VideoInviteMode } from "@/lib/calendar/types";
 import { CalendarDateSelect } from "./CalendarDateSelect";
 import { CalendarTimeSelect } from "./CalendarTimeSelect";
 import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
@@ -13,11 +13,15 @@ import styles from "./CalendarEventForm.module.css";
 
 export type { CalendarFormValues };
 
+type TeamMemberOption = { id: string; name: string };
+
 type CalendarEventFormProps = {
   initial: CalendarFormValues;
   mode: "create" | "edit";
   submitLabel: string;
   scopeLocked?: boolean;
+  currentUserId: string;
+  teamMembers: TeamMemberOption[];
   onSubmit: (values: CalendarFormValues) => Promise<void>;
   onCancel: () => void;
 };
@@ -27,6 +31,8 @@ export function CalendarEventForm({
   mode,
   submitLabel,
   scopeLocked = false,
+  currentUserId,
+  teamMembers,
   onSubmit,
   onCancel,
 }: CalendarEventFormProps) {
@@ -62,7 +68,11 @@ export function CalendarEventForm({
     if (scopeLocked) {
       return;
     }
-    setValues((current) => ({ ...current, scope }));
+    setValues((current) => ({
+      ...current,
+      scope,
+      videoInviteMode: scope === "personal" ? "selected" : current.videoInviteMode,
+    }));
   }
 
   function setEventType(eventType: CalendarEventType) {
@@ -73,8 +83,34 @@ export function CalendarEventForm({
       ...current,
       eventType,
       allDay: eventType === "video_meeting" ? false : current.allDay,
+      videoInviteMode:
+        eventType === "video_meeting"
+          ? current.scope === "personal"
+            ? "selected"
+            : current.videoInviteMode
+          : "all_team",
+      participantUserIds:
+        eventType === "video_meeting" ? current.participantUserIds : [],
     }));
   }
+
+  function setVideoInviteMode(videoInviteMode: VideoInviteMode) {
+    setValues((current) => ({
+      ...current,
+      videoInviteMode,
+      participantUserIds:
+        videoInviteMode === "all_team" ? [] : current.participantUserIds,
+    }));
+  }
+
+  const inviteCandidates = teamMembers.filter(
+    (member) => member.id !== currentUserId,
+  );
+  const showInviteModeSwitch =
+    values.eventType === "video_meeting" && values.scope === "company";
+  const showParticipantPicker =
+    values.eventType === "video_meeting" &&
+    (values.scope === "personal" || values.videoInviteMode === "selected");
 
   return (
     <form className={styles.form} onSubmit={(submitEvent) => void handleSubmit(submitEvent)}>
@@ -168,6 +204,74 @@ export function CalendarEventForm({
             {CALENDAR_EVENT_TYPE_LABELS.video_meeting}
           </span>
         </div>
+      ) : null}
+
+      {showInviteModeSwitch ? (
+        <fieldset className={styles.inviteFieldset}>
+          <legend className={styles.label}>Кого пригласить</legend>
+          <div className={styles.inviteSwitch}>
+            <button
+              type="button"
+              className={[
+                styles.inviteButton,
+                values.videoInviteMode === "all_team" ? styles.inviteAllTeam : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-pressed={values.videoInviteMode === "all_team"}
+              onClick={() => setVideoInviteMode("all_team")}
+            >
+              Вся команда
+            </button>
+            <button
+              type="button"
+              className={[
+                styles.inviteButton,
+                values.videoInviteMode === "selected" ? styles.inviteSelected : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-pressed={values.videoInviteMode === "selected"}
+              onClick={() => setVideoInviteMode("selected")}
+            >
+              Выбранные
+            </button>
+          </div>
+        </fieldset>
+      ) : null}
+
+      {showParticipantPicker ? (
+        <fieldset className={styles.inviteFieldset}>
+          <legend className={styles.label}>Участники</legend>
+          <p className={styles.fieldHintInline}>
+            Вы участвуете автоматически. Отметьте коллег, которым будет доступна
+            встреча и напоминание.
+          </p>
+          <div className={styles.participantList}>
+            {inviteCandidates.map((member) => {
+              const checked = values.participantUserIds.includes(member.id);
+              return (
+                <label key={member.id} className={styles.participantItem}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(changeEvent) => {
+                      setValues((current) => ({
+                        ...current,
+                        participantUserIds: changeEvent.target.checked
+                          ? [...current.participantUserIds, member.id]
+                          : current.participantUserIds.filter(
+                              (id) => id !== member.id,
+                            ),
+                      }));
+                    }}
+                  />
+                  <span>{member.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       ) : null}
 
       <label className={styles.field}>

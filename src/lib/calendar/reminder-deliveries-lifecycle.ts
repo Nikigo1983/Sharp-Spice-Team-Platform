@@ -17,6 +17,19 @@ export function shouldResetReminderDeliveriesOnUpdate(
   if (input.sendReminders === true && !existing.sendReminders) {
     return true;
   }
+  if (
+    input.videoInviteMode !== undefined &&
+    input.videoInviteMode !== existing.videoInviteMode
+  ) {
+    return true;
+  }
+  if (input.participantUserIds !== undefined) {
+    const current = [...(existing.participantUserIds ?? [])].sort().join(",");
+    const next = [...input.participantUserIds].sort().join(",");
+    if (current !== next) {
+      return true;
+    }
+  }
   return false;
 }
 

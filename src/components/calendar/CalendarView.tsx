@@ -47,6 +47,7 @@ import styles from "./CalendarView.module.css";
 
 type CalendarViewProps = {
   user: SessionUser;
+  teamMembers: { id: string; name: string }[];
 };
 
 function readViewFromParams(searchParams: URLSearchParams): CalendarViewMode {
@@ -86,15 +87,15 @@ async function readApiError(response: Response, fallback: string): Promise<strin
   }
 }
 
-export function CalendarView({ user }: CalendarViewProps) {
+export function CalendarView({ user, teamMembers }: CalendarViewProps) {
   return (
     <CalendarTimeZoneProvider>
-      <CalendarViewContent user={user} />
+      <CalendarViewContent user={user} teamMembers={teamMembers} />
     </CalendarTimeZoneProvider>
   );
 }
 
-function CalendarViewContent({ user }: CalendarViewProps) {
+function CalendarViewContent({ user, teamMembers }: CalendarViewProps) {
   const { timeZone, timeZoneLabel } = useCalendarTimeZone();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -460,6 +461,8 @@ function CalendarViewContent({ user }: CalendarViewProps) {
             mode="create"
             initial={createInitialValues}
             submitLabel="Создать"
+            currentUserId={user.id}
+            teamMembers={teamMembers}
             onCancel={() => setCreateOpen(false)}
             onSubmit={handleCreate}
           />
@@ -470,6 +473,7 @@ function CalendarViewContent({ user }: CalendarViewProps) {
         <CalendarEventModal
           event={viewEvent}
           user={user}
+          teamMembers={teamMembers}
           onClose={closeViewEvent}
           onEdit={setEditEvent}
           onDelete={setDeleteEvent}
@@ -486,6 +490,8 @@ function CalendarViewContent({ user }: CalendarViewProps) {
             initial={eventToFormValues(editEvent, timeZone)}
             submitLabel="Сохранить"
             scopeLocked
+            currentUserId={user.id}
+            teamMembers={teamMembers}
             onCancel={() => setEditEvent(null)}
             onSubmit={handleUpdate}
           />

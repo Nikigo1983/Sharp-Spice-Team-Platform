@@ -8,12 +8,15 @@ import type {
   CalendarEvent,
   CalendarEventType,
   CalendarScope,
+  VideoInviteMode,
 } from "./types";
 import { formatTimeInZone, zonedDateTimeToUtc } from "./zoned-time";
 
 export type CalendarFormValues = {
   scope: CalendarScope;
   eventType: CalendarEventType;
+  videoInviteMode: VideoInviteMode;
+  participantUserIds: string[];
   title: string;
   description: string;
   startDate: string;
@@ -48,6 +51,8 @@ export function defaultFormValues(
   return {
     scope: "personal",
     eventType: CALENDAR_DEFAULT_EVENT_TYPE,
+    videoInviteMode: "all_team",
+    participantUserIds: [],
     title: "",
     description: "",
     startDate: dateKey,
@@ -70,6 +75,10 @@ export function eventToFormValues(
   return {
     scope: event.scope,
     eventType: event.eventType,
+    videoInviteMode:
+      event.videoInviteMode ??
+      (event.scope === "company" ? "all_team" : "selected"),
+    participantUserIds: [...(event.participantUserIds ?? [])],
     title: event.title,
     description: event.description,
     startDate: formatDateKey(start, timeZone),
@@ -164,6 +173,17 @@ export function formValuesToCreatePayload(
   return {
     scope: values.scope,
     eventType: values.eventType,
+    videoInviteMode:
+      values.eventType === "video_meeting"
+        ? values.scope === "personal"
+          ? "selected"
+          : values.videoInviteMode
+        : undefined,
+    participantUserIds:
+      values.eventType === "video_meeting" &&
+      (values.scope === "personal" || values.videoInviteMode === "selected")
+        ? values.participantUserIds
+        : undefined,
     title: values.title.trim(),
     description: values.description.trim(),
     startAt,
@@ -188,5 +208,16 @@ export function formValuesToUpdatePayload(
     allDay: values.allDay,
     location: values.location.trim(),
     sendReminders: values.sendReminders,
+    videoInviteMode:
+      values.eventType === "video_meeting"
+        ? values.scope === "personal"
+          ? "selected"
+          : values.videoInviteMode
+        : undefined,
+    participantUserIds:
+      values.eventType === "video_meeting" &&
+      (values.scope === "personal" || values.videoInviteMode === "selected")
+        ? values.participantUserIds
+        : undefined,
   };
 }

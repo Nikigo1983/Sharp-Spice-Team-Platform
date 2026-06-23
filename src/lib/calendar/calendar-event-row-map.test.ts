@@ -14,6 +14,8 @@ const sampleEvent: CalendarEvent = {
   title: "Team sync",
   description: "",
   eventType: "general",
+  videoInviteMode: null,
+  participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T09:00:00.000Z",
   allDay: false,
@@ -48,10 +50,13 @@ describe("mapCalendarEventToRow / mapCalendarEventRowToEvent", () => {
     const row = mapCalendarEventToRow({
       ...sampleEvent,
       eventType: "video_meeting",
+      videoInviteMode: "selected",
     });
     assert.equal(row.event_type, "video_meeting");
+    assert.equal(row.video_invite_mode, "selected");
 
-    const restored = mapCalendarEventRowToEvent(row);
+    const restored = mapCalendarEventRowToEvent(row, ["manager-1"]);
     assert.equal(restored.eventType, "video_meeting");
+    assert.deepEqual(restored.participantUserIds, ["manager-1"]);
   });
 });

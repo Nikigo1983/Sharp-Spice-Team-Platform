@@ -22,6 +22,12 @@ import {
   deleteReminderDeliveriesByEventId,
   shouldResetReminderDeliveriesOnUpdate,
 } from "./reminder-deliveries-lifecycle";
+import { canViewEvent } from "./permissions";
+import { isUserInvitedToVideoMeeting, normalizeParticipantUserIds } from "./participants";
+import {
+  listParticipantUserIdsByEventIds,
+  replaceEventParticipants,
+} from "./participants-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbCalendar from "@/lib/supabase/calendar-events-repo";
 
@@ -49,18 +55,60 @@ function filterEventsForList(
   const scopes = opts.scopes ?? ["personal", "company"];
   const includePersonal = scopes.includes("personal");
   const includeCompany = scopes.includes("company");
+  const viewerUserId = opts.viewerUserId ?? opts.ownerUserId;
 
   return events
     .filter((event) => eventOverlapsRange(event, opts.from, opts.to))
     .filter((event) => {
+      if (!viewerUserId) {
+        return false;
+      }
+
+      const viewer = { id: viewerUserId } as Parameters<typeof canViewEvent>[0];
+      if (!canViewEvent(viewer, event)) {
+        return false;
+      }
+
+      const invitedPersonalVideo =
+        event.eventType === "video_meeting" &&
+        event.scope === "personal" &&
+        isUserInvitedToVideoMeeting(viewerUserId, event) &&
+        event.ownerUserId !== viewerUserId;
+
+      if (invitedPersonalVideo) {
+        return true;
+      }
+
       if (event.scope === "company") {
         return includeCompany;
       }
-      if (!includePersonal) return false;
-      if (!opts.ownerUserId) return false;
-      return event.ownerUserId === opts.ownerUserId;
+
+      return includePersonal;
     })
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
+}
+
+async function attachParticipants(events: CalendarEvent[]): Promise<CalendarEvent[]> {
+  const videoEventIds = events
+    .filter((event) => event.eventType === "video_meeting")
+    .map((event) => event.id);
+
+  if (videoEventIds.length === 0) {
+    return events.map((event) => ({
+      ...event,
+      participantUserIds: event.participantUserIds ?? [],
+    }));
+  }
+
+  const participantMap = await listParticipantUserIdsByEventIds(videoEventIds);
+
+  return events.map((event) => ({
+    ...event,
+    participantUserIds:
+      event.eventType === "video_meeting"
+        ? (participantMap.get(event.id) ?? [])
+        : [],
+  }));
 }
 
 async function readStore(): Promise<CalendarEventStore> {
@@ -87,7 +135,43 @@ async function writeStore(store: CalendarEventStore): Promise<void> {
 function normalizeEvent(event: CalendarEvent): CalendarEvent {
   return {
     ...event,
+    videoInviteMode: event.videoInviteMode ?? null,
+    participantUserIds: event.participantUserIds ?? [],
     sendReminders: event.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
+  };
+}
+
+function resolveVideoInviteForCreate(
+  input: CreateCalendarEventInput,
+): {
+  videoInviteMode: CalendarEvent["videoInviteMode"];
+  participantUserIds: string[];
+} {
+  if (input.eventType !== "video_meeting") {
+    return { videoInviteMode: null, participantUserIds: [] };
+  }
+
+  if (input.scope === "personal") {
+    return {
+      videoInviteMode: "selected",
+      participantUserIds: normalizeParticipantUserIds(
+        input.participantUserIds,
+        input.createdByUserId,
+      ),
+    };
+  }
+
+  const mode = input.videoInviteMode === "selected" ? "selected" : "all_team";
+  if (mode === "all_team") {
+    return { videoInviteMode: "all_team", participantUserIds: [] };
+  }
+
+  return {
+    videoInviteMode: "selected",
+    participantUserIds: normalizeParticipantUserIds(
+      input.participantUserIds,
+      input.createdByUserId,
+    ),
   };
 }
 
@@ -101,7 +185,8 @@ export async function listEventsInRange(
         opts.from,
         opts.to,
       );
-      return filterEventsForList(events, opts);
+      const enriched = await attachParticipants(events.map(normalizeEvent));
+      return filterEventsForList(enriched, opts);
     } catch (error) {
       console.error("[calendar] supabase list", error);
       return [];
@@ -109,21 +194,31 @@ export async function listEventsInRange(
   }
 
   const store = await readStore();
-  return filterEventsForList(store.events, opts);
+  const enriched = await attachParticipants(store.events.map(normalizeEvent));
+  return filterEventsForList(enriched, opts);
 }
 
 export async function getEvent(id: string): Promise<CalendarEvent | null> {
+  let event: CalendarEvent | null = null;
+
   if (isSupabaseConfigured()) {
     try {
-      return await sbCalendar.sbGetCalendarEvent(id);
+      event = await sbCalendar.sbGetCalendarEvent(id);
     } catch (error) {
       console.error("[calendar] supabase get", error);
       return null;
     }
+  } else {
+    const store = await readStore();
+    event = store.events.find((item) => item.id === id) ?? null;
   }
 
-  const store = await readStore();
-  return store.events.find((event) => event.id === id) ?? null;
+  if (!event) {
+    return null;
+  }
+
+  const [enriched] = await attachParticipants([normalizeEvent(event)]);
+  return enriched ?? null;
 }
 
 export async function listEventsInRangeForReminders(
@@ -136,7 +231,10 @@ export async function listEventsInRangeForReminders(
         CALENDAR_COMPANY_ID,
         from,
         to,
-      );
+      ).then(async (events) => {
+        const normalized = events.map(normalizeEvent);
+        return attachParticipants(normalized);
+      });
     } catch (error) {
       console.error("[calendar] supabase list for reminders", error);
       return [];
@@ -144,7 +242,10 @@ export async function listEventsInRangeForReminders(
   }
 
   const store = await readStore();
-  return store.events.filter((event) => eventOverlapsRange(event, from, to));
+  const overlapping = store.events
+    .filter((event) => eventOverlapsRange(event, from, to))
+    .map(normalizeEvent);
+  return attachParticipants(overlapping);
 }
 
 export async function createEvent(
@@ -153,6 +254,7 @@ export async function createEvent(
   validateCreateInput(input);
 
   const now = new Date().toISOString();
+  const { videoInviteMode, participantUserIds } = resolveVideoInviteForCreate(input);
   const event: CalendarEvent = {
     id: randomUUID(),
     companyId: CALENDAR_COMPANY_ID,
@@ -161,6 +263,8 @@ export async function createEvent(
     title: input.title.trim(),
     description: input.description?.trim() ?? "",
     eventType: input.eventType ?? CALENDAR_DEFAULT_EVENT_TYPE,
+    videoInviteMode,
+    participantUserIds,
     startAt: input.startAt,
     endAt: input.endAt,
     allDay: input.allDay ?? false,
@@ -175,7 +279,17 @@ export async function createEvent(
 
   if (isSupabaseConfigured()) {
     try {
-      return await sbCalendar.sbInsertCalendarEvent(event);
+      const created = await sbCalendar.sbInsertCalendarEvent({
+        ...event,
+        participantUserIds: [],
+      });
+      if (videoInviteMode === "selected") {
+        await replaceEventParticipants(created.id, participantUserIds);
+      }
+      return {
+        ...created,
+        participantUserIds,
+      };
     } catch (error) {
       console.error("[calendar] supabase create", error);
       throw error;
@@ -185,6 +299,9 @@ export async function createEvent(
   const store = await readStore();
   store.events.push(event);
   await writeStore(store);
+  if (videoInviteMode === "selected") {
+    await replaceEventParticipants(event.id, participantUserIds);
+  }
   return event;
 }
 
@@ -195,38 +312,80 @@ export async function updateEvent(
   const existing = await getEvent(id);
   if (!existing) return null;
 
+  const rawExisting = { ...existing, participantUserIds: existing.participantUserIds ?? [] };
+  let nextInviteMode = rawExisting.videoInviteMode;
+  let nextParticipantUserIds = rawExisting.participantUserIds;
+
+  if (rawExisting.eventType === "video_meeting") {
+    if (input.videoInviteMode !== undefined) {
+      nextInviteMode =
+        rawExisting.scope === "personal"
+          ? "selected"
+          : input.videoInviteMode === "selected"
+            ? "selected"
+            : "all_team";
+    }
+
+    if (input.participantUserIds !== undefined || input.videoInviteMode !== undefined) {
+      if (nextInviteMode === "all_team") {
+        nextParticipantUserIds = [];
+      } else {
+        nextParticipantUserIds = normalizeParticipantUserIds(
+          input.participantUserIds ?? rawExisting.participantUserIds,
+          rawExisting.createdByUserId,
+        );
+      }
+    }
+  }
+
   const updated: CalendarEvent = {
-    ...existing,
-    title: input.title !== undefined ? input.title.trim() : existing.title,
+    ...rawExisting,
+    title: input.title !== undefined ? input.title.trim() : rawExisting.title,
     description:
       input.description !== undefined
         ? input.description.trim()
-        : existing.description,
-    startAt: input.startAt ?? existing.startAt,
-    endAt: input.endAt ?? existing.endAt,
-    allDay: input.allDay ?? existing.allDay,
+        : rawExisting.description,
+    startAt: input.startAt ?? rawExisting.startAt,
+    endAt: input.endAt ?? rawExisting.endAt,
+    allDay: input.allDay ?? rawExisting.allDay,
     location:
-      input.location !== undefined ? input.location.trim() : existing.location,
+      input.location !== undefined ? input.location.trim() : rawExisting.location,
     sendReminders:
       input.sendReminders !== undefined
         ? input.sendReminders
-        : existing.sendReminders,
+        : rawExisting.sendReminders,
+    videoInviteMode: nextInviteMode,
+    participantUserIds: nextParticipantUserIds,
     updatedByUserId:
       input.updatedByUserId !== undefined
         ? input.updatedByUserId
-        : existing.updatedByUserId,
+        : rawExisting.updatedByUserId,
     updatedAt: new Date().toISOString(),
   };
 
-  validateUpdateInput(existing, input);
+  validateUpdateInput(rawExisting, input);
 
-  if (shouldResetReminderDeliveriesOnUpdate(existing, input)) {
+  if (shouldResetReminderDeliveriesOnUpdate(rawExisting, input)) {
     await deleteReminderDeliveriesByEventId(id);
   }
 
   if (isSupabaseConfigured()) {
     try {
-      return await sbCalendar.sbUpdateCalendarEvent(updated);
+      const saved = await sbCalendar.sbUpdateCalendarEvent({
+        ...updated,
+        participantUserIds: [],
+      });
+      if (saved.eventType === "video_meeting") {
+        if (nextInviteMode === "selected") {
+          await replaceEventParticipants(saved.id, nextParticipantUserIds);
+        } else {
+          await replaceEventParticipants(saved.id, []);
+        }
+      }
+      return {
+        ...saved,
+        participantUserIds: nextParticipantUserIds,
+      };
     } catch (error) {
       console.error("[calendar] supabase update", error);
       throw error;
@@ -239,6 +398,15 @@ export async function updateEvent(
 
   store.events[index] = updated;
   await writeStore(store);
+
+  if (updated.eventType === "video_meeting") {
+    if (nextInviteMode === "selected") {
+      await replaceEventParticipants(id, nextParticipantUserIds);
+    } else {
+      await replaceEventParticipants(id, []);
+    }
+  }
+
   return updated;
 }
 

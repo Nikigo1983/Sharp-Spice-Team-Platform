@@ -1,4 +1,4 @@
-import type { CalendarEvent } from "./types";
+import type { CalendarEvent, VideoInviteMode } from "./types";
 
 export type CalendarEventRow = {
   id: string;
@@ -8,6 +8,7 @@ export type CalendarEventRow = {
   title: string;
   description: string;
   event_type: CalendarEvent["eventType"];
+  video_invite_mode: VideoInviteMode | null;
   start_at: string;
   end_at: string;
   all_day: boolean;
@@ -22,6 +23,7 @@ export type CalendarEventRow = {
 
 export function mapCalendarEventRowToEvent(
   row: CalendarEventRow,
+  participantUserIds: string[] = [],
 ): CalendarEvent {
   return {
     id: row.id,
@@ -31,6 +33,8 @@ export function mapCalendarEventRowToEvent(
     title: row.title,
     description: row.description,
     eventType: row.event_type,
+    videoInviteMode: row.video_invite_mode ?? null,
+    participantUserIds,
     startAt: row.start_at,
     endAt: row.end_at,
     allDay: row.all_day,
@@ -53,6 +57,7 @@ export function mapCalendarEventToRow(event: CalendarEvent): CalendarEventRow {
     title: event.title,
     description: event.description,
     event_type: event.eventType,
+    video_invite_mode: event.videoInviteMode,
     start_at: event.startAt,
     end_at: event.endAt,
     all_day: event.allDay,

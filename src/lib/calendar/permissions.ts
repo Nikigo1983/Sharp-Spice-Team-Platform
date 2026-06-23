@@ -1,10 +1,16 @@
 import type { SessionUser } from "@/lib/auth/types";
-import type { CalendarEvent, CalendarScope } from "./types";
+import { canViewVideoMeeting } from "./participants";
+import type { CalendarEvent } from "./types";
 
 export function canViewEvent(user: SessionUser, event: CalendarEvent): boolean {
+  if (event.eventType === "video_meeting") {
+    return canViewVideoMeeting(user, event);
+  }
+
   if (event.scope === "company") {
     return true;
   }
+
   return event.ownerUserId === user.id;
 }
 
@@ -22,7 +28,7 @@ export function canDeleteEvent(user: SessionUser, event: CalendarEvent): boolean
 
 export function canCreateWithScope(
   _user: SessionUser,
-  scope: CalendarScope,
+  scope: CalendarEvent["scope"],
 ): boolean {
   return scope === "personal" || scope === "company";
 }

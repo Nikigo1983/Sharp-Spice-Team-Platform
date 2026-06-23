@@ -5,6 +5,7 @@ import {
   type ReminderOffsetMinutes,
 } from "./constants";
 import { getZonedDayStartFromIso } from "./range";
+import { resolveVideoMeetingReminderRecipientIds } from "./participants";
 import type { CalendarEvent } from "./types";
 
 export type ReminderWindowOptions = {
@@ -109,6 +110,10 @@ export function resolveReminderRecipientIds(
   event: CalendarEvent,
   activeUserIds: string[],
 ): string[] {
+  if (event.eventType === "video_meeting") {
+    return resolveVideoMeetingReminderRecipientIds(event, activeUserIds);
+  }
+
   if (event.scope === "personal") {
     if (!event.ownerUserId) return [];
     return activeUserIds.includes(event.ownerUserId) ? [event.ownerUserId] : [];

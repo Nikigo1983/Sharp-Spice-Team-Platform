@@ -14,6 +14,7 @@ import {
   getMeetingAccessPhase,
 } from "@/lib/calendar/meeting-client";
 import { getMeetingRoomName, isVideoMeeting } from "@/lib/calendar/meeting";
+import { formatParticipantNames } from "@/lib/calendar/participants";
 import {
   canDeleteEvent,
   canEditEvent,
@@ -25,6 +26,7 @@ import styles from "./CalendarEventModal.module.css";
 type CalendarEventModalProps = {
   event: CalendarEvent;
   user: SessionUser;
+  teamMembers: { id: string; name: string }[];
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
   onDelete: (event: CalendarEvent) => void;
@@ -44,6 +46,7 @@ function meetingStatusClass(phase: ReturnType<typeof getMeetingAccessPhase>): st
 export function CalendarEventModal({
   event,
   user,
+  teamMembers,
   onClose,
   onEdit,
   onDelete,
@@ -91,6 +94,10 @@ export function CalendarEventModal({
               <div>
                 <dt>Комната</dt>
                 <dd className={styles.roomName}>{getMeetingRoomName(event.id)}</dd>
+              </div>
+              <div>
+                <dt>Участники</dt>
+                <dd>{formatParticipantNames(event, teamMembers)}</dd>
               </div>
               <div>
                 <dt>Статус</dt>

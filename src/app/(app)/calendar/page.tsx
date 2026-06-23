@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { getSession } from "@/lib/auth/session";
+import { listTeamMembers } from "@/lib/team/store";
 
 export default async function CalendarPage() {
   const session = await getSession();
@@ -10,10 +11,15 @@ export default async function CalendarPage() {
     redirect("/login");
   }
 
+  const teamMembers = (await listTeamMembers()).map((member) => ({
+    id: member.id,
+    name: member.name,
+  }));
+
   return (
     <AppShell sectionTitle="Календарь">
       <Suspense fallback={<p>Загрузка…</p>}>
-        <CalendarView user={session} />
+        <CalendarView user={session} teamMembers={teamMembers} />
       </Suspense>
     </AppShell>
   );

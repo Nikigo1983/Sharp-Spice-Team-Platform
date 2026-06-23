@@ -215,6 +215,22 @@ export function CalendarEventForm({
         />
       </label>
 
+      <div className={styles.remindersField}>
+        <label className={styles.checkboxField}>
+          <input
+            type="checkbox"
+            checked={values.sendReminders}
+            onChange={(changeEvent) =>
+              setValues({ ...values, sendReminders: changeEvent.target.checked })
+            }
+          />
+          <span>Напоминания за 24 часа и за 1 час</span>
+        </label>
+        <p className={styles.fieldHint}>
+          Уведомление в колокольчике. Только на платформе.
+        </p>
+      </div>
+
       {error ? <p className={styles.error}>{error}</p> : null}
 
       <div className={styles.actions}>

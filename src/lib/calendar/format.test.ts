@@ -23,6 +23,7 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     endAt: "2026-06-20T09:00:00.000Z",
     allDay: false,
     location: "",
+    sendReminders: true,
     createdByUserId: "manager-1",
     createdByName: "Злата",
     updatedByUserId: null,

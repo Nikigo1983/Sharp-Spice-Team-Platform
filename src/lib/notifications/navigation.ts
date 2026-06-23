@@ -1,6 +1,7 @@
 import type { NotificationType } from "@/lib/notifications/types";
+import { decodeCalendarReminderMessage } from "./calendar-reminder-copy";
 
-export type NotificationSection = "team-chat" | "tasks" | "formgrid";
+export type NotificationSection = "team-chat" | "tasks" | "formgrid" | "calendar";
 
 const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
   "team_chat",
@@ -9,10 +10,21 @@ const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
   "task_completed",
   "client_new",
   "consultation_assigned",
+  "calendar_reminder",
 ]);
 
 export function shouldShowNotificationToast(type: NotificationType): boolean {
   return TOAST_NOTIFICATION_TYPES.has(type);
+}
+
+export function getNotificationDisplayMessage(
+  type: NotificationType,
+  message: string,
+): string {
+  if (type === "calendar_reminder") {
+    return decodeCalendarReminderMessage(message).display;
+  }
+  return message;
 }
 
 export function getNotificationSection(
@@ -28,12 +40,17 @@ export function getNotificationSection(
     case "client_new":
     case "consultation_assigned":
       return "formgrid";
+    case "calendar_reminder":
+      return "calendar";
     default:
       return null;
   }
 }
 
-export function getNotificationHref(type: NotificationType): string | null {
+export function getNotificationHref(
+  type: NotificationType,
+  message?: string,
+): string | null {
   switch (type) {
     case "team_chat":
       return "/team-chat";
@@ -44,6 +61,12 @@ export function getNotificationHref(type: NotificationType): string | null {
     case "client_new":
     case "consultation_assigned":
       return "/new-formgrid-clients";
+    case "calendar_reminder": {
+      const { eventId } = decodeCalendarReminderMessage(message ?? "");
+      return eventId
+        ? `/calendar?event=${encodeURIComponent(eventId)}`
+        : "/calendar";
+    }
     default:
       return null;
   }
@@ -65,6 +88,8 @@ export function pathnameMatchesNotificationSection(
         pathname === "/new-formgrid-clients" ||
         pathname.startsWith("/new-formgrid-clients/")
       );
+    case "calendar":
+      return pathname === "/calendar" || pathname.startsWith("/calendar/");
     default:
       return false;
   }

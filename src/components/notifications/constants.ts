@@ -12,6 +12,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<
   task_revision: "Доработка задачи",
   client_new: "Новый клиент",
   consultation_assigned: "Консультация",
+  calendar_reminder: "Напоминание календаря",
   system: "Системное",
 };
 
@@ -25,6 +26,7 @@ export const NOTIFICATION_TYPE_ICONS: Record<NotificationItem["type"], string> =
     task_revision: "🔄",
     client_new: "👤",
     consultation_assigned: "📅",
+    calendar_reminder: "📅",
     system: "🔔",
   };
 

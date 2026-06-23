@@ -1,4 +1,4 @@
-import { CALENDAR_TIMEZONE } from "./constants";
+import { CALENDAR_DEFAULT_SEND_REMINDERS, CALENDAR_TIMEZONE } from "./constants";
 import { formatDateKey } from "./range";
 import type { CalendarEvent, CalendarScope } from "./types";
 
@@ -12,6 +12,7 @@ export type CalendarFormValues = {
   endTime: string;
   allDay: boolean;
   location: string;
+  sendReminders: boolean;
 };
 
 const zonedFormatter = new Intl.DateTimeFormat("en-US", {
@@ -110,6 +111,7 @@ export function defaultFormValues(anchorDate: Date): CalendarFormValues {
     endTime: "11:00",
     allDay: false,
     location: "",
+    sendReminders: CALENDAR_DEFAULT_SEND_REMINDERS,
   };
 }
 
@@ -127,6 +129,7 @@ export function eventToFormValues(event: CalendarEvent): CalendarFormValues {
     endTime: formatTimeValue(end),
     allDay: event.allDay,
     location: event.location,
+    sendReminders: event.sendReminders,
   };
 }
 
@@ -204,6 +207,7 @@ export function formValuesToCreatePayload(values: CalendarFormValues) {
     endAt,
     allDay: values.allDay,
     location: values.location.trim(),
+    sendReminders: values.sendReminders,
   };
 }
 
@@ -217,5 +221,6 @@ export function formValuesToUpdatePayload(values: CalendarFormValues) {
     endAt,
     allDay: values.allDay,
     location: values.location.trim(),
+    sendReminders: values.sendReminders,
   };
 }

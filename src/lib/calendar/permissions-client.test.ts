@@ -43,6 +43,7 @@ function companyEvent(createdByUserId: string): CalendarEvent {
     endAt: "2026-06-20T13:00:00.000Z",
     allDay: false,
     location: "",
+    sendReminders: true,
     createdByUserId,
     createdByName: "Author",
     updatedByUserId: null,

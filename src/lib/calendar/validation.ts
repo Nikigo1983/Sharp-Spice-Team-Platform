@@ -54,6 +54,13 @@ function assertEventTiming(
   }
 }
 
+function assertOptionalBoolean(value: unknown, field: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "boolean") {
+    throw new CalendarValidationError(`${field} must be a boolean`);
+  }
+}
+
 export function parseIsoRange(
   from: string,
   to: string,
@@ -83,6 +90,7 @@ export function validateCreateInput(input: CreateCalendarEventInput): void {
     startAt: input.startAt,
     endAt: input.endAt,
   });
+  assertOptionalBoolean(input.sendReminders, "sendReminders");
 }
 
 export function validateUpdateInput(
@@ -96,4 +104,5 @@ export function validateUpdateInput(
     startAt: input.startAt ?? existing.startAt,
     endAt: input.endAt ?? existing.endAt,
   });
+  assertOptionalBoolean(input.sendReminders, "sendReminders");
 }

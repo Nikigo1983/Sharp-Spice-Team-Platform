@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import {
   CALENDAR_COMPANY_ID,
   CALENDAR_DEFAULT_EVENT_TYPE,
+  CALENDAR_DEFAULT_SEND_REMINDERS,
 } from "./constants";
 import type {
   CalendarEvent,
@@ -17,6 +18,10 @@ import {
   validateCreateInput,
   validateUpdateInput,
 } from "./validation";
+import {
+  deleteReminderDeliveriesByEventId,
+  shouldResetReminderDeliveriesOnUpdate,
+} from "./reminder-deliveries-lifecycle";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbCalendar from "@/lib/supabase/calendar-events-repo";
 
@@ -63,7 +68,11 @@ async function readStore(): Promise<CalendarEventStore> {
     const raw = await readFile(STORE_PATH, "utf8");
     const data = JSON.parse(raw) as CalendarEventStore;
     if (!Array.isArray(data.events)) return { events: [] };
-    return data;
+    return {
+      events: data.events.map((item) =>
+        normalizeEvent(item as CalendarEvent),
+      ),
+    };
   } catch {
     return { events: [] };
   }
@@ -73,6 +82,13 @@ async function writeStore(store: CalendarEventStore): Promise<void> {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   store.events.sort((a, b) => a.startAt.localeCompare(b.startAt));
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+}
+
+function normalizeEvent(event: CalendarEvent): CalendarEvent {
+  return {
+    ...event,
+    sendReminders: event.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
+  };
 }
 
 export async function listEventsInRange(
@@ -110,6 +126,27 @@ export async function getEvent(id: string): Promise<CalendarEvent | null> {
   return store.events.find((event) => event.id === id) ?? null;
 }
 
+export async function listEventsInRangeForReminders(
+  from: string,
+  to: string,
+): Promise<CalendarEvent[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbCalendar.sbListEventsInRange(
+        CALENDAR_COMPANY_ID,
+        from,
+        to,
+      );
+    } catch (error) {
+      console.error("[calendar] supabase list for reminders", error);
+      return [];
+    }
+  }
+
+  const store = await readStore();
+  return store.events.filter((event) => eventOverlapsRange(event, from, to));
+}
+
 export async function createEvent(
   input: CreateCalendarEventInput,
 ): Promise<CalendarEvent> {
@@ -128,6 +165,7 @@ export async function createEvent(
     endAt: input.endAt,
     allDay: input.allDay ?? false,
     location: input.location?.trim() ?? "",
+    sendReminders: input.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
     createdByUserId: input.createdByUserId,
     createdByName: input.createdByName,
     updatedByUserId: null,
@@ -169,6 +207,10 @@ export async function updateEvent(
     allDay: input.allDay ?? existing.allDay,
     location:
       input.location !== undefined ? input.location.trim() : existing.location,
+    sendReminders:
+      input.sendReminders !== undefined
+        ? input.sendReminders
+        : existing.sendReminders,
     updatedByUserId:
       input.updatedByUserId !== undefined
         ? input.updatedByUserId
@@ -177,6 +219,10 @@ export async function updateEvent(
   };
 
   validateUpdateInput(existing, input);
+
+  if (shouldResetReminderDeliveriesOnUpdate(existing, input)) {
+    await deleteReminderDeliveriesByEventId(id);
+  }
 
   if (isSupabaseConfigured()) {
     try {

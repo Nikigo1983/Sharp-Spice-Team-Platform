@@ -1,7 +1,11 @@
 import "server-only";
 
+import type { CalendarEvent } from "@/lib/calendar/types";
+import type { ReminderOffsetMinutes } from "@/lib/calendar/constants";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/tasks/types";
-import { createNotificationsForTeam } from "./store";
+import { buildCalendarReminderNotificationContent } from "./calendar-reminder-copy";
+import { createNotificationForUser, createNotificationsForTeam } from "./store";
+import type { Notification } from "./types";
 
 export async function notifyTeamChatMessage(params: {
   senderId: string;
@@ -273,4 +277,22 @@ export async function notifySystem(params: {
     },
     { onlyUserIds: params.onlyUserIds },
   );
+}
+
+export async function notifyCalendarReminder(params: {
+  event: CalendarEvent;
+  offsetMinutes: ReminderOffsetMinutes;
+  userId: string;
+}): Promise<Notification> {
+  const content = buildCalendarReminderNotificationContent(
+    params.event,
+    params.offsetMinutes,
+  );
+
+  return createNotificationForUser(params.userId, {
+    type: "calendar_reminder",
+    title: content.title,
+    message: content.message,
+    author_name: null,
+  });
 }

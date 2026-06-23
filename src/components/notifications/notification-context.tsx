@@ -14,6 +14,7 @@ export type NotificationItem = {
     | "task_revision"
     | "client_new"
     | "consultation_assigned"
+    | "calendar_reminder"
     | "system";
   title: string;
   message: string;

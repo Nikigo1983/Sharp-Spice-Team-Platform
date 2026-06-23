@@ -8,7 +8,7 @@ import {
   formatNotificationTime,
   isSuccessNotification,
 } from "./constants";
-import { getNotificationHref } from "@/lib/notifications/navigation";
+import { getNotificationDisplayMessage, getNotificationHref } from "@/lib/notifications/navigation";
 import {
   isNotificationSoundEnabled,
   setNotificationSoundEnabled,
@@ -55,12 +55,13 @@ export function NotificationBell() {
     id: string,
     isRead: boolean,
     type: (typeof notifications)[number]["type"],
+    message: string,
   ) {
     if (!ctx) return;
     if (!isRead) {
       await ctx.markRead(id);
     }
-    const href = getNotificationHref(type);
+    const href = getNotificationHref(type, message);
     if (href) {
       setOpen(false);
       router.push(href);
@@ -159,7 +160,12 @@ export function NotificationBell() {
                       type="button"
                       className={styles.itemTypeBtn}
                       onClick={() =>
-                        void handleOpenItem(item.id, item.is_read, item.type)
+                        void handleOpenItem(
+                          item.id,
+                          item.is_read,
+                          item.type,
+                          item.message,
+                        )
                       }
                     >
                       <span
@@ -198,7 +204,7 @@ export function NotificationBell() {
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    {item.message}
+                    {getNotificationDisplayMessage(item.type, item.message)}
                   </p>
                 </div>
               );

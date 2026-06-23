@@ -5,6 +5,7 @@ import {
   defaultFormValues,
   eventToFormValues,
   formValuesToCreatePayload,
+  formValuesToUpdatePayload,
   validateFormValues,
 } from "./form";
 
@@ -21,6 +22,7 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     endAt: "2026-06-20T09:00:00.000Z",
     allDay: false,
     location: "Office",
+    sendReminders: true,
     createdByUserId: "manager-1",
     createdByName: "Злата",
     updatedByUserId: null,
@@ -38,6 +40,7 @@ describe("defaultFormValues", () => {
     assert.equal(values.endDate, "2026-06-20");
     assert.equal(values.startTime, "10:00");
     assert.equal(values.endTime, "11:00");
+    assert.equal(values.sendReminders, true);
   });
 });
 
@@ -54,6 +57,12 @@ describe("eventToFormValues", () => {
     assert.equal(values.title, "Meeting");
     assert.equal(values.startDate, "2026-06-20");
     assert.equal(values.endDate, "2026-06-20");
+    assert.equal(values.sendReminders, true);
+  });
+
+  it("maps sendReminders when reminders are disabled", () => {
+    const values = eventToFormValues(event({ sendReminders: false }));
+    assert.equal(values.sendReminders, false);
   });
 });
 
@@ -97,5 +106,22 @@ describe("formValuesToCreatePayload", () => {
     const payload = formValuesToCreatePayload(values);
     assert.equal(payload.allDay, true);
     assert.ok(payload.endAt > payload.startAt);
+  });
+
+  it("includes sendReminders in create payload", () => {
+    const values = defaultFormValues(new Date("2026-06-20T12:00:00.000Z"));
+    values.title = "Quiet day";
+    values.sendReminders = false;
+
+    const payload = formValuesToCreatePayload(values);
+    assert.equal(payload.sendReminders, false);
+  });
+});
+
+describe("formValuesToUpdatePayload", () => {
+  it("includes sendReminders in update payload", () => {
+    const values = eventToFormValues(event({ sendReminders: false }));
+    const payload = formValuesToUpdatePayload(values);
+    assert.equal(payload.sendReminders, false);
   });
 });

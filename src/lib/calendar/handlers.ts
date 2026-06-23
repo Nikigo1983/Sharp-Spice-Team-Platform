@@ -102,6 +102,10 @@ function parseCreateBody(body: unknown): Omit<
     endAt: record.endAt,
     allDay: typeof record.allDay === "boolean" ? record.allDay : undefined,
     location: typeof record.location === "string" ? record.location : undefined,
+    sendReminders:
+      typeof record.sendReminders === "boolean"
+        ? record.sendReminders
+        : undefined,
   };
 }
 
@@ -112,6 +116,7 @@ const UPDATE_FIELDS = new Set([
   "endAt",
   "allDay",
   "location",
+  "sendReminders",
 ]);
 
 function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
@@ -163,6 +168,12 @@ function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
       throw new CalendarValidationError("location must be a string");
     }
     input.location = record.location;
+  }
+  if ("sendReminders" in record) {
+    if (typeof record.sendReminders !== "boolean") {
+      throw new CalendarValidationError("sendReminders must be a boolean");
+    }
+    input.sendReminders = record.sendReminders;
   }
 
   if (Object.keys(input).length === 0) {

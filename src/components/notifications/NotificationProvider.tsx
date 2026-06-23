@@ -9,6 +9,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  getNotificationDisplayMessage,
   getNotificationHref,
   getNotificationSection,
   isOnNotificationSection,
@@ -66,7 +67,10 @@ function ToastCard({
   onDismiss: () => void;
   onOpen: () => void;
 }) {
-  const href = getNotificationHref(notification.type);
+  const href = getNotificationHref(
+    notification.type,
+    notification.message,
+  );
   const isSuccess = isSuccessNotification(notification.type);
 
   useEffect(() => {
@@ -92,7 +96,12 @@ function ToastCard({
       {notification.author_name ? (
         <div className={styles.toastAuthor}>{notification.author_name}:</div>
       ) : null}
-      <div className={styles.toastMessage}>{notification.message}</div>
+      <div className={styles.toastMessage}>
+        {getNotificationDisplayMessage(
+          notification.type,
+          notification.message,
+        )}
+      </div>
       {href ? <div className={styles.toastAction}>Открыть раздел →</div> : null}
       <span
         className={styles.toastClose}
@@ -147,7 +156,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const openToast = useCallback(
     (notification: NotificationItem) => {
-      const href = getNotificationHref(notification.type);
+      const href = getNotificationHref(
+        notification.type,
+        notification.message,
+      );
       if (href) {
         router.push(href);
       }

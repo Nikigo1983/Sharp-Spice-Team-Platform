@@ -67,6 +67,10 @@ export function CalendarEventModal({
             <dt>Автор</dt>
             <dd>{event.createdByName}</dd>
           </div>
+          <div>
+            <dt>Напоминания</dt>
+            <dd>{event.sendReminders ? "Включены" : "Выключены"}</dd>
+          </div>
         </dl>
 
         {event.description ? (

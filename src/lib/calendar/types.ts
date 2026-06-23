@@ -1,3 +1,7 @@
+import type { ReminderOffsetMinutes } from "./constants";
+
+export type { ReminderOffsetMinutes };
+
 export const CALENDAR_SCOPES = ["personal", "company"] as const;
 
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
@@ -18,6 +22,7 @@ export type CalendarEvent = {
   endAt: string;
   allDay: boolean;
   location: string;
+  sendReminders: boolean;
   createdByUserId: string;
   createdByName: string;
   updatedByUserId: string | null;
@@ -35,6 +40,7 @@ export type CreateCalendarEventInput = {
   endAt: string;
   allDay?: boolean;
   location?: string;
+  sendReminders?: boolean;
   createdByUserId: string;
   createdByName: string;
 };
@@ -46,7 +52,28 @@ export type UpdateCalendarEventInput = {
   endAt?: string;
   allDay?: boolean;
   location?: string;
+  sendReminders?: boolean;
   updatedByUserId?: string | null;
+};
+
+export type CalendarReminderDelivery = {
+  id: string;
+  eventId: string;
+  userId: string;
+  offsetMinutes: ReminderOffsetMinutes;
+  fireAt: string;
+  notificationId: string | null;
+  eventUpdatedAt: string;
+  createdAt: string;
+};
+
+export type InsertCalendarReminderDeliveryInput = {
+  eventId: string;
+  userId: string;
+  offsetMinutes: ReminderOffsetMinutes;
+  fireAt: string;
+  notificationId?: string | null;
+  eventUpdatedAt: string;
 };
 
 export type ListCalendarEventsOptions = {

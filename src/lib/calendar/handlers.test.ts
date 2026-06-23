@@ -46,6 +46,7 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     endAt: "2026-06-20T09:00:00.000Z",
     allDay: false,
     location: "",
+    sendReminders: true,
     createdByUserId: managerA.id,
     createdByName: managerA.name,
     updatedByUserId: null,
@@ -90,6 +91,7 @@ function createMemoryStore(initial: CalendarEvent[] = []): CalendarStoreDeps {
         endAt: input.endAt,
         allDay: input.allDay ?? false,
         location: input.location?.trim() ?? "",
+        sendReminders: input.sendReminders ?? true,
         createdByUserId: input.createdByUserId,
         createdByName: input.createdByName,
       });
@@ -111,6 +113,10 @@ function createMemoryStore(initial: CalendarEvent[] = []): CalendarStoreDeps {
         allDay: input.allDay ?? existing.allDay,
         location:
           input.location !== undefined ? input.location.trim() : existing.location,
+        sendReminders:
+          input.sendReminders !== undefined
+            ? input.sendReminders
+            : existing.sendReminders,
         updatedByUserId: input.updatedByUserId ?? existing.updatedByUserId,
         updatedAt: new Date().toISOString(),
       });
@@ -208,6 +214,43 @@ describe("handleCreateCalendarEvent", () => {
     );
     assert.equal("status" in result && result.status, 422);
   });
+
+  it("accepts sendReminders on create", async () => {
+    const deps = createMemoryStore();
+    const result = await handleCreateCalendarEvent(
+      managerA,
+      {
+        scope: "personal",
+        title: "Quiet event",
+        startAt: "2026-06-20T08:00:00.000Z",
+        endAt: "2026-06-20T09:00:00.000Z",
+        sendReminders: false,
+      },
+      deps,
+    );
+
+    assert.ok(!("status" in result));
+    if ("status" in result) return;
+    assert.equal(result.event.sendReminders, false);
+  });
+
+  it("defaults sendReminders to true when omitted", async () => {
+    const deps = createMemoryStore();
+    const result = await handleCreateCalendarEvent(
+      managerA,
+      {
+        scope: "personal",
+        title: "Default reminders",
+        startAt: "2026-06-20T08:00:00.000Z",
+        endAt: "2026-06-20T09:00:00.000Z",
+      },
+      deps,
+    );
+
+    assert.ok(!("status" in result));
+    if ("status" in result) return;
+    assert.equal(result.event.sendReminders, true);
+  });
 });
 
 describe("handleGetCalendarEvent", () => {
@@ -281,6 +324,31 @@ describe("handleUpdateCalendarEvent", () => {
       managerA,
       "p1",
       { scope: "company" },
+      deps,
+    );
+    assert.equal("status" in result && result.status, 422);
+  });
+
+  it("accepts sendReminders on update", async () => {
+    const deps = createMemoryStore([event({ id: "p1", sendReminders: true })]);
+    const result = await handleUpdateCalendarEvent(
+      managerA,
+      "p1",
+      { sendReminders: false },
+      deps,
+    );
+
+    assert.ok(!("status" in result));
+    if ("status" in result) return;
+    assert.equal(result.event.sendReminders, false);
+  });
+
+  it("rejects non-boolean sendReminders", async () => {
+    const deps = createMemoryStore([event({ id: "p1" })]);
+    const result = await handleUpdateCalendarEvent(
+      managerA,
+      "p1",
+      { sendReminders: "yes" },
       deps,
     );
     assert.equal("status" in result && result.status, 422);

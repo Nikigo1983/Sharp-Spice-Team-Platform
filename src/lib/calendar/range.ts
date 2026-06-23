@@ -106,6 +106,11 @@ function startOfZonedDay(dateKey: string): Date {
   return zonedDateTimeToUtc(dateKey, { hours: 0, minutes: 0, seconds: 0 });
 }
 
+/** Local calendar-day start (00:00) in CALENDAR_TIMEZONE for an ISO instant. */
+export function getZonedDayStartFromIso(iso: string): Date {
+  return startOfZonedDay(formatDateKey(new Date(iso)));
+}
+
 function endOfZonedDay(dateKey: string): Date {
   return startOfZonedDay(addDaysToDateKey(dateKey, 1));
 }

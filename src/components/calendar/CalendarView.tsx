@@ -57,6 +57,20 @@ function readDateFromParams(searchParams: URLSearchParams): Date {
   return parseDateKey(raw);
 }
 
+function buildCalendarUrl(
+  nextView: CalendarViewMode,
+  nextAnchor: Date,
+  eventId?: string | null,
+): string {
+  const params = new URLSearchParams();
+  params.set("view", nextView);
+  params.set("date", formatDateKey(nextAnchor));
+  if (eventId) {
+    params.set("event", eventId);
+  }
+  return `/calendar?${params.toString()}`;
+}
+
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
     const data = (await response.json()) as { error?: string };
@@ -97,11 +111,8 @@ export function CalendarView({ user }: CalendarViewProps) {
   );
 
   const syncUrl = useCallback(
-    (nextView: CalendarViewMode, nextAnchor: Date) => {
-      const params = new URLSearchParams();
-      params.set("view", nextView);
-      params.set("date", formatDateKey(nextAnchor));
-      router.replace(`/calendar?${params.toString()}`);
+    (nextView: CalendarViewMode, nextAnchor: Date, eventId?: string | null) => {
+      router.replace(buildCalendarUrl(nextView, nextAnchor, eventId));
     },
     [router],
   );
@@ -215,6 +226,88 @@ export function CalendarView({ user }: CalendarViewProps) {
   const openEvent = useCallback((event: CalendarEvent) => {
     setViewEvent(event);
   }, []);
+
+  const closeViewEvent = useCallback(() => {
+    setViewEvent(null);
+    const eventParam = searchParams.get("event");
+    if (!eventParam) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("event");
+    router.replace(`/calendar?${params.toString()}`);
+  }, [router, searchParams]);
+
+  const deepLinkEventId = searchParams.get("event");
+
+  useEffect(() => {
+    if (!deepLinkEventId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      let resolved = events.find((item) => item.id === deepLinkEventId);
+
+      if (!resolved) {
+        try {
+          const response = await fetch(
+            `/api/calendar/events/${encodeURIComponent(deepLinkEventId)}`,
+          );
+          if (!response.ok) {
+            if (!cancelled) {
+              setToast({
+                text:
+                  response.status === 404
+                    ? "Событие не найдено"
+                    : "Не удалось открыть событие",
+                type: "error",
+              });
+              const params = new URLSearchParams(searchParams.toString());
+              params.delete("event");
+              router.replace(`/calendar?${params.toString()}`);
+            }
+            return;
+          }
+          const data = (await response.json()) as { event: CalendarEvent };
+          resolved = data.event;
+        } catch {
+          if (!cancelled) {
+            setToast({ text: "Не удалось открыть событие", type: "error" });
+          }
+          return;
+        }
+      }
+
+      if (cancelled || !resolved) {
+        return;
+      }
+
+      setViewEvent(resolved);
+
+      const eventDateKey = formatDateKey(new Date(resolved.startAt));
+      const currentDateKey = formatDateKey(anchorDate);
+      if (eventDateKey !== currentDateKey) {
+        const nextAnchor = parseDateKey(eventDateKey);
+        setAnchorDate(nextAnchor);
+        syncUrl(view, nextAnchor, deepLinkEventId);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    anchorDate,
+    deepLinkEventId,
+    events,
+    reloadToken,
+    router,
+    searchParams,
+    syncUrl,
+    view,
+  ]);
 
   const handleCreate = useCallback(
     async (values: CalendarFormValues) => {
@@ -353,7 +446,7 @@ export function CalendarView({ user }: CalendarViewProps) {
         <CalendarEventModal
           event={viewEvent}
           user={user}
-          onClose={() => setViewEvent(null)}
+          onClose={closeViewEvent}
           onEdit={setEditEvent}
           onDelete={setDeleteEvent}
         />

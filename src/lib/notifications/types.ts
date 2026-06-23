@@ -7,6 +7,7 @@ export const NOTIFICATION_TYPES = [
   "task_revision",
   "client_new",
   "consultation_assigned",
+  "calendar_reminder",
   "system",
 ] as const;
 

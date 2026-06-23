@@ -1,0 +1,23 @@
+name: Calendar reminder cron
+
+on:
+  schedule:
+    # Hobby Vercel allows cron at most once/day; reminders run via GitHub Actions instead.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  calendar-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /api/cron/calendar-reminders
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set in repository secrets."
+            exit 1
+          fi
+          curl -fsS \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://sharp-spice-team-platform.vercel.app/api/cron/calendar-reminders"

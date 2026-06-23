@@ -1,0 +1,97 @@
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 20rem);
+  height: 100%;
+  border-left: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.98);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0.75rem 0;
+  overflow: auto;
+  flex: 1;
+}
+
+.item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.statusDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.name {
+  font-weight: 500;
+}
+
+.tracks {
+  display: flex;
+  gap: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.note {
+  margin: 0;
+  padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-soft);
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: min(70vh, 28rem);
+    border-left: none;
+    border-top: 1px solid var(--border-soft);
+    border-radius: 1rem 1rem 0 0;
+  }
+}

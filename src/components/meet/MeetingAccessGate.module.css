@@ -1,0 +1,55 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--surface-hero);
+}
+
+.card {
+  width: min(100%, 28rem);
+  padding: 2rem 1.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 0.75rem;
+  font-family: Sora, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.eventMeta {
+  margin: 0 0 0.75rem;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.body {
+  margin: 0 0 1.5rem;
+  color: #cbd5e0;
+  line-height: 1.5;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: 999px;
+  background: var(--gradient-brand);
+  color: var(--white);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.action:hover {
+  opacity: 0.92;
+}

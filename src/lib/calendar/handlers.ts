@@ -18,7 +18,8 @@ import type {
   CreateCalendarEventInput,
   UpdateCalendarEventInput,
 } from "./types";
-import { CALENDAR_SCOPES } from "./types";
+import { CALENDAR_EVENT_TYPES, CALENDAR_SCOPES } from "./types";
+import type { CalendarEventType } from "./types";
 import {
   CalendarValidationError,
   parseIsoRange,
@@ -46,6 +47,22 @@ export const defaultCalendarStoreDeps: CalendarStoreDeps = {
   updateEvent,
   deleteEvent,
 };
+
+function isCalendarEventType(value: string): value is CalendarEventType {
+  return CALENDAR_EVENT_TYPES.includes(value as CalendarEventType);
+}
+
+function parseOptionalEventType(
+  value: unknown,
+): CalendarEventType | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  if (!isCalendarEventType(value)) {
+    throw new CalendarValidationError("Invalid eventType");
+  }
+  return value;
+}
 
 function isCalendarScope(value: string): value is CalendarScope {
   return CALENDAR_SCOPES.includes(value as CalendarScope);
@@ -106,6 +123,7 @@ function parseCreateBody(body: unknown): Omit<
       typeof record.sendReminders === "boolean"
         ? record.sendReminders
         : undefined,
+    eventType: parseOptionalEventType(record.eventType),
   };
 }
 

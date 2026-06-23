@@ -8,7 +8,7 @@ import {
   formatNotificationTime,
   isSuccessNotification,
 } from "./constants";
-import { getNotificationDisplayMessage, getNotificationHref } from "@/lib/notifications/navigation";
+import { getNotificationDisplayMessage, getNotificationActionLabel, getNotificationHref } from "@/lib/notifications/navigation";
 import {
   isNotificationSoundEnabled,
   setNotificationSoundEnabled,
@@ -143,6 +143,10 @@ export function NotificationBell() {
             ) : (
               unreadNotifications.map((item) => {
                 const isSuccess = isSuccessNotification(item.type);
+                const actionLabel = getNotificationActionLabel(
+                  item.type,
+                  item.message,
+                );
                 return (
                 <div
                   key={item.id}
@@ -206,6 +210,22 @@ export function NotificationBell() {
                   >
                     {getNotificationDisplayMessage(item.type, item.message)}
                   </p>
+                  {actionLabel ? (
+                    <button
+                      type="button"
+                      className={styles.joinButton}
+                      onClick={() =>
+                        void handleOpenItem(
+                          item.id,
+                          item.is_read,
+                          item.type,
+                          item.message,
+                        )
+                      }
+                    >
+                      {actionLabel}
+                    </button>
+                  ) : null}
                 </div>
               );
               })

@@ -105,6 +105,22 @@ describe("validateCreateInput", () => {
       CalendarValidationError,
     );
   });
+
+  it("accepts video_meeting eventType", () => {
+    assert.doesNotThrow(() =>
+      validateCreateInput(createInput({ eventType: "video_meeting" })),
+    );
+  });
+
+  it("rejects invalid eventType", () => {
+    assert.throws(
+      () =>
+        validateCreateInput(
+          createInput({ eventType: "zoom" as CreateCalendarEventInput["eventType"] }),
+        ),
+      CalendarValidationError,
+    );
+  });
 });
 
 describe("validateUpdateInput", () => {

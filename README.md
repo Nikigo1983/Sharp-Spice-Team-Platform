@@ -67,3 +67,7 @@ npm run dev:clean
 ## Деплой
 
 Проект деплоится на Vercel. Переменные окружения — см. `.env.example`.
+
+### Видеовстречи календаря (LiveKit)
+
+Go-live checklist, настройка LiveKit Cloud и Vercel ENV: [`INTERNAL_VIDEO_MEETINGS_GO_LIVE.md`](INTERNAL_VIDEO_MEETINGS_GO_LIVE.md).

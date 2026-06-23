@@ -36,6 +36,28 @@
   gap: 0.5rem;
 }
 
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.typeBadge,
+.scopeBadge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.typeVideo {
+  background: rgba(99, 102, 241, 0.88);
+}
+
 .title {
   margin: 0;
   font-family: Sora, sans-serif;
@@ -51,17 +73,6 @@
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
-}
-
-.scopeBadge {
-  display: inline-flex;
-  width: fit-content;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-family: Inter, sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #f8fafc;
 }
 
 .scopePersonal {
@@ -96,6 +107,38 @@
   font-family: Inter, sans-serif;
   font-size: 0.9375rem;
   color: var(--white);
+}
+
+.roomName {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.statusBadge::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.statusOpen {
+  color: #22c55e;
+}
+
+.statusWaiting {
+  color: #94a3b8;
+}
+
+.statusClosed {
+  color: #64748b;
 }
 
 .description,

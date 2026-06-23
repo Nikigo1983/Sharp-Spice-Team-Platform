@@ -1,10 +1,19 @@
-import { CALENDAR_DEFAULT_SEND_REMINDERS, CALENDAR_TIMEZONE } from "./constants";
+import {
+  CALENDAR_DEFAULT_EVENT_TYPE,
+  CALENDAR_DEFAULT_SEND_REMINDERS,
+  CALENDAR_TIMEZONE,
+} from "./constants";
 import { formatDateKey } from "./range";
-import type { CalendarEvent, CalendarScope } from "./types";
+import type {
+  CalendarEvent,
+  CalendarEventType,
+  CalendarScope,
+} from "./types";
 import { formatTimeInZone, zonedDateTimeToUtc } from "./zoned-time";
 
 export type CalendarFormValues = {
   scope: CalendarScope;
+  eventType: CalendarEventType;
   title: string;
   description: string;
   startDate: string;
@@ -38,6 +47,7 @@ export function defaultFormValues(
   const dateKey = formatDateKey(anchorDate, timeZone);
   return {
     scope: "personal",
+    eventType: CALENDAR_DEFAULT_EVENT_TYPE,
     title: "",
     description: "",
     startDate: dateKey,
@@ -59,6 +69,7 @@ export function eventToFormValues(
 
   return {
     scope: event.scope,
+    eventType: event.eventType,
     title: event.title,
     description: event.description,
     startDate: formatDateKey(start, timeZone),
@@ -128,6 +139,10 @@ export function validateFormValues(
     return "Укажите название события";
   }
 
+  if (values.eventType === "video_meeting" && values.allDay) {
+    return "Видеовстреча не может быть событием на весь день";
+  }
+
   try {
     const { startAt, endAt } = formValuesToTimestamps(values, timeZone);
     if (endAt < startAt) {
@@ -148,6 +163,7 @@ export function formValuesToCreatePayload(
 
   return {
     scope: values.scope,
+    eventType: values.eventType,
     title: values.title.trim(),
     description: values.description.trim(),
     startAt,

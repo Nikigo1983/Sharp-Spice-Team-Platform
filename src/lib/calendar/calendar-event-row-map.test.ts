@@ -43,4 +43,15 @@ describe("mapCalendarEventToRow / mapCalendarEventRowToEvent", () => {
     });
     assert.equal(row.send_reminders, true);
   });
+
+  it("round-trips video_meeting event_type", () => {
+    const row = mapCalendarEventToRow({
+      ...sampleEvent,
+      eventType: "video_meeting",
+    });
+    assert.equal(row.event_type, "video_meeting");
+
+    const restored = mapCalendarEventRowToEvent(row);
+    assert.equal(restored.eventType, "video_meeting");
+  });
 });

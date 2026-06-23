@@ -92,6 +92,7 @@ function createMemoryStore(initial: CalendarEvent[] = []): CalendarStoreDeps {
         allDay: input.allDay ?? false,
         location: input.location?.trim() ?? "",
         sendReminders: input.sendReminders ?? true,
+        eventType: input.eventType ?? "general",
         createdByUserId: input.createdByUserId,
         createdByName: input.createdByName,
       });
@@ -251,6 +252,40 @@ describe("handleCreateCalendarEvent", () => {
     if ("status" in result) return;
     assert.equal(result.event.sendReminders, true);
   });
+
+  it("accepts video_meeting eventType on create", async () => {
+    const deps = createMemoryStore();
+    const result = await handleCreateCalendarEvent(
+      managerA,
+      {
+        scope: "company",
+        title: "Team sync",
+        startAt: "2026-06-20T08:00:00.000Z",
+        endAt: "2026-06-20T09:00:00.000Z",
+        eventType: "video_meeting",
+      },
+      deps,
+    );
+
+    assert.ok(!("status" in result));
+    if ("status" in result) return;
+    assert.equal(result.event.eventType, "video_meeting");
+  });
+
+  it("rejects invalid eventType on create", async () => {
+    const result = await handleCreateCalendarEvent(
+      managerA,
+      {
+        scope: "personal",
+        title: "Bad type",
+        startAt: "2026-06-20T08:00:00.000Z",
+        endAt: "2026-06-20T09:00:00.000Z",
+        eventType: "zoom",
+      },
+      createMemoryStore(),
+    );
+    assert.equal("status" in result && result.status, 422);
+  });
 });
 
 describe("handleGetCalendarEvent", () => {
@@ -349,6 +384,17 @@ describe("handleUpdateCalendarEvent", () => {
       managerA,
       "p1",
       { sendReminders: "yes" },
+      deps,
+    );
+    assert.equal("status" in result && result.status, 422);
+  });
+
+  it("rejects eventType on update", async () => {
+    const deps = createMemoryStore([event({ id: "p1" })]);
+    const result = await handleUpdateCalendarEvent(
+      managerA,
+      "p1",
+      { eventType: "video_meeting" },
       deps,
     );
     assert.equal("status" in result && result.status, 422);

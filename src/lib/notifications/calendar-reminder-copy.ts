@@ -1,4 +1,5 @@
 import { formatEventTimeRange } from "@/lib/calendar/format";
+import { isVideoMeeting } from "@/lib/calendar/meeting";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import type { ReminderOffsetMinutes } from "@/lib/calendar/constants";
 
@@ -23,22 +24,39 @@ export function formatCalendarReminderDisplayMessage(
 export function encodeCalendarReminderMessage(
   displayMessage: string,
   eventId: string,
+  options?: { isVideoMeeting?: boolean },
 ): string {
-  return `${displayMessage}${EVENT_ID_SEPARATOR}${eventId}`;
+  const flag = options?.isVideoMeeting ? "1" : "0";
+  return `${displayMessage}${EVENT_ID_SEPARATOR}${eventId}${EVENT_ID_SEPARATOR}${flag}`;
 }
 
 export function decodeCalendarReminderMessage(message: string): {
   display: string;
   eventId: string | null;
+  isVideoMeeting: boolean;
 } {
-  const separatorIndex = message.lastIndexOf(EVENT_ID_SEPARATOR);
-  if (separatorIndex === -1) {
-    return { display: message, eventId: null };
+  const parts = message.split(EVENT_ID_SEPARATOR);
+  if (parts.length === 1) {
+    return { display: message, eventId: null, isVideoMeeting: false };
   }
 
-  const display = message.slice(0, separatorIndex);
-  const eventId = message.slice(separatorIndex + 1);
-  return { display, eventId: eventId || null };
+  if (parts.length === 2) {
+    return {
+      display: parts[0],
+      eventId: parts[1] || null,
+      isVideoMeeting: false,
+    };
+  }
+
+  const flag = parts[parts.length - 1];
+  const eventId = parts[parts.length - 2];
+  const display = parts.slice(0, -2).join(EVENT_ID_SEPARATOR);
+
+  return {
+    display,
+    eventId: eventId || null,
+    isVideoMeeting: flag === "1",
+  };
 }
 
 export function buildCalendarReminderNotificationContent(
@@ -48,6 +66,8 @@ export function buildCalendarReminderNotificationContent(
   const displayMessage = formatCalendarReminderDisplayMessage(event);
   return {
     title: getCalendarReminderTitle(offsetMinutes),
-    message: encodeCalendarReminderMessage(displayMessage, event.id),
+    message: encodeCalendarReminderMessage(displayMessage, event.id, {
+      isVideoMeeting: isVideoMeeting(event),
+    }),
   };
 }

@@ -1,0 +1,117 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-hero);
+  color: var(--white);
+}
+
+.livekitRoom {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.room {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.96);
+}
+
+.backLink {
+  color: #cbd5e0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.backLink:hover {
+  color: var(--white);
+}
+
+.topMeta {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.eventTitle {
+  font-family: Sora, sans-serif;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventTime {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.shareBanner {
+  padding: 0.55rem 1rem;
+  background: rgba(99, 102, 241, 0.16);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  font-size: 0.92rem;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 0.75rem;
+}
+
+.grid {
+  height: 100%;
+}
+
+.tile {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #111827;
+}
+
+.loadingCard {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 2rem;
+  color: #cbd5e0;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #6366f1;
+  border-radius: 999px;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .topBar {
+    flex-wrap: wrap;
+  }
+}

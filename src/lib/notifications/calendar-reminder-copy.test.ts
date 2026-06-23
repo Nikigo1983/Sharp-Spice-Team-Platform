@@ -4,6 +4,7 @@ import type { CalendarEvent } from "@/lib/calendar/types";
 import {
   buildCalendarReminderNotificationContent,
   decodeCalendarReminderMessage,
+  encodeCalendarReminderMessage,
   formatCalendarReminderDisplayMessage,
   getCalendarReminderTitle,
 } from "./calendar-reminder-copy";
@@ -56,6 +57,38 @@ describe("calendar reminder notification copy", () => {
     assert.equal(title, "Напоминание: через 1 час");
     const decoded = decodeCalendarReminderMessage(message);
     assert.equal(decoded.eventId, "evt-42");
+    assert.equal(decoded.isVideoMeeting, false);
     assert.match(decoded.display, /Созвон с клиентом$/);
+  });
+
+  it("encodes video meeting flag for video events", () => {
+    const { message } = buildCalendarReminderNotificationContent(
+      event({ eventType: "video_meeting", title: "Синк команды" }),
+      60,
+    );
+
+    const decoded = decodeCalendarReminderMessage(message);
+    assert.equal(decoded.eventId, "evt-42");
+    assert.equal(decoded.isVideoMeeting, true);
+    assert.match(decoded.display, /Синк команды$/);
+  });
+
+  it("decodes legacy two-part messages without video flag", () => {
+    const legacy = "10:00 – 11:00 — Старый формат\u2063evt-old";
+    const decoded = decodeCalendarReminderMessage(legacy);
+    assert.equal(decoded.eventId, "evt-old");
+    assert.equal(decoded.isVideoMeeting, false);
+    assert.equal(decoded.display, "10:00 – 11:00 — Старый формат");
+  });
+
+  it("round-trips explicit video flag encoding", () => {
+    const message = encodeCalendarReminderMessage(
+      "10:00 – 11:00 — Синк",
+      "evt-video",
+      { isVideoMeeting: true },
+    );
+    const decoded = decodeCalendarReminderMessage(message);
+    assert.equal(decoded.eventId, "evt-video");
+    assert.equal(decoded.isVideoMeeting, true);
   });
 });

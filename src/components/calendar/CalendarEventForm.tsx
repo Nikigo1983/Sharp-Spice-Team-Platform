@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import type { CalendarFormValues } from "@/lib/calendar/form";
 import { validateFormValues } from "@/lib/calendar/form";
-import type { CalendarScope } from "@/lib/calendar/types";
+import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
+import type { CalendarEventType, CalendarScope } from "@/lib/calendar/types";
 import { CalendarDateSelect } from "./CalendarDateSelect";
 import { CalendarTimeSelect } from "./CalendarTimeSelect";
 import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
@@ -64,6 +65,17 @@ export function CalendarEventForm({
     setValues((current) => ({ ...current, scope }));
   }
 
+  function setEventType(eventType: CalendarEventType) {
+    if (mode !== "create") {
+      return;
+    }
+    setValues((current) => ({
+      ...current,
+      eventType,
+      allDay: eventType === "video_meeting" ? false : current.allDay,
+    }));
+  }
+
   return (
     <form className={styles.form} onSubmit={(submitEvent) => void handleSubmit(submitEvent)}>
       {mode === "create" ? (
@@ -112,6 +124,52 @@ export function CalendarEventForm({
         </div>
       )}
 
+      {mode === "create" ? (
+        <fieldset className={styles.formatFieldset}>
+          <legend className={styles.label}>Формат встречи</legend>
+          <div className={styles.formatSwitch}>
+            <button
+              type="button"
+              className={[
+                styles.formatButton,
+                values.eventType === "general" ? styles.formatGeneral : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-pressed={values.eventType === "general"}
+              onClick={() => setEventType("general")}
+            >
+              {CALENDAR_EVENT_TYPE_LABELS.general}
+            </button>
+            <button
+              type="button"
+              className={[
+                styles.formatButton,
+                values.eventType === "video_meeting" ? styles.formatVideo : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-pressed={values.eventType === "video_meeting"}
+              onClick={() => setEventType("video_meeting")}
+            >
+              {CALENDAR_EVENT_TYPE_LABELS.video_meeting}
+            </button>
+          </div>
+          {values.eventType === "video_meeting" ? (
+            <p className={styles.fieldHint}>
+              Комната создаётся на платформе. Ссылка для клиентов не генерируется.
+            </p>
+          ) : null}
+        </fieldset>
+      ) : values.eventType === "video_meeting" ? (
+        <div className={styles.readonlyScope}>
+          <span className={styles.label}>Формат</span>
+          <span className={[styles.formatBadge, styles.formatVideo].join(" ")}>
+            {CALENDAR_EVENT_TYPE_LABELS.video_meeting}
+          </span>
+        </div>
+      ) : null}
+
       <label className={styles.field}>
         <span className={styles.label}>Название *</span>
         <input
@@ -142,6 +200,7 @@ export function CalendarEventForm({
         <input
           type="checkbox"
           checked={values.allDay}
+          disabled={values.eventType === "video_meeting"}
           onChange={(changeEvent) =>
             setValues({ ...values, allDay: changeEvent.target.checked })
           }

@@ -1,6 +1,7 @@
-import { CALENDAR_SCOPES } from "./types";
+import { CALENDAR_EVENT_TYPES, CALENDAR_SCOPES } from "./types";
 import type {
   CalendarEvent,
+  CalendarEventType,
   CalendarScope,
   CreateCalendarEventInput,
   UpdateCalendarEventInput,
@@ -15,6 +16,19 @@ export class CalendarValidationError extends Error {
 
 function isCalendarScope(value: string): value is CalendarScope {
   return CALENDAR_SCOPES.includes(value as CalendarScope);
+}
+
+function isCalendarEventType(value: string): value is CalendarEventType {
+  return CALENDAR_EVENT_TYPES.includes(value as CalendarEventType);
+}
+
+function assertEventType(value: string | undefined): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!isCalendarEventType(value)) {
+    throw new CalendarValidationError("Invalid eventType");
+  }
 }
 
 function assertValidIsoTimestamp(value: string, field: string): void {
@@ -90,6 +104,7 @@ export function validateCreateInput(input: CreateCalendarEventInput): void {
     startAt: input.startAt,
     endAt: input.endAt,
   });
+  assertEventType(input.eventType);
   assertOptionalBoolean(input.sendReminders, "sendReminders");
 }
 

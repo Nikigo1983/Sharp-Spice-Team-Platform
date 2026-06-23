@@ -6,7 +6,7 @@ export const CALENDAR_SCOPES = ["personal", "company"] as const;
 
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
-export const CALENDAR_EVENT_TYPES = ["general"] as const;
+export const CALENDAR_EVENT_TYPES = ["general", "video_meeting"] as const;
 
 export type CalendarEventType = (typeof CALENDAR_EVENT_TYPES)[number];
 
@@ -74,6 +74,29 @@ export type InsertCalendarReminderDeliveryInput = {
   fireAt: string;
   notificationId?: string | null;
   eventUpdatedAt: string;
+};
+
+export const CALENDAR_MEETING_AUDIT_ACTIONS = ["joined", "left"] as const;
+
+export type CalendarMeetingAuditAction =
+  (typeof CALENDAR_MEETING_AUDIT_ACTIONS)[number];
+
+export type CalendarMeetingAudit = {
+  id: string;
+  eventId: string;
+  userId: string;
+  userName: string;
+  roomName: string;
+  action: CalendarMeetingAuditAction;
+  occurredAt: string;
+};
+
+export type InsertCalendarMeetingAuditInput = {
+  eventId: string;
+  userId: string;
+  userName: string;
+  roomName: string;
+  action: CalendarMeetingAuditAction;
 };
 
 export type ListCalendarEventsOptions = {

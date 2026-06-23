@@ -36,6 +36,7 @@ describe("defaultFormValues", () => {
   it("prefills anchor date and default times", () => {
     const values = defaultFormValues(new Date("2026-06-20T12:00:00.000Z"));
     assert.equal(values.scope, "personal");
+    assert.equal(values.eventType, "general");
     assert.equal(values.startDate, "2026-06-20");
     assert.equal(values.endDate, "2026-06-20");
     assert.equal(values.startTime, "10:00");
@@ -115,6 +116,31 @@ describe("formValuesToCreatePayload", () => {
 
     const payload = formValuesToCreatePayload(values);
     assert.equal(payload.sendReminders, false);
+  });
+
+  it("includes eventType in create payload", () => {
+    const values = defaultFormValues(new Date("2026-06-20T12:00:00.000Z"));
+    values.title = "Синк";
+    values.eventType = "video_meeting";
+
+    const payload = formValuesToCreatePayload(values);
+    assert.equal(payload.eventType, "video_meeting");
+  });
+
+  it("maps eventType from stored event", () => {
+    const values = eventToFormValues(event({ eventType: "video_meeting" }));
+    assert.equal(values.eventType, "video_meeting");
+  });
+
+  it("rejects video meeting with all-day flag", () => {
+    const values = defaultFormValues(new Date("2026-06-20T12:00:00.000Z"));
+    values.title = "Синк";
+    values.eventType = "video_meeting";
+    values.allDay = true;
+    assert.equal(
+      validateFormValues(values),
+      "Видеовстреча не может быть событием на весь день",
+    );
   });
 });
 

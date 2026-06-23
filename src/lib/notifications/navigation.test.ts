@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { encodeCalendarReminderMessage } from "./calendar-reminder-copy";
 import {
+  getNotificationActionLabel,
   getNotificationDisplayMessage,
   getNotificationHref,
   getNotificationSection,
@@ -26,6 +27,24 @@ describe("notification navigation", () => {
       getNotificationDisplayMessage("calendar_reminder", message),
       "10:00 – 11:00 — Созвон",
     );
+    assert.equal(getNotificationActionLabel("calendar_reminder", message), null);
+  });
+
+  it("routes video meeting reminders to meet page", () => {
+    const message = encodeCalendarReminderMessage(
+      "10:00 – 11:00 — Синк",
+      "evt-video",
+      { isVideoMeeting: true },
+    );
+
+    assert.equal(
+      getNotificationHref("calendar_reminder", message),
+      "/calendar/meet/evt-video",
+    );
+    assert.equal(
+      getNotificationActionLabel("calendar_reminder", message),
+      "Присоединиться",
+    );
   });
 
   it("falls back to calendar index when event id is missing", () => {
@@ -35,6 +54,10 @@ describe("notification navigation", () => {
   it("matches calendar pathname for toast suppression", () => {
     assert.equal(
       pathnameMatchesNotificationSection("/calendar", "calendar"),
+      true,
+    );
+    assert.equal(
+      pathnameMatchesNotificationSection("/calendar/meet/evt-1", "calendar"),
       true,
     );
     assert.equal(

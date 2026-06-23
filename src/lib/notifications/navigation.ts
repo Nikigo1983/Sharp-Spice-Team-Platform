@@ -62,7 +62,12 @@ export function getNotificationHref(
     case "consultation_assigned":
       return "/new-formgrid-clients";
     case "calendar_reminder": {
-      const { eventId } = decodeCalendarReminderMessage(message ?? "");
+      const { eventId, isVideoMeeting } = decodeCalendarReminderMessage(
+        message ?? "",
+      );
+      if (isVideoMeeting && eventId) {
+        return `/calendar/meet/${encodeURIComponent(eventId)}`;
+      }
       return eventId
         ? `/calendar?event=${encodeURIComponent(eventId)}`
         : "/calendar";
@@ -70,6 +75,18 @@ export function getNotificationHref(
     default:
       return null;
   }
+}
+
+export function getNotificationActionLabel(
+  type: NotificationType,
+  message?: string,
+): string | null {
+  if (type !== "calendar_reminder") {
+    return null;
+  }
+
+  const { isVideoMeeting } = decodeCalendarReminderMessage(message ?? "");
+  return isVideoMeeting ? "Присоединиться" : null;
 }
 
 export function pathnameMatchesNotificationSection(

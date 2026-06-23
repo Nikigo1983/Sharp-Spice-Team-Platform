@@ -2,11 +2,18 @@
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { MeetingJoinButton } from "@/components/meet/MeetingJoinButton";
 import type { SessionUser } from "@/lib/auth/types";
+import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import {
   formatEventTimeRange,
   formatScopeLabel,
 } from "@/lib/calendar/format";
+import {
+  formatMeetingStatusLabel,
+  getMeetingAccessPhase,
+} from "@/lib/calendar/meeting-client";
+import { getMeetingRoomName, isVideoMeeting } from "@/lib/calendar/meeting";
 import {
   canDeleteEvent,
   canEditEvent,
@@ -23,6 +30,17 @@ type CalendarEventModalProps = {
   onDelete: (event: CalendarEvent) => void;
 };
 
+function meetingStatusClass(phase: ReturnType<typeof getMeetingAccessPhase>): string {
+  switch (phase) {
+    case "open":
+      return styles.statusOpen;
+    case "waiting":
+      return styles.statusWaiting;
+    case "closed":
+      return styles.statusClosed;
+  }
+}
+
 export function CalendarEventModal({
   event,
   user,
@@ -35,6 +53,8 @@ export function CalendarEventModal({
   const canDelete = canDeleteEvent(user, event);
   const scopeClass =
     event.scope === "personal" ? styles.scopePersonal : styles.scopeCompany;
+  const videoMeeting = isVideoMeeting(event);
+  const meetingPhase = videoMeeting ? getMeetingAccessPhase(event) : null;
 
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="calendar-event-title">
@@ -42,9 +62,16 @@ export function CalendarEventModal({
       <Card className={styles.modal}>
         <header className={styles.header}>
           <div className={styles.headerMain}>
-            <span className={[styles.scopeBadge, scopeClass].join(" ")}>
-              {formatScopeLabel(event.scope)}
-            </span>
+            <div className={styles.badges}>
+              {videoMeeting ? (
+                <span className={[styles.typeBadge, styles.typeVideo].join(" ")}>
+                  {CALENDAR_EVENT_TYPE_LABELS.video_meeting}
+                </span>
+              ) : null}
+              <span className={[styles.scopeBadge, scopeClass].join(" ")}>
+                {formatScopeLabel(event.scope)}
+              </span>
+            </div>
             <h2 id="calendar-event-title" className={styles.title}>
               {event.title}
             </h2>
@@ -59,6 +86,29 @@ export function CalendarEventModal({
             <dt>Время</dt>
             <dd>{formatEventTimeRange(event, timeZone)}</dd>
           </div>
+          {videoMeeting ? (
+            <>
+              <div>
+                <dt>Комната</dt>
+                <dd className={styles.roomName}>{getMeetingRoomName(event.id)}</dd>
+              </div>
+              <div>
+                <dt>Статус</dt>
+                <dd>
+                  <span
+                    className={[
+                      styles.statusBadge,
+                      meetingPhase ? meetingStatusClass(meetingPhase) : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {meetingPhase ? formatMeetingStatusLabel(meetingPhase) : "—"}
+                  </span>
+                </dd>
+              </div>
+            </>
+          ) : null}
           {event.location ? (
             <div>
               <dt>Место</dt>
@@ -74,6 +124,10 @@ export function CalendarEventModal({
             <dd>{event.sendReminders ? "Включены" : "Выключены"}</dd>
           </div>
         </dl>
+
+        {videoMeeting ? (
+          <MeetingJoinButton event={event} timeZone={timeZone} />
+        ) : null}
 
         {event.description ? (
           <p className={styles.description}>{event.description}</p>

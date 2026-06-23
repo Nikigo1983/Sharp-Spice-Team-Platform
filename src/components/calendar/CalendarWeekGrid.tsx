@@ -37,6 +37,7 @@ function WeekEventBlock({
 }) {
   const { timeZone } = useCalendarTimeZone();
   const timeRange = formatEventTimeRange(layout.event, timeZone);
+  const isCompact = layout.heightRatio < 0.05;
   const scopeClass =
     layout.event.scope === "personal"
       ? styles.weekEventPersonal
@@ -45,19 +46,29 @@ function WeekEventBlock({
   return (
     <button
       type="button"
-      className={[styles.weekEvent, scopeClass].join(" ")}
+      className={[
+        styles.weekEvent,
+        scopeClass,
+        isCompact ? styles.weekEventCompact : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{
         top: `${layout.topRatio * 100}%`,
         height: `${layout.heightRatio * 100}%`,
       }}
       onClick={() => onEventClick?.(layout.event)}
-      title={layout.event.title}
+      title={`${layout.event.title} · ${timeRange}`}
       aria-label={`${layout.event.title}, ${timeRange}`}
     >
-      <span className={styles.weekEventTime}>
-        {timeRange}
-      </span>
-      <span className={styles.weekEventTitle}>{layout.event.title}</span>
+      {isCompact ? (
+        <span className={styles.weekEventTitle}>{layout.event.title}</span>
+      ) : (
+        <>
+          <span className={styles.weekEventTime}>{timeRange}</span>
+          <span className={styles.weekEventTitle}>{layout.event.title}</span>
+        </>
+      )}
     </button>
   );
 }
@@ -93,7 +104,7 @@ export function CalendarWeekGrid({
 
   const gridStyle = {
     ["--week-slot-count" as string]: String(SLOT_COUNT),
-    ["--week-slot-height" as string]: "1.5rem",
+    ["--week-slot-height" as string]: "2rem",
   };
 
   return (

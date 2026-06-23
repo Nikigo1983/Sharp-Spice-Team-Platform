@@ -150,14 +150,32 @@
   right: 0.2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.2rem 0.35rem;
+  justify-content: flex-start;
+  gap: 0.15rem;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.45rem;
   border: none;
-  border-radius: 6px;
+  border-left: 3px solid rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
   overflow: hidden;
   text-align: left;
   cursor: pointer;
   z-index: 1;
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.35);
+  box-sizing: border-box;
+}
+
+.weekEventCompact {
+  flex-direction: row;
+  align-items: center;
+  min-height: 2.125rem;
+  padding: 0.3rem 0.45rem;
+}
+
+.weekEventCompact .weekEventTitle {
+  font-size: 0.75rem;
+  line-height: 1.15;
+  -webkit-line-clamp: 1;
 }
 
 .weekEventPersonal {
@@ -175,16 +193,17 @@
 
 .weekEventTime {
   font-family: Inter, sans-serif;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  color: rgba(248, 250, 252, 0.92);
+  color: rgba(248, 250, 252, 0.95);
+  white-space: nowrap;
 }
 
 .weekEventTitle {
   font-family: Inter, sans-serif;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   color: #f8fafc;
   overflow: hidden;
   text-overflow: ellipsis;

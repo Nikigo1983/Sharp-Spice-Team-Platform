@@ -2,14 +2,9 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { canPreviewInline } from "@/lib/tasks/attachment-formats";
 import { readTaskAttachmentFile } from "@/lib/tasks/attachment-storage";
-import { getTaskForUser, removeTaskAttachment } from "@/lib/tasks/store";
-import type { Task } from "@/lib/tasks/types";
+import { findTaskAttachment, getTaskForUser, removeTaskAttachment } from "@/lib/tasks/store";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
-
-function findAttachment(task: Task, attachmentId: string) {
-  return task.attachments.find((item) => item.id === attachmentId) ?? null;
-}
 
 export async function GET(_request: Request, context: RouteContext) {
   const session = await getSession();
@@ -23,7 +18,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const attachment = findAttachment(task, attachmentId);
+  const attachment = findTaskAttachment(task, attachmentId);
   if (!attachment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -62,7 +57,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   const task = await removeTaskAttachment(id, attachmentId, session);
   if (!task) {
-    const attachment = findAttachment(existing, attachmentId);
+    const attachment = findTaskAttachment(existing, attachmentId);
     if (!attachment) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

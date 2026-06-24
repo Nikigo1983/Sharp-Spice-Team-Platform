@@ -85,6 +85,22 @@ export function canManageTaskAttachments(task: Task, user: SessionUser): boolean
   );
 }
 
+/** Исполнитель может оставить отчёт о проделанной работе. */
+export function canAddTaskProgressReport(task: Task, user: SessionUser): boolean {
+  if (task.status === "completed") return false;
+  return isTaskAssignee(task, user.id);
+}
+
+/** Удалить свой отчёт может автор; автор задачи или владелец — любой. */
+export function canDeleteTaskProgressReport(
+  task: Task,
+  report: { authorUserId: string },
+  user: SessionUser,
+): boolean {
+  if (user.role === "owner" || isTaskCreator(task, user)) return true;
+  return report.authorUserId === user.id;
+}
+
 /** Удалить вложение может автор задачи, владелец или тот, кто его загрузил. */
 export function canDeleteTaskAttachment(
   task: Task,

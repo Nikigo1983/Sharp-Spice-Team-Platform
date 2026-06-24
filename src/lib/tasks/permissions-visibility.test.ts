@@ -39,6 +39,7 @@ function task(overrides: Partial<Task> = {}): Task {
     updatedAt: "2026-01-01T00:00:00.000Z",
     reviewHistory: [],
     attachments: [],
+    progressReports: [],
     ...overrides,
   };
 }

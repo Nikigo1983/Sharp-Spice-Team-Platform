@@ -1,0 +1,261 @@
+.section {
+  margin-bottom: 1rem;
+  padding: 0.875rem;
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.35);
+  border: 1px solid var(--border-soft);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.count {
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-400);
+}
+
+.textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-600);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--gray-100);
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent-burgundy);
+}
+
+.fileRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.uploadBtn,
+.submitBtn {
+  border: 1px solid var(--gray-600);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--gray-200);
+  border-radius: 8px;
+  padding: 0.375rem 0.75rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.uploadBtn:hover:not(:disabled),
+.submitBtn:hover:not(:disabled) {
+  border-color: var(--accent-burgundy);
+  color: var(--white);
+}
+
+.uploadBtn:disabled,
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submitBtn {
+  align-self: flex-start;
+  background: rgba(136, 19, 55, 0.35);
+  border-color: rgba(190, 18, 60, 0.45);
+}
+
+.pendingFile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-400);
+}
+
+.clearFileBtn {
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.clearFileBtn:hover:not(:disabled) {
+  color: #fca5a5;
+}
+
+.hint {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--gray-500);
+}
+
+.empty {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  font-style: italic;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.item {
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border-soft);
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.author {
+  font-family: Sora, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-200);
+}
+
+.time {
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.deleteBtn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.125rem 0.375rem;
+}
+
+.deleteBtn:hover {
+  color: #fca5a5;
+}
+
+.comment {
+  margin: 0 0 0.5rem;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--gray-200);
+  white-space: pre-wrap;
+}
+
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  text-decoration: none;
+  color: inherit;
+}
+
+.fileLink:hover .fileName {
+  color: var(--white);
+}
+
+.fileIcon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.fileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.fileName {
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-200);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSub {
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.error {
+  margin: 0.5rem 0 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: #fca5a5;
+}

@@ -7,8 +7,10 @@ import type { SessionUser } from "@/lib/auth/types";
 import { normalizeAssignees } from "./assignees";
 import { isTaskOverdue } from "./overdue";
 import {
+  canAddTaskProgressReport,
   canDeleteTask,
   canDeleteTaskAttachment,
+  canDeleteTaskProgressReport,
   canDirectComplete,
   canEditTask,
   canManageTaskAttachments,
@@ -24,6 +26,7 @@ import type {
   Task,
   TaskAssignee,
   TaskAttachment,
+  TaskProgressReport,
   TaskReviewEvent,
   TaskStats,
   TaskStatus,
@@ -32,6 +35,8 @@ import type {
 import {
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_ATTACHMENTS_PER_TASK,
+  MAX_TASK_PROGRESS_REPORTS,
+  MAX_TASK_PROGRESS_REPORT_COMMENT_LENGTH,
   normalizeTaskAttachmentContentType,
 } from "./attachment-formats";
 import {
@@ -79,6 +84,38 @@ function normalizeAttachments(raw: unknown): TaskAttachment[] {
   return attachments;
 }
 
+function normalizeProgressReports(raw: unknown): TaskProgressReport[] {
+  if (!Array.isArray(raw)) return [];
+  const reports: TaskProgressReport[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const report = item as Partial<TaskProgressReport>;
+    if (
+      !report.id ||
+      !report.authorUserId ||
+      !report.authorName ||
+      typeof report.comment !== "string" ||
+      !report.createdAt
+    ) {
+      continue;
+    }
+    let attachment: TaskAttachment | null = null;
+    if (report.attachment && typeof report.attachment === "object") {
+      const normalized = normalizeAttachments([report.attachment]);
+      attachment = normalized[0] ?? null;
+    }
+    reports.push({
+      id: report.id,
+      authorUserId: report.authorUserId,
+      authorName: report.authorName,
+      comment: report.comment,
+      attachment,
+      createdAt: report.createdAt,
+    });
+  }
+  return reports;
+}
+
 function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
   if (!Array.isArray(raw)) return [];
   const events: TaskReviewEvent[] = [];
@@ -112,7 +149,28 @@ function normalizeTask(task: Task): Task {
     assignees: normalizeAssignees(task.assignees),
     reviewHistory: normalizeReviewHistory(task.reviewHistory),
     attachments: normalizeAttachments(task.attachments),
+    progressReports: normalizeProgressReports(task.progressReports),
   };
+}
+
+export function findTaskAttachment(
+  task: Task,
+  attachmentId: string,
+): TaskAttachment | null {
+  const direct = task.attachments.find((item) => item.id === attachmentId);
+  if (direct) return direct;
+  for (const report of task.progressReports) {
+    if (report.attachment?.id === attachmentId) return report.attachment;
+  }
+  return null;
+}
+
+function collectTaskAttachmentFiles(task: Task): TaskAttachment[] {
+  const files = [...task.attachments];
+  for (const report of task.progressReports) {
+    if (report.attachment) files.push(report.attachment);
+  }
+  return files;
 }
 
 async function readStore(): Promise<TaskStore> {
@@ -179,8 +237,10 @@ async function persistTask(updated: Task): Promise<Task | null> {
 }
 
 export {
+  canAddTaskProgressReport,
   canChangeTaskStatus,
   canDeleteTask,
+  canDeleteTaskProgressReport,
   canEditTask,
   canReviewTask,
   canSubmitForApproval,
@@ -260,6 +320,7 @@ export async function createTask(
     updatedAt: now,
     reviewHistory: [],
     attachments: [],
+    progressReports: [],
   };
 
   store.tasks.unshift(task);
@@ -502,7 +563,7 @@ export async function deleteTask(
 
   if (!canDeleteTask(task, user)) return false;
 
-  for (const attachment of task.attachments) {
+  for (const attachment of collectTaskAttachmentFiles(task)) {
     await deleteTaskAttachmentFile(attachment.id, attachment.fileName).catch(
       () => undefined,
     );
@@ -614,6 +675,112 @@ export async function removeTaskAttachment(
   const updated: Task = {
     ...current,
     attachments: current.attachments.filter((item) => item.id !== attachmentId),
+    updatedAt: now,
+  };
+
+  return persistTask(updated);
+}
+
+export async function addTaskProgressReport(
+  taskId: string,
+  input: { comment: string; file?: { buffer: Buffer; fileName: string; contentType: string; size: number } },
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = await getTask(taskId);
+  if (!current) return null;
+  if (!canAddTaskProgressReport(current, user)) return null;
+
+  const comment = input.comment.trim();
+  if (!comment) {
+    throw new Error("Comment required");
+  }
+  if (comment.length > MAX_TASK_PROGRESS_REPORT_COMMENT_LENGTH) {
+    throw new Error("Comment too long");
+  }
+  if (current.progressReports.length >= MAX_TASK_PROGRESS_REPORTS) {
+    throw new Error("Too many reports");
+  }
+
+  let attachment: TaskAttachment | null = null;
+  if (input.file) {
+    if (input.file.size > MAX_TASK_ATTACHMENT_BYTES) {
+      throw new Error("File too large");
+    }
+    const contentType = normalizeTaskAttachmentContentType(
+      input.file.contentType,
+      input.file.fileName,
+    );
+    if (!contentType) {
+      throw new Error("Unsupported file type");
+    }
+
+    const attachmentId = randomUUID();
+    const now = new Date().toISOString();
+    attachment = {
+      id: attachmentId,
+      fileName: input.file.fileName.trim() || "file",
+      contentType,
+      size: input.file.size,
+      uploadedByUserId: user.id,
+      uploadedByName: user.name,
+      uploadedAt: now,
+    };
+
+    try {
+      await saveTaskAttachmentFile(
+        attachment.id,
+        attachment.fileName,
+        input.file.buffer,
+        contentType,
+      );
+    } catch (error) {
+      console.error("[tasks] progress report attachment save", error);
+      throw new Error("Failed to save attachment");
+    }
+  }
+
+  const now = new Date().toISOString();
+  const report: TaskProgressReport = {
+    id: randomUUID(),
+    authorUserId: user.id,
+    authorName: user.name,
+    comment,
+    attachment,
+    createdAt: now,
+  };
+
+  const updated: Task = {
+    ...current,
+    progressReports: [...current.progressReports, report],
+    updatedAt: now,
+  };
+
+  return persistTask(updated);
+}
+
+export async function removeTaskProgressReport(
+  taskId: string,
+  reportId: string,
+  user: SessionUser,
+): Promise<Task | null> {
+  const current = await getTask(taskId);
+  if (!current) return null;
+
+  const report = current.progressReports.find((item) => item.id === reportId);
+  if (!report) return null;
+  if (!canDeleteTaskProgressReport(current, report, user)) return null;
+
+  if (report.attachment) {
+    await deleteTaskAttachmentFile(
+      report.attachment.id,
+      report.attachment.fileName,
+    ).catch(() => undefined);
+  }
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...current,
+    progressReports: current.progressReports.filter((item) => item.id !== reportId),
     updatedAt: now,
   };
 

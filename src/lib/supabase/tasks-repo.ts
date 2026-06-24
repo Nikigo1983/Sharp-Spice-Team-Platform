@@ -2,7 +2,7 @@ import "server-only";
 
 import { getSupabaseAdmin } from "./server";
 import { normalizeAssignees } from "@/lib/tasks/assignees";
-import type { Task, TaskAttachment, TaskReviewEvent, TaskStatus } from "@/lib/tasks/types";
+import type { Task, TaskAttachment, TaskProgressReport, TaskReviewEvent, TaskStatus } from "@/lib/tasks/types";
 
 type TaskRow = {
   id: string;
@@ -18,6 +18,7 @@ type TaskRow = {
   updated_at: string;
   review_history?: unknown;
   attachments?: unknown;
+  progress_reports?: unknown;
 };
 
 function normalizeReviewHistory(raw: unknown): TaskReviewEvent[] {
@@ -77,6 +78,38 @@ function normalizeAttachments(raw: unknown): TaskAttachment[] {
   return attachments;
 }
 
+function normalizeProgressReports(raw: unknown): TaskProgressReport[] {
+  if (!Array.isArray(raw)) return [];
+  const reports: TaskProgressReport[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const report = item as Partial<TaskProgressReport>;
+    if (
+      !report.id ||
+      !report.authorUserId ||
+      !report.authorName ||
+      typeof report.comment !== "string" ||
+      !report.createdAt
+    ) {
+      continue;
+    }
+    let attachment: TaskAttachment | null = null;
+    if (report.attachment && typeof report.attachment === "object") {
+      const normalized = normalizeAttachments([report.attachment]);
+      attachment = normalized[0] ?? null;
+    }
+    reports.push({
+      id: report.id,
+      authorUserId: report.authorUserId,
+      authorName: report.authorName,
+      comment: report.comment,
+      attachment,
+      createdAt: report.createdAt,
+    });
+  }
+  return reports;
+}
+
 function mapRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -92,6 +125,7 @@ function mapRow(row: TaskRow): Task {
     updatedAt: row.updated_at,
     reviewHistory: normalizeReviewHistory(row.review_history),
     attachments: normalizeAttachments(row.attachments),
+    progressReports: normalizeProgressReports(row.progress_reports),
   };
 }
 
@@ -110,6 +144,7 @@ function mapTask(task: Task): TaskRow {
     updated_at: task.updatedAt,
     review_history: task.reviewHistory,
     attachments: task.attachments,
+    progress_reports: task.progressReports,
   };
 }
 

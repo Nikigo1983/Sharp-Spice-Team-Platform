@@ -24,6 +24,7 @@ import {
 } from "@/lib/tasks/workflow";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskAttachmentsSection } from "./TaskAttachments";
+import { TaskProgressReportsSection } from "./TaskProgressReports";
 import styles from "./TaskDetailModal.module.css";
 
 type TaskDetailModalProps = {
@@ -150,6 +151,12 @@ export function TaskDetailModal({
         )}
 
         <TaskAttachmentsSection
+          task={task}
+          user={user}
+          onTaskUpdated={onTaskUpdated}
+        />
+
+        <TaskProgressReportsSection
           task={task}
           user={user}
           onTaskUpdated={onTaskUpdated}

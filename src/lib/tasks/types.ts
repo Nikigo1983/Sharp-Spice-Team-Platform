@@ -42,6 +42,15 @@ export type TaskAttachment = {
   uploadedAt: string;
 };
 
+export type TaskProgressReport = {
+  id: string;
+  authorUserId: string;
+  authorName: string;
+  comment: string;
+  attachment: TaskAttachment | null;
+  createdAt: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -56,6 +65,7 @@ export type Task = {
   updatedAt: string;
   reviewHistory: TaskReviewEvent[];
   attachments: TaskAttachment[];
+  progressReports: TaskProgressReport[];
 };
 
 export type TaskStats = {

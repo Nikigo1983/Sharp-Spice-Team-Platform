@@ -21,11 +21,11 @@ export const REMINDER_OFFSETS_MINUTES = [1440, 60] as const;
 
 export type ReminderOffsetMinutes = (typeof REMINDER_OFFSETS_MINUTES)[number];
 
-/** Vercel cron interval — keep in sync with vercel.json (PR #3). */
-export const REMINDER_CRON_INTERVAL_MS = 5 * 60 * 1000;
+/** GitHub Actions cron interval in practice (often 1–2 h); keep forward window generous. */
+export const REMINDER_CRON_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
-/** How late a cron tick may still deliver a reminder. */
-export const REMINDER_GRACE_WINDOW_MS = 10 * 60 * 1000;
+/** How late a cron tick may still deliver on schedule (ideal fire time). */
+export const REMINDER_GRACE_WINDOW_MS = 6 * 60 * 60 * 1000;
 
-/** Upper bound of the fire window (matches cron interval). */
+/** Upper bound of the fire window — how far ahead we pre-deliver before ideal fire time. */
 export const REMINDER_CRON_WINDOW_MS = REMINDER_CRON_INTERVAL_MS;

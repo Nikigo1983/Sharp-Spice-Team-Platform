@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import {
+  REMINDER_CRON_WINDOW_MS,
+  REMINDER_GRACE_WINDOW_MS,
+} from "./constants";
 import type { CalendarEvent } from "./types";
 import {
   computeEffectiveStartMs,
@@ -11,8 +15,8 @@ import {
   resolveReminderRecipientIds,
 } from "./reminders";
 
-const GRACE_MS = 10 * 60 * 1000;
-const CRON_MS = 5 * 60 * 1000;
+const GRACE_MS = REMINDER_GRACE_WINDOW_MS;
+const CRON_MS = REMINDER_CRON_WINDOW_MS;
 
 function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
   return {
@@ -127,14 +131,15 @@ describe("getReminderDeliveryCandidate", () => {
     );
   });
 
-  it("skips 24h offset when event is less than 24h away", () => {
+  it("skips 24h offset when event is less than 24h away and created after fire time", () => {
     const startAt = "2026-06-25T08:00:00.000Z";
     const nowMs = Date.parse("2026-06-25T06:00:00.000Z");
     assert.equal(
-      getReminderDeliveryCandidate(event({ startAt }), 1440, nowMs, {
-        graceWindowMs: GRACE_MS,
-        cronWindowMs: CRON_MS,
-      }),
+      getReminderDeliveryCandidate(
+        event({ startAt, createdAt: "2026-06-25T04:00:00.000Z" }),
+        1440,
+        nowMs,
+      ),
       "fire_target_too_late",
     );
   });
@@ -142,15 +147,73 @@ describe("getReminderDeliveryCandidate", () => {
   it("accepts 1h offset inside fire window", () => {
     const startAt = "2026-06-25T08:00:00.000Z";
     const nowMs = Date.parse("2026-06-25T07:00:00.000Z");
-    const candidate = getReminderDeliveryCandidate(event({ startAt }), 60, nowMs, {
-      graceWindowMs: GRACE_MS,
-      cronWindowMs: CRON_MS,
-    });
+    const candidate = getReminderDeliveryCandidate(event({ startAt }), 60, nowMs);
     assert.notEqual(typeof candidate, "string");
     if (typeof candidate !== "string") {
       assert.equal(candidate.offsetMinutes, 60);
       assert.equal(candidate.fireTargetMs, Date.parse("2026-06-25T07:00:00.000Z"));
     }
+  });
+
+  it("catch-up delivers 1h reminder after a late cron tick", () => {
+    const startAt = "2026-06-23T16:00:00.000Z";
+    const nowMs = Date.parse("2026-06-23T15:28:00.000Z");
+    const candidate = getReminderDeliveryCandidate(
+      event({
+        startAt,
+        createdAt: "2026-06-23T13:44:00.000Z",
+      }),
+      60,
+      nowMs,
+    );
+    assert.notEqual(typeof candidate, "string");
+    if (typeof candidate !== "string") {
+      assert.equal(candidate.offsetMinutes, 60);
+    }
+  });
+
+  it("catch-up delivers 1h reminder when event was created after ideal fire time", () => {
+    const startAt = "2026-06-23T16:00:00.000Z";
+    const nowMs = Date.parse("2026-06-23T15:30:00.000Z");
+    const candidate = getReminderDeliveryCandidate(
+      event({
+        startAt,
+        createdAt: "2026-06-23T15:13:00.000Z",
+      }),
+      60,
+      nowMs,
+    );
+    assert.notEqual(typeof candidate, "string");
+  });
+
+  it("skips 24h reminder when event was created after the ideal fire time", () => {
+    const startAt = "2026-06-23T16:00:00.000Z";
+    const nowMs = Date.parse("2026-06-23T15:28:00.000Z");
+    assert.equal(
+      getReminderDeliveryCandidate(
+        event({
+          startAt,
+          createdAt: "2026-06-23T13:44:00.000Z",
+        }),
+        1440,
+        nowMs,
+      ),
+      "fire_target_too_late",
+    );
+  });
+
+  it("catch-up delivers 24h reminder when cron missed by less than grace window", () => {
+    const startAt = "2026-06-25T08:00:00.000Z";
+    const nowMs = Date.parse("2026-06-24T10:00:00.000Z");
+    const candidate = getReminderDeliveryCandidate(
+      event({
+        startAt,
+        createdAt: "2026-06-20T10:00:00.000Z",
+      }),
+      1440,
+      nowMs,
+    );
+    assert.notEqual(typeof candidate, "string");
   });
 });
 
@@ -199,10 +262,7 @@ describe("listReminderOffsetsForEvent", () => {
   it("returns only offsets inside the fire window", () => {
     const startAt = "2026-06-25T08:00:00.000Z";
     const nowMs = Date.parse("2026-06-25T07:00:00.000Z");
-    const offsets = listReminderOffsetsForEvent(event({ startAt }), nowMs, {
-      graceWindowMs: GRACE_MS,
-      cronWindowMs: CRON_MS,
-    });
+    const offsets = listReminderOffsetsForEvent(event({ startAt }), nowMs);
     assert.deepEqual(offsets.map((item) => item.offsetMinutes), [60]);
   });
 });
@@ -210,10 +270,7 @@ describe("listReminderOffsetsForEvent", () => {
 describe("getEventScanRangeIso", () => {
   it("covers both reminder offsets", () => {
     const nowMs = Date.parse("2026-06-25T07:00:00.000Z");
-    const range = getEventScanRangeIso(nowMs, {
-      graceWindowMs: GRACE_MS,
-      cronWindowMs: CRON_MS,
-    });
+    const range = getEventScanRangeIso(nowMs);
     assert.ok(range.from < range.to);
     assert.ok(range.from <= new Date(nowMs - GRACE_MS + 60 * 60_000).toISOString());
     assert.ok(range.to >= new Date(nowMs + CRON_MS + 1440 * 60_000).toISOString());

@@ -19,6 +19,7 @@ describe("calendar reminder constants", () => {
 
   it("aligns cron window with interval", () => {
     assert.equal(REMINDER_CRON_WINDOW_MS, REMINDER_CRON_INTERVAL_MS);
-    assert.equal(REMINDER_GRACE_WINDOW_MS, 10 * 60 * 1000);
+    assert.equal(REMINDER_GRACE_WINDOW_MS, 6 * 60 * 60 * 1000);
+    assert.equal(REMINDER_CRON_INTERVAL_MS, 3 * 60 * 60 * 1000);
   });
 });

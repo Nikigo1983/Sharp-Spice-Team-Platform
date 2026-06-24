@@ -68,12 +68,57 @@ export function getReminderDeliveryCandidate(
     return "event_started";
   }
 
+  const graceWindowMs = opts.graceWindowMs ?? REMINDER_GRACE_WINDOW_MS;
+  const cronWindowMs = opts.cronWindowMs ?? REMINDER_CRON_WINDOW_MS;
   const fireTargetMs = computeFireTargetMs(effectiveStartMs, offsetMinutes);
-  if (fireTargetMs > nowMs + (opts.cronWindowMs ?? REMINDER_CRON_WINDOW_MS)) {
+
+  if (isFireTargetInWindow(fireTargetMs, nowMs, { graceWindowMs, cronWindowMs })) {
+    return { offsetMinutes, effectiveStartMs, fireTargetMs };
+  }
+
+  const catchUp = getCatchUpReminderCandidate(
+    event,
+    offsetMinutes,
+    nowMs,
+    effectiveStartMs,
+    fireTargetMs,
+    graceWindowMs,
+  );
+  if (catchUp) {
+    return catchUp;
+  }
+
+  if (fireTargetMs > nowMs + cronWindowMs) {
     return "fire_target_too_early";
   }
-  if (fireTargetMs < nowMs - (opts.graceWindowMs ?? REMINDER_GRACE_WINDOW_MS)) {
-    return "fire_target_too_late";
+  return "fire_target_too_late";
+}
+
+function getCatchUpReminderCandidate(
+  event: CalendarEvent,
+  offsetMinutes: ReminderOffsetMinutes,
+  nowMs: number,
+  effectiveStartMs: number,
+  fireTargetMs: number,
+  graceWindowMs: number,
+): ReminderDeliveryCandidate | null {
+  if (fireTargetMs > nowMs || nowMs >= effectiveStartMs) {
+    return null;
+  }
+
+  if (offsetMinutes === 60) {
+    return { offsetMinutes, effectiveStartMs, fireTargetMs };
+  }
+
+  const eventCreatedMs = Date.parse(event.createdAt);
+  if (Number.isNaN(eventCreatedMs)) {
+    return null;
+  }
+  if (fireTargetMs < eventCreatedMs) {
+    return null;
+  }
+  if (nowMs - fireTargetMs > graceWindowMs) {
+    return null;
   }
 
   return { offsetMinutes, effectiveStartMs, fireTargetMs };

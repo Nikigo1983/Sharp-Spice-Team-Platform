@@ -100,29 +100,29 @@ export function TaskAttachmentsSection({
     <section className={styles.section}>
       <div className={styles.header}>
         <h3 className={styles.title}>Файлы</h3>
-        {canUpload ? (
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept={TASK_ATTACHMENT_ACCEPT}
-              className={styles.hiddenInput}
-              onChange={(e) => void handleUpload(e.target.files)}
-            />
-            <button
-              type="button"
-              className={styles.uploadBtn}
-              disabled={uploading}
-              onClick={() => inputRef.current?.click()}
-            >
-              {uploading ? "Загрузка…" : "+ Прикрепить"}
-            </button>
-          </>
-        ) : null}
       </div>
 
-      {canUpload ? <p className={styles.hint}>{TASK_ATTACHMENT_HINT}</p> : null}
+      {canUpload ? (
+        <div className={styles.uploadRow}>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={TASK_ATTACHMENT_ACCEPT}
+            className={styles.hiddenInput}
+            onChange={(e) => void handleUpload(e.target.files)}
+          />
+          <button
+            type="button"
+            className={styles.uploadBtn}
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? "Загрузка…" : "+ Прикрепить"}
+          </button>
+          <p className={styles.hint}>{TASK_ATTACHMENT_HINT}</p>
+        </div>
+      ) : null}
 
       {task.attachments.length === 0 ? (
         <p className={styles.empty}>Файлы не прикреплены.</p>

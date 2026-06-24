@@ -1,13 +1,13 @@
 import "server-only";
 
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-import type { WorkspaceChatSession } from "@/lib/ai/workspace-chat-types";
 import { parseFlexibleDate } from "@/lib/analytics/dates";
 import { countFormgridRowsSince } from "@/lib/google-sheets/formgrid-dates";
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
 import { listAllClients } from "@/lib/google-sheets/service";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  AI_REQUEST_STATS_DAYS,
+  countAiUserMessagesLastDaysForDashboard,
+} from "./ai-request-stats";
 
 export type DashboardStats = {
   clientsTotal: number;
@@ -59,73 +59,6 @@ async function countFormgridLeadsLastDays(
   }
 }
 
-async function countAiUserMessagesLastDays(days: number): Promise<number> {
-  const since = daysAgo(days);
-
-  if (isSupabaseConfigured()) {
-    try {
-      const { getSupabaseAdmin } = await import("@/lib/supabase/server");
-      const { data, error } = await getSupabaseAdmin()
-        .from("ai_workspace_chats")
-        .select("messages, updated_at");
-
-      if (error) throw error;
-
-      let total = 0;
-      for (const row of data ?? []) {
-        const updatedAt = new Date(String(row.updated_at));
-        if (Number.isNaN(updatedAt.getTime()) || updatedAt < since) continue;
-        const messages = Array.isArray(row.messages) ? row.messages : [];
-        for (const message of messages) {
-          if (
-            message &&
-            typeof message === "object" &&
-            "role" in message &&
-            message.role === "user" &&
-            "content" in message &&
-            typeof message.content === "string"
-          ) {
-            total += 1;
-          }
-        }
-      }
-      return total;
-    } catch (error) {
-      console.error("[dashboard] supabase ai count", error);
-      return 0;
-    }
-  }
-
-  const dir = path.join(process.cwd(), ".data", "ai-workspace-chats");
-  let files: string[];
-  try {
-    files = await readdir(dir);
-  } catch {
-    return 0;
-  }
-
-  let total = 0;
-
-  for (const file of files) {
-    if (!file.endsWith(".json")) continue;
-    try {
-      const raw = await readFile(path.join(dir, file), "utf8");
-      const data = JSON.parse(raw) as { sessions?: WorkspaceChatSession[] };
-      const sessions = data.sessions ?? [];
-
-      for (const session of sessions) {
-        const updated = parseFlexibleDate(session.updatedAt);
-        if (!updated || !isOnOrAfter(updated, since)) continue;
-        total += session.messages.filter((m) => m.role === "user").length;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return total;
-}
-
 function countConsultationsThisWeek(
   clients: Awaited<ReturnType<typeof listAllClients>>["items"],
 ): number {
@@ -154,7 +87,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     await Promise.all([
       listAllClients(),
       countFormgridLeadsLastDays(7),
-      countAiUserMessagesLastDays(30),
+      countAiUserMessagesLastDaysForDashboard(AI_REQUEST_STATS_DAYS),
     ]);
 
   return {

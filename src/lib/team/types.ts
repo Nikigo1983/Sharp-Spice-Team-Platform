@@ -7,4 +7,5 @@ export type TeamMember = {
   role: UserRole;
   isOnline?: boolean;
   lastActiveAt?: string | null;
+  aiRequestsThisMonth?: number;
 };

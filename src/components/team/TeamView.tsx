@@ -121,6 +121,13 @@ export function TeamView({ user }: TeamViewProps) {
                       ) : null}
                     </p>
                     <p className={styles.meta}>{member.email}</p>
+                    <p className={styles.stats}>
+                      AI-запросы:{" "}
+                      <span className={styles.statValue}>
+                        {member.aiRequestsThisMonth ?? 0}
+                      </span>{" "}
+                      за месяц
+                    </p>
                     <span className={styles.role}>
                       {ROLE_LABELS[member.role]}
                     </span>

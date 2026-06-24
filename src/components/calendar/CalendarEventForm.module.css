@@ -1,7 +1,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .field,
@@ -11,10 +11,28 @@
   gap: 0.375rem;
 }
 
-.scopeFieldset {
+.scopeFieldset,
+.formatFieldset,
+.inviteFieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
   border: none;
+}
+
+.scopeFieldset .label,
+.formatFieldset .label,
+.inviteFieldset .label {
+  margin: 0 0 0.25rem;
+  padding: 0;
+}
+
+.scopeSwitch,
+.formatSwitch,
+.inviteSwitch {
+  margin-top: 0.25rem;
 }
 
 .label {
@@ -77,12 +95,6 @@
 
 .dateTimeGrid .field {
   gap: 0.5rem;
-}
-
-.formatFieldset {
-  margin: 0;
-  padding: 0;
-  border: none;
 }
 
 .formatSwitch {
@@ -207,12 +219,6 @@
   font-size: 0.8125rem;
   line-height: 1.45;
   color: #94a3b8;
-}
-
-.inviteFieldset {
-  margin: 0;
-  padding: 0;
-  border: none;
 }
 
 .inviteSwitch {

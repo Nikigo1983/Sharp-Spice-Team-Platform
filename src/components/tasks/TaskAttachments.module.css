@@ -1,9 +1,11 @@
 .section {
   margin-bottom: 1rem;
-  padding: 0.875rem;
+  padding: 0.875rem 0.875rem 1.125rem;
   border-radius: 10px;
   background: rgba(15, 20, 28, 0.35);
   border: 1px solid var(--border-soft);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .header {

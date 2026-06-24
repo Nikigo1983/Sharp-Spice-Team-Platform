@@ -1,16 +1,18 @@
 .section {
   margin-bottom: 1rem;
-  padding: 0.875rem;
+  padding: 0.875rem 0.875rem 1.125rem;
   border-radius: 10px;
   background: rgba(15, 20, 28, 0.35);
   border: 1px solid var(--border-soft);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.875rem;
 }
 
 .title {
@@ -33,16 +35,17 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  gap: 0.875rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--border-soft);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .label {
@@ -52,7 +55,10 @@
 }
 
 .textarea {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   resize: vertical;
   min-height: 4.5rem;
   padding: 0.625rem 0.75rem;
@@ -74,7 +80,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  margin-top: 0.125rem;
 }
 
 .hiddenInput {
@@ -87,7 +94,7 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--gray-200);
   border-radius: 8px;
-  padding: 0.375rem 0.75rem;
+  padding: 0.5rem 0.875rem;
   font-family: Inter, sans-serif;
   font-size: 0.8125rem;
   cursor: pointer;
@@ -109,6 +116,14 @@
   align-self: flex-start;
   background: rgba(136, 19, 55, 0.35);
   border-color: rgba(190, 18, 60, 0.45);
+}
+
+.formActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  margin-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 
 .pendingFile {
@@ -136,6 +151,7 @@
 
 .hint {
   margin: 0;
+  padding-bottom: 0.125rem;
   font-family: Inter, sans-serif;
   font-size: 0.75rem;
   line-height: 1.45;

@@ -128,55 +128,57 @@ export function TaskProgressReportsSection({
             />
           </label>
 
-          <div className={styles.fileRow}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={TASK_ATTACHMENT_ACCEPT}
-              className={styles.hiddenInput}
-              disabled={submitting}
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                setPendingFile(file);
-              }}
-            />
+          <div className={styles.formActions}>
+            <div className={styles.fileRow}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={TASK_ATTACHMENT_ACCEPT}
+                className={styles.hiddenInput}
+                disabled={submitting}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setPendingFile(file);
+                }}
+              />
+              <button
+                type="button"
+                className={styles.uploadBtn}
+                disabled={submitting}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {pendingFile ? "Заменить файл" : "+ Прикрепить файл"}
+              </button>
+              {pendingFile ? (
+                <span className={styles.pendingFile}>
+                  {pendingFile.name} · {formatFileSize(pendingFile.size)}
+                  <button
+                    type="button"
+                    className={styles.clearFileBtn}
+                    disabled={submitting}
+                    aria-label="Убрать файл"
+                    onClick={() => {
+                      setPendingFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : null}
+            </div>
+            <p className={styles.hint}>
+              Файл необязателен. {TASK_ATTACHMENT_HINT}
+            </p>
             <button
               type="button"
-              className={styles.uploadBtn}
+              className={styles.submitBtn}
               disabled={submitting}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => void handleSubmit()}
             >
-              {pendingFile ? "Заменить файл" : "+ Прикрепить файл"}
+              {submitting ? "Отправка…" : "Отправить отчёт"}
             </button>
-            {pendingFile ? (
-              <span className={styles.pendingFile}>
-                {pendingFile.name} · {formatFileSize(pendingFile.size)}
-                <button
-                  type="button"
-                  className={styles.clearFileBtn}
-                  disabled={submitting}
-                  aria-label="Убрать файл"
-                  onClick={() => {
-                    setPendingFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ) : null}
           </div>
-          <p className={styles.hint}>
-            Файл необязателен. {TASK_ATTACHMENT_HINT}
-          </p>
-          <button
-            type="button"
-            className={styles.submitBtn}
-            disabled={submitting}
-            onClick={() => void handleSubmit()}
-          >
-            {submitting ? "Отправка…" : "Отправить отчёт"}
-          </button>
         </div>
       ) : null}
 

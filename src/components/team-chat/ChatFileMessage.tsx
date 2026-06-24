@@ -1,6 +1,7 @@
 "use client";
 
 import { formatFileSize } from "@/lib/tasks/attachment-formats";
+import { FileTypeIcon } from "@/components/ui/UiIcon";
 import styles from "./TeamChatView.module.css";
 
 type ChatFileMessageProps = {
@@ -9,16 +10,6 @@ type ChatFileMessageProps = {
   fileSize: number | null;
   contentType: string | null;
 };
-
-function fileIcon(contentType: string | null): string {
-  const type = contentType?.toLowerCase() ?? "";
-  if (type === "application/pdf") return "📄";
-  if (type.includes("spreadsheet") || type.includes("excel")) return "📊";
-  if (type.includes("word")) return "📝";
-  if (type.includes("presentation") || type.includes("powerpoint")) return "📽";
-  if (type.includes("zip")) return "🗜";
-  return "📎";
-}
 
 export function ChatFileMessage({
   src,
@@ -34,7 +25,7 @@ export function ChatFileMessage({
       className={styles.fileLink}
       title="Открыть файл"
     >
-      <span className={styles.fileIcon}>{fileIcon(contentType)}</span>
+      <FileTypeIcon contentType={contentType} className={styles.fileIcon} />
       <span className={styles.fileMeta}>
         <span className={styles.fileName}>{fileName}</span>
         {fileSize != null ? (

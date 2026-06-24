@@ -22,6 +22,7 @@ import { ChatFileMessage, CHAT_DOCUMENT_ACCEPT } from "./ChatFileMessage";
 import { ChatMessageText } from "./ChatMessageText";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { FileTypeIcon, UiIcon } from "@/components/ui/UiIcon";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
 import styles from "./TeamChatView.module.css";
 
@@ -688,7 +689,10 @@ export function TeamChatView({
                   />
                 ) : (
                   <span className={styles.attachmentFileIcon} aria-hidden>
-                    📎
+                    <FileTypeIcon
+                      contentType={pendingAttachment.file.type || null}
+                      className={styles.attachmentFileIconGlyph}
+                    />
                   </span>
                 )}
                 <div className={styles.attachmentInfo}>
@@ -719,7 +723,7 @@ export function TeamChatView({
               placeholder={
                 pendingAttachment
                   ? "Подпись к вложению (необязательно)…"
-                  : "Сообщение… Ctrl+V — скриншот, 📎 — файл"
+                  : "Сообщение… Ctrl+V — скриншот, скрепка — файл"
               }
               value={composerText}
               maxLength={5000}
@@ -755,7 +759,7 @@ export function TeamChatView({
                 aria-label="Прикрепить файл"
                 title="PDF, Word, Excel и др."
               >
-                📎
+                <UiIcon icon="paperclip" className={styles.composerIcon} />
               </Button>
               <input
                 ref={imageInputRef}
@@ -777,7 +781,7 @@ export function TeamChatView({
                 aria-label="Прикрепить изображение"
                 title="Изображение"
               >
-                🖼
+                <UiIcon icon="image" className={styles.composerIcon} />
               </Button>
               <Button
                 type="button"
@@ -792,7 +796,7 @@ export function TeamChatView({
                 aria-label="Записать голосовое сообщение"
                 title="Голосовое сообщение"
               >
-                🎤
+                <UiIcon icon="microphone" className={styles.composerIcon} />
               </Button>
               <Button
                 type="button"
@@ -815,7 +819,7 @@ export function TeamChatView({
       {voiceRecorder.state === "idle" ? (
         <p className={styles.composerHint}>
           Прикрепите файл или скриншот, добавьте подпись и нажмите «Отправить» — всё
-          уйдёт одним сообщением. Ctrl+V — вставить скриншот. 📎 — документы до 25 МБ.
+          уйдёт одним сообщением. Ctrl+V — вставить скриншот. Скрепка — документы до 25 МБ.
         </p>
       ) : null}
 

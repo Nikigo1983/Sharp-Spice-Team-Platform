@@ -13,6 +13,7 @@ import {
   canManageTaskAttachments,
 } from "@/lib/tasks/permissions";
 import type { Task, TaskAttachment } from "@/lib/tasks/types";
+import { FileTypeIcon } from "@/components/ui/UiIcon";
 import styles from "./TaskAttachments.module.css";
 
 type TaskAttachmentsSectionProps = {
@@ -20,20 +21,6 @@ type TaskAttachmentsSectionProps = {
   user: SessionUser;
   onTaskUpdated?: (task: Task) => void;
 };
-
-function fileIcon(contentType: string): string {
-  if (contentType.startsWith("image/")) return "🖼";
-  if (contentType === "application/pdf") return "📄";
-  if (contentType.includes("spreadsheet") || contentType.includes("excel")) {
-    return "📊";
-  }
-  if (contentType.includes("word")) return "📝";
-  if (contentType.includes("presentation") || contentType.includes("powerpoint")) {
-    return "📽";
-  }
-  if (contentType.includes("zip")) return "🗜";
-  return "📎";
-}
 
 export async function uploadTaskFiles(taskId: string, files: File[]): Promise<Task> {
   let latestTask: Task | null = null;
@@ -140,7 +127,10 @@ export function TaskAttachmentsSection({
                   className={styles.fileLink}
                   title="Открыть файл"
                 >
-                  <span className={styles.fileIcon}>{fileIcon(attachment.contentType)}</span>
+                  <FileTypeIcon
+                    contentType={attachment.contentType}
+                    className={styles.fileIcon}
+                  />
                   <span className={styles.fileMeta}>
                     <span className={styles.fileName}>{attachment.fileName}</span>
                     <span className={styles.fileSub}>

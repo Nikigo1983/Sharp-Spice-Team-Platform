@@ -130,7 +130,15 @@
 .micBtn {
   min-width: 2.75rem;
   padding-inline: 0.75rem;
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.composerIcon {
+  font-size: 0.9375rem;
+  color: var(--gray-300);
+  line-height: 1;
 }
 
 .recordingBar {
@@ -186,8 +194,15 @@
 }
 
 .voiceIcon {
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+}
+
+.voiceIconGlyph {
+  font-size: 0.875rem;
+  color: var(--gray-400);
 }
 
 .voicePlayer {
@@ -251,10 +266,14 @@
   width: 56px;
   height: 56px;
   flex-shrink: 0;
-  font-size: 1.5rem;
   border-radius: var(--radius-sm);
   background: rgba(145, 13, 13, 0.12);
   border: 1px solid var(--border-burgundy);
+}
+
+.attachmentFileIconGlyph {
+  font-size: 1.25rem;
+  color: var(--gray-300);
 }
 
 .attachmentInfo {
@@ -319,7 +338,12 @@
 
 .fileIcon {
   flex-shrink: 0;
-  font-size: 1.125rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  font-size: 1rem;
+  color: var(--gray-400);
 }
 
 .fileMeta {

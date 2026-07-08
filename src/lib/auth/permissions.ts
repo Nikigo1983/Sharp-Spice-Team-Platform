@@ -56,6 +56,12 @@ const NAV_TEAM_CHAT: NavItem = {
   icon: "fa-solid fa-comments",
 };
 
+const NAV_MEETING_RECORDINGS: NavItem = {
+  href: "/meeting-recordings",
+  label: "Записи встреч",
+  icon: "fa-solid fa-video",
+};
+
 const NAV_RELOCATION: NavItem = {
   href: "/relocation",
   label: "Эмиграция",
@@ -102,6 +108,7 @@ const MANAGER_NAV: NavItem[] = [
   NAV_KB,
   NAV_TASKS,
   NAV_CALENDAR,
+  NAV_MEETING_RECORDINGS,
   NAV_TEAM_CHAT,
   NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,
@@ -118,6 +125,7 @@ const OWNER_NAV: NavItem[] = [
   NAV_KB,
   NAV_TASKS,
   NAV_CALENDAR,
+  NAV_MEETING_RECORDINGS,
   NAV_TEAM_CHAT,
   NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,

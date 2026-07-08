@@ -2,9 +2,11 @@
 
 import { TrackToggle, useRoomContext } from "@livekit/components-react";
 import { Track } from "livekit-client";
+import { MeetingRecordingButton } from "./MeetingRecordingButton";
 import styles from "./MeetingControlBar.module.css";
 
 type MeetingControlBarProps = {
+  eventId?: string;
   participantCount: number;
   participantsOpen: boolean;
   onToggleParticipants: () => void;
@@ -15,6 +17,7 @@ type MeetingControlBarProps = {
 };
 
 export function MeetingControlBar({
+  eventId,
   participantCount,
   participantsOpen,
   onToggleParticipants,
@@ -70,6 +73,7 @@ export function MeetingControlBar({
           <i className="fa-solid fa-display" aria-hidden="true" />
         </TrackToggle>
         )}
+        {eventId ? <MeetingRecordingButton eventId={eventId} /> : null}
         <button
           type="button"
           className={`${styles.toggle} ${participantsOpen ? styles.toggleActive : ""}`}

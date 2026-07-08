@@ -158,6 +158,42 @@ export type CalendarMeetingGuestAdmission = {
   decidedByUserId: string | null;
 };
 
+export const MEETING_RECORDING_STATUSES = [
+  "starting",
+  "active",
+  "processing",
+  "complete",
+  "failed",
+  "stopped",
+] as const;
+
+export type MeetingRecordingStatus =
+  (typeof MEETING_RECORDING_STATUSES)[number];
+
+export type CalendarMeetingRecording = {
+  id: string;
+  eventId: string;
+  egressId: string | null;
+  status: MeetingRecordingStatus;
+  startedByUserId: string;
+  startedByName: string;
+  storagePath: string | null;
+  fileName: string | null;
+  durationSeconds: number | null;
+  fileSizeBytes: number | null;
+  errorMessage: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  createdAt: string;
+};
+
+export type CalendarMeetingRecordingWithEvent = CalendarMeetingRecording & {
+  eventTitle: string;
+  eventStartAt: string;
+  linkedClientId: string | null;
+  linkedClientName: string | null;
+};
+
 export type ListCalendarEventsOptions = {
   from: string;
   to: string;

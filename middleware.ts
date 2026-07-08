@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { getSessionFromToken } from "@/lib/auth/session";
 
-const PUBLIC_PATHS = ["/login", "/join"];
+const PUBLIC_PATHS = ["/login", "/join", "/api/webhooks"];
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -13,6 +13,7 @@ const PROTECTED_PREFIXES = [
   "/knowledge-base",
   "/tasks",
   "/calendar",
+  "/meeting-recordings",
   "/team-chat",
   "/relocation",
   "/checkups-erevan",
@@ -93,6 +94,8 @@ export const config = {
     "/tasks/:path*",
     "/calendar",
     "/calendar/:path*",
+    "/meeting-recordings",
+    "/meeting-recordings/:path*",
     "/team-chat",
     "/team-chat/:path*",
     "/relocation",

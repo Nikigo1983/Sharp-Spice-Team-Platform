@@ -132,6 +132,7 @@ function MeetingStage({
       </div>
 
       <MeetingControlBar
+        eventId={event.id}
         participantCount={participants.length}
         pendingGuestCount={pendingGuestAdmissions.length}
         participantsOpen={participantsOpen}

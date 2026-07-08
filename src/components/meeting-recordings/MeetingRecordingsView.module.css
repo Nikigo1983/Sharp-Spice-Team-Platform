@@ -1,0 +1,156 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.title {
+  margin: 0 0 0.35rem;
+  font-family: Sora, sans-serif;
+  font-size: 1.6rem;
+}
+
+.subtitle {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  max-width: 42rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 28, 0.45);
+}
+
+.itemTitle {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.itemMeta,
+.clientMeta {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.84rem;
+}
+
+.clientMeta {
+  margin-top: 0.2rem;
+}
+
+.itemActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.playButton,
+.eventLink {
+  min-height: 2.2rem;
+  padding: 0 0.8rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.playButton {
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.18);
+  color: #e0e7ff;
+  cursor: pointer;
+}
+
+.eventLink {
+  border: 1px solid var(--border-soft);
+  color: #cbd5e0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playerPane {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+
+.player {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+
+.playerPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: #94a3b8;
+  text-align: center;
+}
+
+.status,
+.empty {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.error,
+.inlineError {
+  margin: 0.75rem 0 0;
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .playerPane {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

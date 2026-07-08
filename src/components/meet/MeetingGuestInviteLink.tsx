@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCalendarTimeZone } from "@/components/calendar/CalendarTimeZoneContext";
+import { buildGuestMeetingInviteText } from "@/lib/calendar/meeting-guest-invite-message";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import styles from "./MeetingGuestInviteLink.module.css";
 
@@ -13,12 +15,24 @@ export function MeetingGuestInviteLink({
   event,
   canRegenerate,
 }: MeetingGuestInviteLinkProps) {
+  const { timeZone } = useCalendarTimeZone();
   const [guestJoinUrl, setGuestJoinUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [linkedClientEmail, setLinkedClientEmail] = useState<string | null>(null);
+
+  const inviteText = useMemo(() => {
+    if (!guestJoinUrl) {
+      return "";
+    }
+
+    return buildGuestMeetingInviteText(event, guestJoinUrl, {
+      recipientName: event.linkedClientName,
+      timeZone,
+    });
+  }, [event, guestJoinUrl, timeZone]);
 
   const loadInvite = useCallback(async () => {
     setLoading(true);
@@ -72,17 +86,17 @@ export function MeetingGuestInviteLink({
       });
   }, [event.linkedClientId]);
 
-  async function handleCopy() {
-    if (!guestJoinUrl) {
+  async function handleCopyInvite() {
+    if (!inviteText) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(guestJoinUrl);
+      await navigator.clipboard.writeText(inviteText);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Скопируйте ссылку для клиента:", guestJoinUrl);
+      window.prompt("Скопируйте приглашение для клиента:", inviteText);
     }
   }
 
@@ -125,15 +139,12 @@ export function MeetingGuestInviteLink({
   }
 
   function buildMailtoUrl() {
-    if (!guestJoinUrl) {
+    if (!inviteText) {
       return null;
     }
 
-    const greetingName = event.linkedClientName?.trim() || "коллеги";
-    const subject = encodeURIComponent(`Ссылка на встречу: ${event.title}`);
-    const body = encodeURIComponent(
-      `Здравствуйте, ${greetingName}!\n\nПриглашаем вас на видеовстречу «${event.title}».\n\nПодключиться можно по ссылке (регистрация не нужна):\n${guestJoinUrl}\n\nДо встречи!`,
-    );
+    const subject = encodeURIComponent(`Приглашение на встречу: ${event.title}`);
+    const body = encodeURIComponent(inviteText);
     const recipient = linkedClientEmail
       ? encodeURIComponent(linkedClientEmail)
       : "";
@@ -147,8 +158,8 @@ export function MeetingGuestInviteLink({
       <div className={styles.header}>
         <h3 className={styles.title}>Ссылка для клиента</h3>
         <p className={styles.hint}>
-          Отправьте эту ссылку человеку без аккаунта на платформе. Регистрация не
-          нужна.
+          Скопируйте готовое приглашение с названием, временем и ссылкой — и
+          отправьте клиенту в мессенджер или email. Регистрация не нужна.
         </p>
       </div>
 
@@ -157,30 +168,37 @@ export function MeetingGuestInviteLink({
       ) : error ? (
         <p className={styles.error}>{error}</p>
       ) : guestJoinUrl ? (
-        <div className={styles.urlRow}>
-          <input
-            className={styles.urlInput}
-            value={guestJoinUrl}
+        <>
+          <textarea
+            className={styles.invitePreview}
+            value={inviteText}
             readOnly
-            aria-label="Гостевая ссылка"
-            onFocus={(event) => event.currentTarget.select()}
+            rows={10}
+            aria-label="Текст приглашения для клиента"
+            onFocus={(focusEvent) => focusEvent.currentTarget.select()}
           />
-          <button type="button" className={styles.copyButton} onClick={() => void handleCopy()}>
-            {copied ? "Скопировано" : "Копировать"}
-          </button>
-          <a
-            className={styles.emailButton}
-            href={buildMailtoUrl() ?? undefined}
-            aria-disabled={!guestJoinUrl}
-            onClick={(clickEvent) => {
-              if (!guestJoinUrl) {
-                clickEvent.preventDefault();
-              }
-            }}
-          >
-            Отправить по email
-          </a>
-        </div>
+          <div className={styles.actionRow}>
+            <button
+              type="button"
+              className={styles.copyButton}
+              onClick={() => void handleCopyInvite()}
+            >
+              {copied ? "Скопировано" : "Копировать приглашение"}
+            </button>
+            <a
+              className={styles.emailButton}
+              href={buildMailtoUrl() ?? undefined}
+              aria-disabled={!inviteText}
+              onClick={(clickEvent) => {
+                if (!inviteText) {
+                  clickEvent.preventDefault();
+                }
+              }}
+            >
+              Отправить по email
+            </a>
+          </div>
+        </>
       ) : null}
 
       {canRegenerate && !loading ? (

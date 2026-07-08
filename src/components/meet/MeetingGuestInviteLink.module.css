@@ -35,6 +35,27 @@
   font-size: 0.9rem;
 }
 
+.invitePreview {
+  width: 100%;
+  min-height: 11rem;
+  margin-bottom: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 28, 0.55);
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .urlRow {
   display: flex;
   flex-wrap: wrap;
@@ -92,7 +113,7 @@
 }
 
 @media (max-width: 640px) {
-  .urlRow {
+  .actionRow {
     flex-direction: column;
   }
 

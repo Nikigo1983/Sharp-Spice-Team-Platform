@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCalendarTimeZone } from "@/components/calendar/CalendarTimeZoneContext";
 import { buildGuestMeetingInviteText } from "@/lib/calendar/meeting-guest-invite-message";
+import {
+  buildMailtoShareUrl,
+  buildTelegramShareUrl,
+  buildWhatsAppShareUrl,
+} from "@/lib/calendar/meeting-guest-invite-share";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import styles from "./MeetingGuestInviteLink.module.css";
 
@@ -22,6 +27,7 @@ export function MeetingGuestInviteLink({
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [linkedClientEmail, setLinkedClientEmail] = useState<string | null>(null);
+  const [linkedClientPhone, setLinkedClientPhone] = useState<string | null>(null);
 
   const inviteText = useMemo(() => {
     if (!guestJoinUrl) {
@@ -69,22 +75,52 @@ export function MeetingGuestInviteLink({
   useEffect(() => {
     if (!event.linkedClientId) {
       setLinkedClientEmail(null);
+      setLinkedClientPhone(null);
       return;
     }
 
     void fetch(`/api/clients/${encodeURIComponent(event.linkedClientId)}`)
       .then(async (response) => {
         const payload = (await response.json()) as {
-          client?: { email?: string };
+          client?: { email?: string; phone?: string };
         };
         if (response.ok) {
           setLinkedClientEmail(payload.client?.email?.trim() || null);
+          setLinkedClientPhone(payload.client?.phone?.trim() || null);
         }
       })
       .catch(() => {
         setLinkedClientEmail(null);
+        setLinkedClientPhone(null);
       });
   }, [event.linkedClientId]);
+
+  const mailtoUrl = useMemo(() => {
+    if (!inviteText) {
+      return null;
+    }
+
+    return buildMailtoShareUrl(inviteText, {
+      subject: `Приглашение на встречу: ${event.title}`,
+      recipientEmail: linkedClientEmail,
+    });
+  }, [event.title, inviteText, linkedClientEmail]);
+
+  const whatsAppUrl = useMemo(() => {
+    if (!inviteText) {
+      return null;
+    }
+
+    return buildWhatsAppShareUrl(inviteText, linkedClientPhone);
+  }, [inviteText, linkedClientPhone]);
+
+  const telegramUrl = useMemo(() => {
+    if (!inviteText || !guestJoinUrl) {
+      return null;
+    }
+
+    return buildTelegramShareUrl(inviteText, guestJoinUrl);
+  }, [guestJoinUrl, inviteText]);
 
   async function handleCopyInvite() {
     if (!inviteText) {
@@ -138,21 +174,6 @@ export function MeetingGuestInviteLink({
     }
   }
 
-  function buildMailtoUrl() {
-    if (!inviteText) {
-      return null;
-    }
-
-    const subject = encodeURIComponent(`Приглашение на встречу: ${event.title}`);
-    const body = encodeURIComponent(inviteText);
-    const recipient = linkedClientEmail
-      ? encodeURIComponent(linkedClientEmail)
-      : "";
-    return recipient
-      ? `mailto:${recipient}?subject=${subject}&body=${body}`
-      : `mailto:?subject=${subject}&body=${body}`;
-  }
-
   return (
     <section className={styles.section} aria-label="Ссылка для клиента">
       <div className={styles.header}>
@@ -186,8 +207,8 @@ export function MeetingGuestInviteLink({
               {copied ? "Скопировано" : "Копировать приглашение"}
             </button>
             <a
-              className={styles.emailButton}
-              href={buildMailtoUrl() ?? undefined}
+              className={styles.shareButton}
+              href={mailtoUrl ?? undefined}
               aria-disabled={!inviteText}
               onClick={(clickEvent) => {
                 if (!inviteText) {
@@ -195,21 +216,56 @@ export function MeetingGuestInviteLink({
                 }
               }}
             >
-              Отправить по email
+              По email
+            </a>
+            <a
+              className={`${styles.shareButton} ${styles.shareButtonWhatsapp}`}
+              href={whatsAppUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={!inviteText}
+              onClick={(clickEvent) => {
+                if (!inviteText) {
+                  clickEvent.preventDefault();
+                }
+              }}
+            >
+              В WhatsApp
+            </a>
+            <a
+              className={`${styles.shareButton} ${styles.shareButtonTelegram}`}
+              href={telegramUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={!inviteText}
+              onClick={(clickEvent) => {
+                if (!inviteText) {
+                  clickEvent.preventDefault();
+                }
+              }}
+            >
+              В Telegram
             </a>
           </div>
         </>
       ) : null}
 
       {canRegenerate && !loading ? (
-        <button
-          type="button"
-          className={styles.regenerateButton}
-          onClick={() => void handleRegenerate()}
-          disabled={regenerating}
-        >
-          {regenerating ? "Обновление…" : "Новая ссылка"}
-        </button>
+        <div className={styles.regenerateBlock}>
+          <button
+            type="button"
+            className={styles.regenerateButton}
+            onClick={() => void handleRegenerate()}
+            disabled={regenerating}
+          >
+            {regenerating ? "Обновление…" : "Создать новую ссылку"}
+          </button>
+          <p className={styles.regenerateHint}>
+            Отзывает текущую ссылку и создаёт другую. Старая перестанет работать —
+            используйте, если ссылку нужно заменить или она могла попасть не тому
+            человеку.
+          </p>
+        </div>
       ) : null}
     </section>
   );

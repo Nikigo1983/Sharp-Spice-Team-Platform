@@ -75,7 +75,7 @@
 }
 
 .copyButton,
-.emailButton,
+.shareButton,
 .regenerateButton {
   min-height: 2.4rem;
   padding: 0 0.85rem;
@@ -90,26 +90,56 @@
 }
 
 .copyButton:hover,
-.emailButton:hover,
+.shareButton:hover,
 .regenerateButton:hover {
   background: rgba(99, 102, 241, 0.28);
 }
 
-.regenerateButton {
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.shareButtonWhatsapp {
+  border-color: rgba(37, 211, 102, 0.45);
+  background: rgba(37, 211, 102, 0.14);
+  color: #bbf7d0;
+}
+
+.shareButtonWhatsapp:hover {
+  background: rgba(37, 211, 102, 0.24);
+}
+
+.shareButtonTelegram {
+  border-color: rgba(42, 171, 238, 0.45);
+  background: rgba(42, 171, 238, 0.14);
+  color: #bae6fd;
+}
+
+.shareButtonTelegram:hover {
+  background: rgba(42, 171, 238, 0.24);
+}
+
+.regenerateBlock {
   margin-top: 0.65rem;
+}
+
+.regenerateButton {
   background: transparent;
+}
+
+.regenerateHint {
+  margin: 0.45rem 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .regenerateButton:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.emailButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
 }
 
 @media (max-width: 640px) {
@@ -118,7 +148,7 @@
   }
 
   .copyButton,
-  .emailButton {
+  .shareButton {
     width: 100%;
   }
 }

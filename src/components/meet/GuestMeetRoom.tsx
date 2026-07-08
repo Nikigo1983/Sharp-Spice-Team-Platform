@@ -26,12 +26,26 @@ type GuestTokenPayload = {
   eventTitle: string;
 };
 
+type AdmissionPayload = {
+  admissionId: string;
+  guestId: string;
+  status: "pending";
+  waitingRoom: boolean;
+};
+
 type ConnectState =
   | { status: "lobby" }
   | { status: "loading" }
+  | {
+      status: "waiting";
+      displayName: string;
+      admissionId: string;
+      guestId: string;
+    }
   | { status: "ready"; credentials: GuestTokenPayload; displayName: string }
   | { status: "error"; message: string }
-  | { status: "left" };
+  | { status: "left" }
+  | { status: "rejected" };
 
 async function postGuestAudit(
   inviteToken: string,
@@ -46,6 +60,30 @@ async function postGuestAudit(
     body: JSON.stringify({ inviteToken, guestId, displayName, action }),
     keepalive: options?.keepalive ?? false,
   });
+}
+
+async function fetchGuestToken(
+  inviteToken: string,
+  displayName: string,
+  admission?: { admissionId: string; guestId: string },
+): Promise<GuestTokenPayload> {
+  const response = await fetch("/api/meet/guest-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      inviteToken,
+      displayName,
+      admissionId: admission?.admissionId,
+      guestId: admission?.guestId,
+    }),
+  });
+
+  const payload = (await response.json()) as GuestTokenPayload & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Не удалось подключиться");
+  }
+
+  return payload;
 }
 
 type GuestMeetingStageProps = {
@@ -88,6 +126,7 @@ function GuestMeetingStage({
         participantsOpen={participantsOpen}
         onToggleParticipants={() => setParticipantsOpen((open) => !open)}
         onLeave={onLeave}
+        hideScreenShare
       />
 
       {participantsOpen ? (
@@ -141,6 +180,21 @@ export function GuestMeetRoom({ event, inviteToken }: GuestMeetRoomProps) {
     status: "lobby",
   });
 
+  const connectWithToken = useCallback(
+    async (
+      trimmed: string,
+      admission?: { admissionId: string; guestId: string },
+    ) => {
+      const payload = await fetchGuestToken(inviteToken, trimmed, admission);
+      setConnectState({
+        status: "ready",
+        credentials: payload,
+        displayName: trimmed,
+      });
+    },
+    [inviteToken],
+  );
+
   const handleJoin = useCallback(async () => {
     const trimmed = displayName.trim();
     if (trimmed.length < 2) {
@@ -150,39 +204,103 @@ export function GuestMeetRoom({ event, inviteToken }: GuestMeetRoomProps) {
     setConnectState({ status: "loading" });
 
     try {
-      const response = await fetch("/api/meet/guest-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inviteToken,
-          displayName: trimmed,
-        }),
-      });
+      if (event.guestWaitingRoom) {
+        const response = await fetch("/api/meet/guest-admission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inviteToken, displayName: trimmed }),
+        });
+        const payload = (await response.json()) as AdmissionPayload & {
+          error?: string;
+        };
 
-      const payload = (await response.json()) as GuestTokenPayload & {
-        error?: string;
-      };
+        if (!response.ok) {
+          setConnectState({
+            status: "error",
+            message: payload.error ?? "Не удалось отправить запрос",
+          });
+          return;
+        }
 
-      if (!response.ok) {
         setConnectState({
-          status: "error",
-          message: payload.error ?? "Не удалось подключиться",
+          status: "waiting",
+          displayName: trimmed,
+          admissionId: payload.admissionId,
+          guestId: payload.guestId,
         });
         return;
       }
 
-      setConnectState({
-        status: "ready",
-        credentials: payload,
-        displayName: trimmed,
-      });
-    } catch {
+      await connectWithToken(trimmed);
+    } catch (error) {
       setConnectState({
         status: "error",
-        message: "Не удалось подключиться. Проверьте интернет и попробуйте снова.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Не удалось подключиться. Проверьте интернет и попробуйте снова.",
       });
     }
-  }, [displayName, inviteToken]);
+  }, [connectWithToken, displayName, event.guestWaitingRoom, inviteToken]);
+
+  useEffect(() => {
+    if (connectState.status !== "waiting") {
+      return;
+    }
+
+    const { admissionId, guestId, displayName: waitingName } = connectState;
+    let cancelled = false;
+
+    async function pollAdmission() {
+      try {
+        const response = await fetch(
+          `/api/meet/guest-admission/${encodeURIComponent(admissionId)}?inviteToken=${encodeURIComponent(inviteToken)}`,
+        );
+        const payload = (await response.json()) as {
+          status?: string;
+          error?: string;
+        };
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setConnectState({
+            status: "error",
+            message: payload.error ?? "Не удалось проверить статус",
+          });
+          return;
+        }
+
+        if (payload.status === "admitted") {
+          await connectWithToken(waitingName, { admissionId, guestId });
+          return;
+        }
+
+        if (payload.status === "rejected") {
+          setConnectState({ status: "rejected" });
+        }
+      } catch {
+        if (!cancelled) {
+          setConnectState({
+            status: "error",
+            message: "Не удалось проверить статус подключения",
+          });
+        }
+      }
+    }
+
+    void pollAdmission();
+    const intervalId = window.setInterval(() => {
+      void pollAdmission();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [connectState, connectWithToken, inviteToken]);
 
   const handleLeave = useCallback(() => {
     if (connectState.status === "ready") {
@@ -204,7 +322,19 @@ export function GuestMeetRoom({ event, inviteToken }: GuestMeetRoomProps) {
     return <GuestMeetingGate variant="left" event={event} />;
   }
 
-  if (connectState.status === "lobby" || connectState.status === "loading" || connectState.status === "error") {
+  if (connectState.status === "rejected") {
+    return <GuestMeetingGate variant="rejected" event={event} />;
+  }
+
+  if (connectState.status === "waiting") {
+    return <GuestMeetingGate variant="waiting_room" event={event} />;
+  }
+
+  if (
+    connectState.status === "lobby" ||
+    connectState.status === "loading" ||
+    connectState.status === "error"
+  ) {
     return (
       <div className={styles.lobbyPage}>
         <div className={styles.lobbyCard}>
@@ -214,6 +344,12 @@ export function GuestMeetRoom({ event, inviteToken }: GuestMeetRoomProps) {
           <p className={styles.lobbyEventTime}>
             {formatEventTimeRange(event, CALENDAR_TIMEZONE)}
           </p>
+
+          {event.guestWaitingRoom ? (
+            <p className={styles.waitingHint}>
+              После отправки запроса организатор должен принять вас в зал ожидания.
+            </p>
+          ) : null}
 
           <label className={styles.nameLabel} htmlFor="guest-display-name">
             Ваше имя
@@ -241,7 +377,11 @@ export function GuestMeetRoom({ event, inviteToken }: GuestMeetRoomProps) {
               connectState.status === "loading" || displayName.trim().length < 2
             }
           >
-            {connectState.status === "loading" ? "Подключение…" : "Присоединиться"}
+            {connectState.status === "loading"
+              ? "Подключение…"
+              : event.guestWaitingRoom
+                ? "Запросить вход"
+                : "Присоединиться"}
           </button>
         </div>
       </div>

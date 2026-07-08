@@ -48,6 +48,13 @@
   font-size: 0.95rem;
 }
 
+.waitingHint {
+  margin: 0 0 1rem;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .nameLabel {
   display: block;
   margin-bottom: 0.4rem;

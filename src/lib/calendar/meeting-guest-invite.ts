@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+export { isGuestParticipantId } from "./meeting-guest-client";
 
 export function generateGuestInviteToken(): string {
   return randomBytes(32).toString("base64url");
@@ -36,8 +37,4 @@ export function normalizeGuestDisplayName(value: unknown): string | null {
   }
 
   return trimmed;
-}
-
-export function isGuestParticipantId(value: string): boolean {
-  return value.startsWith("guest-");
 }

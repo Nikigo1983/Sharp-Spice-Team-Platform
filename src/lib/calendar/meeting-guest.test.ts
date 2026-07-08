@@ -28,6 +28,7 @@ const event: CalendarEvent = {
   description: "",
   eventType: "video_meeting",
   videoInviteMode: "all_team",
+  guestWaitingRoom: false,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T08:30:00.000Z",
@@ -156,6 +157,7 @@ describe("handleMintGuestMeetingToken", () => {
     const result = await handleMintGuestMeetingToken(
       "invite-token",
       "Anna Client",
+      undefined,
       {
         getInviteByToken: async () => ({
           id: "inv-1",

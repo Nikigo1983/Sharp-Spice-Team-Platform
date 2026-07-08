@@ -136,6 +136,7 @@ function normalizeEvent(event: CalendarEvent): CalendarEvent {
   return {
     ...event,
     videoInviteMode: event.videoInviteMode ?? null,
+    guestWaitingRoom: event.guestWaitingRoom ?? true,
     participantUserIds: event.participantUserIds ?? [],
     sendReminders: event.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
   };
@@ -264,6 +265,10 @@ export async function createEvent(
     description: input.description?.trim() ?? "",
     eventType: input.eventType ?? CALENDAR_DEFAULT_EVENT_TYPE,
     videoInviteMode,
+    guestWaitingRoom:
+      input.eventType === "video_meeting"
+        ? input.guestWaitingRoom ?? true
+        : true,
     participantUserIds,
     startAt: input.startAt,
     endAt: input.endAt,
@@ -355,6 +360,10 @@ export async function updateEvent(
         ? input.sendReminders
         : rawExisting.sendReminders,
     videoInviteMode: nextInviteMode,
+    guestWaitingRoom:
+      input.guestWaitingRoom !== undefined
+        ? input.guestWaitingRoom
+        : rawExisting.guestWaitingRoom,
     participantUserIds: nextParticipantUserIds,
     updatedByUserId:
       input.updatedByUserId !== undefined

@@ -16,6 +16,7 @@ export type CalendarFormValues = {
   scope: CalendarScope;
   eventType: CalendarEventType;
   videoInviteMode: VideoInviteMode;
+  guestWaitingRoom: boolean;
   participantUserIds: string[];
   title: string;
   description: string;
@@ -52,6 +53,7 @@ export function defaultFormValues(
     scope: "personal",
     eventType: CALENDAR_DEFAULT_EVENT_TYPE,
     videoInviteMode: "all_team",
+    guestWaitingRoom: true,
     participantUserIds: [],
     title: "",
     description: "",
@@ -79,6 +81,7 @@ export function eventToFormValues(
       event.videoInviteMode ??
       (event.scope === "company" ? "all_team" : "selected"),
     participantUserIds: [...(event.participantUserIds ?? [])],
+    guestWaitingRoom: event.guestWaitingRoom ?? true,
     title: event.title,
     description: event.description,
     startDate: formatDateKey(start, timeZone),
@@ -191,6 +194,8 @@ export function formValuesToCreatePayload(
     allDay: values.allDay,
     location: values.location.trim(),
     sendReminders: values.sendReminders,
+    guestWaitingRoom:
+      values.eventType === "video_meeting" ? values.guestWaitingRoom : undefined,
   };
 }
 
@@ -208,6 +213,8 @@ export function formValuesToUpdatePayload(
     allDay: values.allDay,
     location: values.location.trim(),
     sendReminders: values.sendReminders,
+    guestWaitingRoom:
+      values.eventType === "video_meeting" ? values.guestWaitingRoom : undefined,
     videoInviteMode:
       values.eventType === "video_meeting"
         ? values.scope === "personal"

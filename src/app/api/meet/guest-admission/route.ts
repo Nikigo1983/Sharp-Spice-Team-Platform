@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handleMintGuestMeetingToken } from "@/lib/calendar/meeting-guest-handler";
+import { handleRequestGuestAdmission } from "@/lib/calendar/meeting-guest-admission-handler";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -17,23 +17,12 @@ export async function POST(request: Request) {
     body && typeof body === "object"
       ? (body as Record<string, unknown>).displayName
       : undefined;
-  const admissionId =
-    body && typeof body === "object" && typeof (body as Record<string, unknown>).admissionId === "string"
-      ? (body as Record<string, string>).admissionId
-      : undefined;
-  const guestId =
-    body && typeof body === "object" && typeof (body as Record<string, unknown>).guestId === "string"
-      ? (body as Record<string, string>).guestId
-      : undefined;
 
-  const result = await handleMintGuestMeetingToken(inviteToken, displayName, {
-    admissionId,
-    guestId,
-  });
+  const result = await handleRequestGuestAdmission(inviteToken, displayName);
 
-  if ("status" in result) {
+  if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, { status: 201 });
 }

@@ -130,7 +130,10 @@ function MeetingStage({
       />
 
       {participantsOpen ? (
-        <MeetingParticipantPanel onClose={() => setParticipantsOpen(false)} />
+        <MeetingParticipantPanel
+          eventId={event.id}
+          onClose={() => setParticipantsOpen(false)}
+        />
       ) : null}
 
       <RoomAudioRenderer />

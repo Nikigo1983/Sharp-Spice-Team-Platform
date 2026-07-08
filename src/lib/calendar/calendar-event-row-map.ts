@@ -9,6 +9,7 @@ export type CalendarEventRow = {
   description: string;
   event_type: CalendarEvent["eventType"];
   video_invite_mode: VideoInviteMode | null;
+  guest_waiting_room: boolean;
   start_at: string;
   end_at: string;
   all_day: boolean;
@@ -34,6 +35,7 @@ export function mapCalendarEventRowToEvent(
     description: row.description,
     eventType: row.event_type,
     videoInviteMode: row.video_invite_mode ?? null,
+    guestWaitingRoom: row.guest_waiting_room ?? true,
     participantUserIds,
     startAt: row.start_at,
     endAt: row.end_at,
@@ -58,6 +60,7 @@ export function mapCalendarEventToRow(event: CalendarEvent): CalendarEventRow {
     description: event.description,
     event_type: event.eventType,
     video_invite_mode: event.videoInviteMode,
+    guest_waiting_room: event.guestWaitingRoom,
     start_at: event.startAt,
     end_at: event.endAt,
     all_day: event.allDay,

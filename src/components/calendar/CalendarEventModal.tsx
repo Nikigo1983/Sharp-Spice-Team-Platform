@@ -101,6 +101,10 @@ export function CalendarEventModal({
                 <dd>{formatParticipantNames(event, teamMembers)}</dd>
               </div>
               <div>
+                <dt>Зал ожидания</dt>
+                <dd>{event.guestWaitingRoom ? "Включён для гостей" : "Выключен"}</dd>
+              </div>
+              <div>
                 <dt>Статус</dt>
                 <dd>
                   <span

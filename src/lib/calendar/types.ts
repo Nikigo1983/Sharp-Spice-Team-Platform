@@ -23,6 +23,7 @@ export type CalendarEvent = {
   description: string;
   eventType: CalendarEventType;
   videoInviteMode: VideoInviteMode | null;
+  guestWaitingRoom: boolean;
   participantUserIds: string[];
   startAt: string;
   endAt: string;
@@ -43,6 +44,7 @@ export type CreateCalendarEventInput = {
   description?: string;
   eventType?: CalendarEventType;
   videoInviteMode?: VideoInviteMode;
+  guestWaitingRoom?: boolean;
   participantUserIds?: string[];
   startAt: string;
   endAt: string;
@@ -62,6 +64,7 @@ export type UpdateCalendarEventInput = {
   location?: string;
   sendReminders?: boolean;
   videoInviteMode?: VideoInviteMode;
+  guestWaitingRoom?: boolean;
   participantUserIds?: string[];
   updatedByUserId?: string | null;
 };
@@ -119,6 +122,27 @@ export type CalendarMeetingGuestInvite = {
   enabled: boolean;
   createdAt: string;
   revokedAt: string | null;
+};
+
+export const GUEST_ADMISSION_STATUSES = [
+  "pending",
+  "admitted",
+  "rejected",
+  "left",
+] as const;
+
+export type GuestAdmissionStatus = (typeof GUEST_ADMISSION_STATUSES)[number];
+
+export type CalendarMeetingGuestAdmission = {
+  id: string;
+  eventId: string;
+  inviteId: string;
+  guestId: string;
+  displayName: string;
+  status: GuestAdmissionStatus;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedByUserId: string | null;
 };
 
 export type ListCalendarEventsOptions = {

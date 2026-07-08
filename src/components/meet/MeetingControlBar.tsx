@@ -10,6 +10,7 @@ type MeetingControlBarProps = {
   onToggleParticipants: () => void;
   onLeave: () => void;
   compact?: boolean;
+  hideScreenShare?: boolean;
 };
 
 export function MeetingControlBar({
@@ -18,6 +19,7 @@ export function MeetingControlBar({
   onToggleParticipants,
   onLeave,
   compact = false,
+  hideScreenShare = false,
 }: MeetingControlBarProps) {
   const room = useRoomContext();
 
@@ -47,6 +49,7 @@ export function MeetingControlBar({
         >
           <i className="fa-solid fa-video" aria-hidden="true" />
         </TrackToggle>
+        {hideScreenShare ? null : (
         <TrackToggle
           source={Track.Source.ScreenShare}
           showIcon={false}
@@ -64,6 +67,7 @@ export function MeetingControlBar({
         >
           <i className="fa-solid fa-display" aria-hidden="true" />
         </TrackToggle>
+        )}
         <button
           type="button"
           className={`${styles.toggle} ${participantsOpen ? styles.toggleActive : ""}`}

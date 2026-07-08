@@ -275,6 +275,22 @@ export function CalendarEventForm({
         </fieldset>
       ) : null}
 
+      {values.eventType === "video_meeting" ? (
+        <label className={styles.checkboxField}>
+          <input
+            type="checkbox"
+            checked={values.guestWaitingRoom}
+            onChange={(changeEvent) =>
+              setValues({
+                ...values,
+                guestWaitingRoom: changeEvent.target.checked,
+              })
+            }
+          />
+          <span>Зал ожидания для гостей по ссылке</span>
+        </label>
+      ) : null}
+
       <label className={styles.field}>
         <span className={styles.label}>Название *</span>
         <input

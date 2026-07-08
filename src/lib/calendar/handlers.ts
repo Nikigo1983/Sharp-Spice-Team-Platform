@@ -154,6 +154,10 @@ function parseCreateBody(body: unknown): Omit<
         : undefined,
     eventType: parseOptionalEventType(record.eventType),
     videoInviteMode: parseOptionalVideoInviteMode(record.videoInviteMode),
+    guestWaitingRoom:
+      typeof record.guestWaitingRoom === "boolean"
+        ? record.guestWaitingRoom
+        : undefined,
     participantUserIds: parseParticipantUserIds(record.participantUserIds),
   };
 }
@@ -167,6 +171,7 @@ const UPDATE_FIELDS = new Set([
   "location",
   "sendReminders",
   "videoInviteMode",
+  "guestWaitingRoom",
   "participantUserIds",
 ]);
 
@@ -228,6 +233,12 @@ function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
   }
   if ("videoInviteMode" in record) {
     input.videoInviteMode = parseOptionalVideoInviteMode(record.videoInviteMode);
+  }
+  if ("guestWaitingRoom" in record) {
+    if (typeof record.guestWaitingRoom !== "boolean") {
+      throw new CalendarValidationError("guestWaitingRoom must be a boolean");
+    }
+    input.guestWaitingRoom = record.guestWaitingRoom;
   }
   if ("participantUserIds" in record) {
     input.participantUserIds = parseParticipantUserIds(record.participantUserIds);

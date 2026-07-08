@@ -20,6 +20,7 @@ import {
   mintGuestMeetingAccessToken,
 } from "./meeting-token";
 import type { CalendarEvent } from "./types";
+import * as sbAdmissions from "@/lib/supabase/calendar-meeting-guest-admissions-repo";
 import type { CalendarMeetingAuditAction } from "./types";
 
 export type GuestMeetingPreview =
@@ -92,6 +93,7 @@ export type GuestTokenResponse = {
 export async function handleMintGuestMeetingToken(
   inviteToken: string,
   displayNameInput: unknown,
+  options?: { admissionId?: string; guestId?: string },
   deps: GuestMeetingPreviewDeps = defaultGuestMeetingPreviewDeps,
   now: Date = new Date(),
 ): Promise<GuestTokenResponse | GuestTokenHandlerError> {
@@ -123,7 +125,31 @@ export async function handleMintGuestMeetingToken(
     return { status: 503, error: "Meetings not configured" };
   }
 
-  const guestId = `guest-${randomUUID()}`;
+  let guestId = options?.guestId?.trim() ?? "";
+
+  if (preview.event.guestWaitingRoom) {
+    const admissionId = options?.admissionId?.trim();
+    if (!admissionId || !guestId) {
+      return { status: 403, error: "Guest admission required" };
+    }
+
+    const admission = await sbAdmissions.sbGetGuestAdmissionById(admissionId);
+    if (!admission || admission.eventId !== preview.event.id) {
+      return { status: 404, error: "Admission not found" };
+    }
+    if (admission.guestId !== guestId) {
+      return { status: 403, error: "Guest identity mismatch" };
+    }
+    if (admission.status !== "admitted") {
+      return { status: 403, error: "Guest not admitted yet" };
+    }
+    if (admission.displayName !== displayName) {
+      return { status: 403, error: "Guest identity mismatch" };
+    }
+  } else {
+    guestId = `guest-${randomUUID()}`;
+  }
+
   const minted = await mintGuestMeetingAccessToken(
     guestId,
     displayName,

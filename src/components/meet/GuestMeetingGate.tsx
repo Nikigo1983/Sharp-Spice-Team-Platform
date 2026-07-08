@@ -9,7 +9,9 @@ export type GuestMeetingGateVariant =
   | "closed"
   | "invalid_invite"
   | "not_configured"
-  | "left";
+  | "left"
+  | "waiting_room"
+  | "rejected";
 
 type GuestMeetingGateProps = {
   variant: GuestMeetingGateVariant;
@@ -48,6 +50,16 @@ function getCopy(
       return {
         title: "Вы покинули встречу",
         body: "Спасибо за участие. Чтобы вернуться, обновите страницу и снова введите имя.",
+      };
+    case "waiting_room":
+      return {
+        title: "Ожидание подключения",
+        body: "Организатор скоро впустит вас в видеовстречу. Не закрывайте эту страницу.",
+      };
+    case "rejected":
+      return {
+        title: "Подключение отклонено",
+        body: "Организатор не принял ваш запрос на участие. Свяжитесь с ним, если это ошибка.",
       };
   }
 }

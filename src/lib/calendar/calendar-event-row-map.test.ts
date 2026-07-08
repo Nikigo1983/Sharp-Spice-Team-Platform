@@ -15,6 +15,7 @@ const sampleEvent: CalendarEvent = {
   description: "",
   eventType: "general",
   videoInviteMode: null,
+  guestWaitingRoom: true,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T09:00:00.000Z",

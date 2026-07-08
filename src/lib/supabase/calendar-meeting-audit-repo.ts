@@ -14,6 +14,7 @@ type CalendarMeetingAuditRow = {
   user_name: string;
   room_name: string;
   action: CalendarMeetingAudit["action"];
+  participant_type: CalendarMeetingAudit["participantType"];
   occurred_at: string;
 };
 
@@ -25,6 +26,7 @@ function mapRow(row: CalendarMeetingAuditRow): CalendarMeetingAudit {
     userName: row.user_name,
     roomName: row.room_name,
     action: row.action,
+    participantType: row.participant_type ?? "team",
     occurredAt: row.occurred_at,
   };
 }
@@ -39,6 +41,7 @@ export async function sbInsertCalendarMeetingAudit(
     user_name: input.userName,
     room_name: input.roomName,
     action: input.action,
+    participant_type: input.participantType ?? "team",
   };
 
   const { data, error } = await getSupabaseAdmin()

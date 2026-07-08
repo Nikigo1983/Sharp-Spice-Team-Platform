@@ -64,3 +64,35 @@ export async function mintMeetingAccessToken(
     expiresAt,
   };
 }
+
+export async function mintGuestMeetingAccessToken(
+  guestId: string,
+  displayName: string,
+  event: CalendarEvent,
+  env: LiveKitEnv,
+  now: Date = new Date(),
+): Promise<{ token: string; roomName: string; expiresAt: string }> {
+  const roomName = getMeetingRoomName(event.id);
+  const ttlSeconds = buildMeetingTokenTtlSeconds(event, now);
+  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
+
+  const accessToken = new AccessToken(env.apiKey, env.apiSecret, {
+    identity: guestId,
+    name: displayName,
+    ttl: ttlSeconds,
+  });
+
+  accessToken.addGrant({
+    roomJoin: true,
+    room: roomName,
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: false,
+  });
+
+  return {
+    token: await accessToken.toJwt(),
+    roomName,
+    expiresAt,
+  };
+}

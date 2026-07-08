@@ -1,0 +1,148 @@
+.page,
+.lobbyPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-hero);
+  color: var(--white);
+}
+
+.lobbyPage {
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.lobbyCard {
+  width: min(100%, 28rem);
+  padding: 1.75rem;
+  border-radius: var(--radius-md);
+  background: rgba(45, 55, 72, 0.96);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-card);
+}
+
+.lobbyBrand {
+  margin: 0 0 0.5rem;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lobbyTitle {
+  margin: 0 0 0.35rem;
+  font-family: Sora, sans-serif;
+  font-size: 1.35rem;
+}
+
+.lobbyEventTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.lobbyEventTime {
+  margin: 0.35rem 0 1.25rem;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.nameLabel {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #cbd5e0;
+  font-size: 0.9rem;
+}
+
+.nameInput {
+  width: 100%;
+  min-height: 2.75rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 20, 28, 0.65);
+  color: var(--white);
+  font: inherit;
+}
+
+.nameInput:focus {
+  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline-offset: 1px;
+}
+
+.error {
+  margin: 0 0 0.85rem;
+  color: #fca5a5;
+  font-size: 0.92rem;
+}
+
+.joinButton {
+  width: 100%;
+  min-height: 2.75rem;
+  border: none;
+  border-radius: 999px;
+  background: #6366f1;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.joinButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.livekitRoom,
+.room {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.96);
+}
+
+.topMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.guestBadge {
+  color: #c7d2fe;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eventTitle {
+  font-family: Sora, sans-serif;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventTime {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.guestName {
+  color: #e2e8f0;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}

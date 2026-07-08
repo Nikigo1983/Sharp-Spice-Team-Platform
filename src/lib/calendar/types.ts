@@ -98,6 +98,7 @@ export type CalendarMeetingAudit = {
   userName: string;
   roomName: string;
   action: CalendarMeetingAuditAction;
+  participantType: "team" | "guest";
   occurredAt: string;
 };
 
@@ -107,6 +108,17 @@ export type InsertCalendarMeetingAuditInput = {
   userName: string;
   roomName: string;
   action: CalendarMeetingAuditAction;
+  participantType?: "team" | "guest";
+};
+
+export type CalendarMeetingGuestInvite = {
+  id: string;
+  eventId: string;
+  token: string;
+  createdByUserId: string;
+  enabled: boolean;
+  createdAt: string;
+  revokedAt: string | null;
 };
 
 export type ListCalendarEventsOptions = {

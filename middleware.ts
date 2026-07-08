@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { getSessionFromToken } from "@/lib/auth/session";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/join"];
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -75,6 +75,8 @@ export const config = {
   matcher: [
     "/",
     "/login",
+    "/join",
+    "/join/:path*",
     "/dashboard",
     "/dashboard/:path*",
     "/clients",

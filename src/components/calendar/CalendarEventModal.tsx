@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { MeetingJoinButton } from "@/components/meet/MeetingJoinButton";
+import { MeetingGuestInviteLink } from "@/components/meet/MeetingGuestInviteLink";
 import type { SessionUser } from "@/lib/auth/types";
 import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import {
@@ -133,7 +134,10 @@ export function CalendarEventModal({
         </dl>
 
         {videoMeeting ? (
-          <MeetingJoinButton event={event} timeZone={timeZone} />
+          <>
+            <MeetingJoinButton event={event} timeZone={timeZone} />
+            <MeetingGuestInviteLink event={event} canRegenerate={canEdit} />
+          </>
         ) : null}
 
         {event.description ? (

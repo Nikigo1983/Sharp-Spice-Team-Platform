@@ -105,14 +105,6 @@
   line-height: 1.45;
 }
 
-.shareBanner {
-  padding: 0.55rem 1rem;
-  background: rgba(99, 102, 241, 0.16);
-  border-bottom: 1px solid rgba(99, 102, 241, 0.25);
-  color: #c7d2fe;
-  font-size: 0.92rem;
-}
-
 .stage {
   position: relative;
   flex: 1;
@@ -120,6 +112,10 @@
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
+}
+
+.stage:has(.speakerLayoutScreenShare) {
+  padding: 0;
 }
 
 .speakerLayout {
@@ -171,6 +167,73 @@
   outline-offset: 1px;
 }
 
+.speakerLayoutScreenShare {
+  gap: 0;
+}
+
+.speakerMainScreenShare {
+  position: relative;
+}
+
+.speakerMainTileScreenShare {
+  border-radius: 0;
+}
+
+.screenShareOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.shareBannerOverlay {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.85rem;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 20, 28, 0.92) 0%,
+    rgba(15, 20, 28, 0.55) 70%,
+    transparent 100%
+  );
+  color: #c7d2fe;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.filmstripScreenShare {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: none;
+  padding: 0.35rem 0.5rem 0.5rem;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 20, 28, 0.72) 0%,
+    rgba(15, 20, 28, 0.35) 65%,
+    transparent 100%
+  );
+  pointer-events: auto;
+}
+
+.filmstripScreenShare .filmstripCarousel {
+  height: 4.75rem;
+}
+
+.filmstripTileScreenShare {
+  width: 7.5rem;
+  min-width: 7.5rem;
+  max-width: 7.5rem;
+  height: 4.25rem;
+  border-radius: 0.45rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.filmstripScreenShare :global(.lk-carousel) :global(.lk-participant-tile) {
+  flex: 0 0 7.5rem;
+}
+
 .speakerLayoutCompact {
   gap: 0.5rem;
 }
@@ -179,6 +242,21 @@
   flex-basis: 5.5rem;
   min-height: 5rem;
   max-height: 6rem;
+}
+
+.filmstripScreenShareCompact .filmstripCarousel {
+  height: 3.75rem;
+}
+
+.filmstripScreenShareCompact .filmstripTileScreenShare {
+  width: 6rem;
+  min-width: 6rem;
+  max-width: 6rem;
+  height: 3.35rem;
+}
+
+.filmstripScreenShareCompact :global(.lk-carousel) :global(.lk-participant-tile) {
+  flex: 0 0 6rem;
 }
 
 .loadingCard {

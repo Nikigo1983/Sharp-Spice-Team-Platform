@@ -68,51 +68,80 @@ export function MeetingSpeakerLayout({ compact = false }: { compact?: boolean })
     setPinnedTrack(event.track);
   }
 
+  const filmstrip = carouselTracks.length > 0 ? (
+    <div
+      className={[
+        styles.filmstrip,
+        screenShareTrack ? styles.filmstripScreenShare : "",
+        compact ? styles.filmstripCompact : "",
+        screenShareTrack && compact ? styles.filmstripScreenShareCompact : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <CarouselLayout
+        tracks={carouselTracks}
+        orientation="horizontal"
+        className={styles.filmstripCarousel}
+      >
+        <ParticipantTile
+          className={[
+            styles.filmstripTile,
+            screenShareTrack ? styles.filmstripTileScreenShare : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onParticipantClick={handleCarouselParticipantClick}
+        />
+      </CarouselLayout>
+    </div>
+  ) : null;
+
   return (
-    <>
-      {screenShareTrack ? (
-        <div className={styles.shareBanner}>
-          {screenShareTrack.participant.name || screenShareTrack.participant.identity}{" "}
-          демонстрирует экран
-        </div>
-      ) : null}
+    <div
+      className={[
+        styles.speakerLayout,
+        screenShareTrack ? styles.speakerLayoutScreenShare : "",
+        compact ? styles.speakerLayoutCompact : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {!screenShareTrack ? filmstrip : null}
 
       <div
         className={[
-          styles.speakerLayout,
-          compact ? styles.speakerLayoutCompact : "",
+          styles.speakerMain,
+          screenShareTrack ? styles.speakerMainScreenShare : "",
         ]
           .filter(Boolean)
           .join(" ")}
       >
-      {carouselTracks.length > 0 ? (
-        <div
-          className={[
-            styles.filmstrip,
-            compact ? styles.filmstripCompact : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          <CarouselLayout
-            tracks={carouselTracks}
-            orientation="horizontal"
-            className={styles.filmstripCarousel}
-          >
-            <ParticipantTile
-              className={styles.filmstripTile}
-              onParticipantClick={handleCarouselParticipantClick}
-            />
-          </CarouselLayout>
-        </div>
-      ) : null}
-
-      <div className={styles.speakerMain}>
         {focusTrack ? (
-          <FocusLayout trackRef={focusTrack} className={styles.speakerMainTile} />
+          <FocusLayout
+            trackRef={focusTrack}
+            className={[
+              styles.speakerMainTile,
+              screenShareTrack ? styles.speakerMainTileScreenShare : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          />
+        ) : null}
+
+        {screenShareTrack ? (
+          <>
+            <div className={styles.screenShareOverlay}>
+              <div className={styles.shareBannerOverlay}>
+                {screenShareTrack.participant.name ||
+                  screenShareTrack.participant.identity}{" "}
+                демонстрирует экран
+              </div>
+              {filmstrip}
+            </div>
+          </>
         ) : null}
       </div>
-      </div>
-    </>
+    </div>
   );
 }

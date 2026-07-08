@@ -219,9 +219,10 @@ export async function handleGetGuestAdmissionStatus(
   };
 }
 
-export async function handleListPendingGuestAdmissions(
+export async function handleListGuestAdmissions(
   session: SessionUser,
   eventId: string,
+  options?: { pendingOnly?: boolean },
   storeDeps: CalendarStoreDeps = defaultCalendarStoreDeps,
   deps: GuestAdmissionDeps = defaultGuestAdmissionDeps,
 ): Promise<
@@ -240,8 +241,28 @@ export async function handleListPendingGuestAdmissions(
     return { status: 503, error: "Guest admissions not configured" };
   }
 
-  const admissions = await deps.listAdmissionsByEvent(eventId, "pending");
+  const admissions = await deps.listAdmissionsByEvent(
+    eventId,
+    options?.pendingOnly ? "pending" : undefined,
+  );
   return { admissions };
+}
+
+export async function handleListPendingGuestAdmissions(
+  session: SessionUser,
+  eventId: string,
+  storeDeps: CalendarStoreDeps = defaultCalendarStoreDeps,
+  deps: GuestAdmissionDeps = defaultGuestAdmissionDeps,
+): Promise<
+  { admissions: CalendarMeetingGuestAdmission[] } | GuestAdmissionHandlerError
+> {
+  return handleListGuestAdmissions(
+    session,
+    eventId,
+    { pendingOnly: true },
+    storeDeps,
+    deps,
+  );
 }
 
 export async function handleDecideGuestAdmission(

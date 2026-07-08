@@ -12,6 +12,8 @@ export type CalendarEventRow = {
   guest_waiting_room: boolean;
   guest_max_count: number | null;
   guest_access_password_hash: string | null;
+  linked_client_id: string | null;
+  linked_client_name: string | null;
   start_at: string;
   end_at: string;
   all_day: boolean;
@@ -41,6 +43,8 @@ export function mapCalendarEventRowToEvent(
     guestMaxCount: row.guest_max_count ?? null,
     guestAccessPasswordHash: row.guest_access_password_hash ?? null,
     guestAccessPasswordSet: Boolean(row.guest_access_password_hash),
+    linkedClientId: row.linked_client_id ?? null,
+    linkedClientName: row.linked_client_name ?? null,
     participantUserIds,
     startAt: row.start_at,
     endAt: row.end_at,
@@ -68,6 +72,8 @@ export function mapCalendarEventToRow(event: CalendarEvent): CalendarEventRow {
     guest_waiting_room: event.guestWaitingRoom,
     guest_max_count: event.guestMaxCount,
     guest_access_password_hash: event.guestAccessPasswordHash,
+    linked_client_id: event.linkedClientId,
+    linked_client_name: event.linkedClientName,
     start_at: event.startAt,
     end_at: event.endAt,
     all_day: event.allDay,

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { MeetingJoinButton } from "@/components/meet/MeetingJoinButton";
 import { MeetingGuestInviteLink } from "@/components/meet/MeetingGuestInviteLink";
+import { MeetingGuestHistory } from "@/components/meet/MeetingGuestHistory";
 import type { SessionUser } from "@/lib/auth/types";
 import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import {
@@ -112,6 +113,19 @@ export function CalendarEventModal({
                 <dt>Зал ожидания</dt>
                 <dd>{event.guestWaitingRoom ? "Включён для гостей" : "Выключен"}</dd>
               </div>
+              {event.linkedClientId ? (
+                <div>
+                  <dt>Клиент</dt>
+                  <dd>
+                    <a
+                      className={styles.clientLink}
+                      href={`/clients/${encodeURIComponent(event.linkedClientId)}`}
+                    >
+                      {event.linkedClientName ?? event.linkedClientId}
+                    </a>
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Статус</dt>
                 <dd>
@@ -149,6 +163,7 @@ export function CalendarEventModal({
           <>
             <MeetingJoinButton event={event} timeZone={timeZone} />
             <MeetingGuestInviteLink event={event} canRegenerate={canEdit} />
+            <MeetingGuestHistory eventId={event.id} />
           </>
         ) : null}
 

@@ -19,6 +19,8 @@ const sampleEvent: CalendarEvent = {
   guestMaxCount: 10,
   guestAccessPasswordHash: null,
   guestAccessPasswordSet: false,
+  linkedClientId: null,
+  linkedClientName: null,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T09:00:00.000Z",
@@ -80,5 +82,21 @@ describe("mapCalendarEventToRow / mapCalendarEventRowToEvent", () => {
     assert.equal(restored.guestMaxCount, 5);
     assert.equal(restored.guestAccessPasswordHash, "hash-value");
     assert.equal(restored.guestAccessPasswordSet, true);
+  });
+
+  it("round-trips linked client fields for video meetings", () => {
+    const row = mapCalendarEventToRow({
+      ...sampleEvent,
+      eventType: "video_meeting",
+      videoInviteMode: "all_team",
+      linkedClientId: "CL-1001",
+      linkedClientName: "Anna Client",
+    });
+    assert.equal(row.linked_client_id, "CL-1001");
+    assert.equal(row.linked_client_name, "Anna Client");
+
+    const restored = mapCalendarEventRowToEvent(row);
+    assert.equal(restored.linkedClientId, "CL-1001");
+    assert.equal(restored.linkedClientName, "Anna Client");
   });
 });

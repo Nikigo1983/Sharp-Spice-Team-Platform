@@ -18,6 +18,7 @@ export function MeetingGuestInviteLink({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [linkedClientEmail, setLinkedClientEmail] = useState<string | null>(null);
 
   const loadInvite = useCallback(async () => {
     setLoading(true);
@@ -50,6 +51,26 @@ export function MeetingGuestInviteLink({
   useEffect(() => {
     void loadInvite();
   }, [loadInvite]);
+
+  useEffect(() => {
+    if (!event.linkedClientId) {
+      setLinkedClientEmail(null);
+      return;
+    }
+
+    void fetch(`/api/clients/${encodeURIComponent(event.linkedClientId)}`)
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          client?: { email?: string };
+        };
+        if (response.ok) {
+          setLinkedClientEmail(payload.client?.email?.trim() || null);
+        }
+      })
+      .catch(() => {
+        setLinkedClientEmail(null);
+      });
+  }, [event.linkedClientId]);
 
   async function handleCopy() {
     if (!guestJoinUrl) {
@@ -108,11 +129,17 @@ export function MeetingGuestInviteLink({
       return null;
     }
 
+    const greetingName = event.linkedClientName?.trim() || "коллеги";
     const subject = encodeURIComponent(`Ссылка на встречу: ${event.title}`);
     const body = encodeURIComponent(
-      `Здравствуйте!\n\nПриглашаем вас на видеовстречу «${event.title}».\n\nПодключиться можно по ссылке (регистрация не нужна):\n${guestJoinUrl}\n\nДо встречи!`,
+      `Здравствуйте, ${greetingName}!\n\nПриглашаем вас на видеовстречу «${event.title}».\n\nПодключиться можно по ссылке (регистрация не нужна):\n${guestJoinUrl}\n\nДо встречи!`,
     );
-    return `mailto:?subject=${subject}&body=${body}`;
+    const recipient = linkedClientEmail
+      ? encodeURIComponent(linkedClientEmail)
+      : "";
+    return recipient
+      ? `mailto:${recipient}?subject=${subject}&body=${body}`
+      : `mailto:?subject=${subject}&body=${body}`;
   }
 
   return (

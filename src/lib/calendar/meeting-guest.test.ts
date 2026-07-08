@@ -32,6 +32,8 @@ const event: CalendarEvent = {
   guestMaxCount: 10,
   guestAccessPasswordHash: null,
   guestAccessPasswordSet: false,
+  linkedClientId: null,
+  linkedClientName: null,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T08:30:00.000Z",

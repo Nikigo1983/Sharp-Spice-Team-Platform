@@ -8,6 +8,7 @@ import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import type { CalendarEventType, CalendarScope, VideoInviteMode } from "@/lib/calendar/types";
 import { CalendarDateSelect } from "./CalendarDateSelect";
 import { CalendarTimeSelect } from "./CalendarTimeSelect";
+import { CalendarClientPicker } from "./CalendarClientPicker";
 import { useCalendarTimeZone } from "./CalendarTimeZoneContext";
 import styles from "./CalendarEventForm.module.css";
 
@@ -273,6 +274,20 @@ export function CalendarEventForm({
             })}
           </div>
         </fieldset>
+      ) : null}
+
+      {values.eventType === "video_meeting" ? (
+        <CalendarClientPicker
+          clientId={values.linkedClientId}
+          clientName={values.linkedClientName}
+          onChange={({ clientId, clientName }) =>
+            setValues({
+              ...values,
+              linkedClientId: clientId,
+              linkedClientName: clientName,
+            })
+          }
+        />
       ) : null}
 
       {values.eventType === "video_meeting" ? (

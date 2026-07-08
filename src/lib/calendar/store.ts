@@ -146,6 +146,8 @@ function normalizeEvent(event: CalendarEvent): CalendarEvent {
     guestAccessPasswordHash: event.guestAccessPasswordHash ?? null,
     guestAccessPasswordSet:
       event.guestAccessPasswordSet ?? Boolean(event.guestAccessPasswordHash),
+    linkedClientId: event.linkedClientId ?? null,
+    linkedClientName: event.linkedClientName ?? null,
     participantUserIds: event.participantUserIds ?? [],
     sendReminders: event.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
   };
@@ -164,6 +166,35 @@ async function resolveGuestAccessPasswordHash(
     return null;
   }
   return hashGuestAccessPassword(normalized);
+}
+
+function resolveLinkedClient(
+  eventType: CalendarEvent["eventType"],
+  clientId: string | null | undefined,
+  clientName: string | null | undefined,
+  existing?: { id: string | null; name: string | null },
+): { linkedClientId: string | null; linkedClientName: string | null } {
+  if (eventType !== "video_meeting") {
+    return { linkedClientId: null, linkedClientName: null };
+  }
+
+  if (clientId === undefined && clientName === undefined) {
+    return {
+      linkedClientId: existing?.id ?? null,
+      linkedClientName: existing?.name ?? null,
+    };
+  }
+
+  const trimmedId = clientId?.trim() ?? "";
+  if (!trimmedId) {
+    return { linkedClientId: null, linkedClientName: null };
+  }
+
+  const trimmedName = clientName?.trim() ?? "";
+  return {
+    linkedClientId: trimmedId,
+    linkedClientName: trimmedName || existing?.name || null,
+  };
 }
 
 function resolveVideoInviteForCreate(
@@ -284,6 +315,11 @@ export async function createEvent(
     input.eventType ?? CALENDAR_DEFAULT_EVENT_TYPE,
     input.guestAccessPassword,
   );
+  const { linkedClientId, linkedClientName } = resolveLinkedClient(
+    input.eventType ?? CALENDAR_DEFAULT_EVENT_TYPE,
+    input.linkedClientId,
+    input.linkedClientName,
+  );
   const event: CalendarEvent = {
     id: randomUUID(),
     companyId: CALENDAR_COMPANY_ID,
@@ -303,6 +339,8 @@ export async function createEvent(
         : null,
     guestAccessPasswordHash,
     guestAccessPasswordSet: Boolean(guestAccessPasswordHash),
+    linkedClientId,
+    linkedClientName,
     participantUserIds,
     startAt: input.startAt,
     endAt: input.endAt,
@@ -382,6 +420,16 @@ export async function updateEvent(
     input.guestAccessPassword,
     rawExisting.guestAccessPasswordHash,
   );
+  const nextEventType = rawExisting.eventType;
+  const { linkedClientId, linkedClientName } = resolveLinkedClient(
+    nextEventType,
+    input.linkedClientId,
+    input.linkedClientName,
+    {
+      id: rawExisting.linkedClientId,
+      name: rawExisting.linkedClientName,
+    },
+  );
 
   const updated: CalendarEvent = {
     ...rawExisting,
@@ -410,6 +458,8 @@ export async function updateEvent(
         : rawExisting.guestMaxCount,
     guestAccessPasswordHash,
     guestAccessPasswordSet: Boolean(guestAccessPasswordHash),
+    linkedClientId,
+    linkedClientName,
     participantUserIds: nextParticipantUserIds,
     updatedByUserId:
       input.updatedByUserId !== undefined

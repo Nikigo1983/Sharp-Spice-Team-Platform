@@ -27,6 +27,8 @@ export type CalendarEvent = {
   guestMaxCount: number | null;
   guestAccessPasswordHash: string | null;
   guestAccessPasswordSet: boolean;
+  linkedClientId: string | null;
+  linkedClientName: string | null;
   participantUserIds: string[];
   startAt: string;
   endAt: string;
@@ -50,6 +52,8 @@ export type CreateCalendarEventInput = {
   guestWaitingRoom?: boolean;
   guestMaxCount?: number | null;
   guestAccessPassword?: string | null;
+  linkedClientId?: string | null;
+  linkedClientName?: string | null;
   participantUserIds?: string[];
   startAt: string;
   endAt: string;
@@ -72,6 +76,8 @@ export type UpdateCalendarEventInput = {
   guestWaitingRoom?: boolean;
   guestMaxCount?: number | null;
   guestAccessPassword?: string | null;
+  linkedClientId?: string | null;
+  linkedClientName?: string | null;
   participantUserIds?: string[];
   updatedByUserId?: string | null;
 };

@@ -116,6 +116,21 @@ function parseOptionalVideoInviteMode(
   return value;
 }
 
+function parseOptionalStringField(
+  value: unknown,
+): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new CalendarValidationError("Expected string or null");
+  }
+  return value;
+}
+
 function parseCreateBody(body: unknown): Omit<
   CreateCalendarEventInput,
   "ownerUserId" | "createdByUserId" | "createdByName"
@@ -168,6 +183,8 @@ function parseCreateBody(body: unknown): Omit<
     guestAccessPassword: normalizeGuestAccessPasswordInput(
       record.guestAccessPassword,
     ),
+    linkedClientId: parseOptionalStringField(record.linkedClientId),
+    linkedClientName: parseOptionalStringField(record.linkedClientName),
     participantUserIds: parseParticipantUserIds(record.participantUserIds),
   };
 }
@@ -184,6 +201,8 @@ const UPDATE_FIELDS = new Set([
   "guestWaitingRoom",
   "guestMaxCount",
   "guestAccessPassword",
+  "linkedClientId",
+  "linkedClientName",
   "participantUserIds",
 ]);
 
@@ -267,6 +286,12 @@ function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
     input.guestAccessPassword = normalizeGuestAccessPasswordInput(
       record.guestAccessPassword,
     );
+  }
+  if ("linkedClientId" in record) {
+    input.linkedClientId = parseOptionalStringField(record.linkedClientId);
+  }
+  if ("linkedClientName" in record) {
+    input.linkedClientName = parseOptionalStringField(record.linkedClientName);
   }
   if ("participantUserIds" in record) {
     input.participantUserIds = parseParticipantUserIds(record.participantUserIds);

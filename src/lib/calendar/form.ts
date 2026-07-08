@@ -19,6 +19,8 @@ export type CalendarFormValues = {
   guestWaitingRoom: boolean;
   guestMaxCount: number;
   guestAccessPassword: string;
+  linkedClientId: string | null;
+  linkedClientName: string | null;
   participantUserIds: string[];
   title: string;
   description: string;
@@ -58,6 +60,8 @@ export function defaultFormValues(
     guestWaitingRoom: true,
     guestMaxCount: 10,
     guestAccessPassword: "",
+    linkedClientId: null,
+    linkedClientName: null,
     participantUserIds: [],
     title: "",
     description: "",
@@ -88,6 +92,8 @@ export function eventToFormValues(
     guestWaitingRoom: event.guestWaitingRoom ?? true,
     guestMaxCount: event.guestMaxCount ?? 10,
     guestAccessPassword: "",
+    linkedClientId: event.linkedClientId,
+    linkedClientName: event.linkedClientName,
     title: event.title,
     description: event.description,
     startDate: formatDateKey(start, timeZone),
@@ -210,6 +216,10 @@ export function formValuesToCreatePayload(
         : values.eventType === "video_meeting"
           ? null
           : undefined,
+    linkedClientId:
+      values.eventType === "video_meeting" ? values.linkedClientId : undefined,
+    linkedClientName:
+      values.eventType === "video_meeting" ? values.linkedClientName : undefined,
   };
 }
 
@@ -248,5 +258,9 @@ export function formValuesToUpdatePayload(
       (values.scope === "personal" || values.videoInviteMode === "selected")
         ? values.participantUserIds
         : undefined,
+    linkedClientId:
+      values.eventType === "video_meeting" ? values.linkedClientId : undefined,
+    linkedClientName:
+      values.eventType === "video_meeting" ? values.linkedClientName : undefined,
   };
 }

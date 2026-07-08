@@ -24,6 +24,9 @@ const event: CalendarEvent = {
   eventType: "video_meeting",
   videoInviteMode: "all_team",
   guestWaitingRoom: true,
+  guestMaxCount: 10,
+  guestAccessPasswordHash: null,
+  guestAccessPasswordSet: false,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T08:30:00.000Z",
@@ -42,6 +45,7 @@ describe("meeting guest admissions", () => {
     const result = await handleRequestGuestAdmission(
       "invite-token",
       "Anna Client",
+      undefined,
       {
         getInviteByToken: async () => ({
           id: "inv-1",
@@ -54,6 +58,7 @@ describe("meeting guest admissions", () => {
         }),
         getEventById: async () => event,
         isConfigured: () => true,
+        countActiveAdmissions: async () => 0,
         insertAdmission: async (input) => ({
           id: "adm-1",
           eventId: input.eventId,
@@ -72,8 +77,8 @@ describe("meeting guest admissions", () => {
       new Date("2026-06-25T08:10:00.000Z"),
     );
 
-    assert.ok("admissionId" in result);
-    if ("admissionId" in result) {
+    assert.ok(!("error" in result));
+    if (!("error" in result)) {
       assert.equal(result.status, "pending");
       assert.equal(result.waitingRoom, true);
     }
@@ -108,6 +113,7 @@ describe("meeting guest admissions", () => {
         getInviteByToken: async () => null,
         getEventById: async () => event,
         isConfigured: () => true,
+        countActiveAdmissions: async () => 0,
         insertAdmission: async () => admission,
         getAdmissionById: async () => admission,
         listAdmissionsByEvent: async () => [admission],
@@ -120,8 +126,8 @@ describe("meeting guest admissions", () => {
       },
     );
 
-    assert.ok(!("status" in result));
-    if (!("status" in result)) {
+    assert.ok(!("error" in result));
+    if (!("error" in result)) {
       assert.equal(result.admission.status, "admitted");
     }
   });

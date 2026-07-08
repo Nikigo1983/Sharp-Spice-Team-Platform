@@ -16,9 +16,14 @@ import {
   isGuestParticipantId,
   normalizeGuestDisplayName,
 } from "./meeting-guest-invite";
-import { canViewEvent } from "./permissions";
+import {
+  eventRequiresGuestPassword,
+  isGuestLimitReached,
+  verifyGuestAccessPassword,
+} from "./meeting-guest-access";
 import { isVideoMeeting } from "./meeting";
-import type { CalendarMeetingGuestAdmission } from "./types";
+import { canViewEvent } from "./permissions";
+import type { CalendarEvent, CalendarMeetingGuestAdmission } from "./types";
 import {
   resolveGuestMeetingPreview,
   type GuestMeetingPreviewDeps,
@@ -49,6 +54,7 @@ export type GuestAdmissionDeps = GuestMeetingPreviewDeps & {
   getAdmissionById: typeof sbAdmissions.sbGetGuestAdmissionById;
   listAdmissionsByEvent: typeof sbAdmissions.sbListGuestAdmissionsByEvent;
   updateAdmissionStatus: typeof sbAdmissions.sbUpdateGuestAdmissionStatus;
+  countActiveAdmissions: typeof sbAdmissions.sbCountActiveGuestAdmissions;
   isConfigured?: () => boolean;
 };
 
@@ -58,8 +64,44 @@ export const defaultGuestAdmissionDeps: GuestAdmissionDeps = {
   getAdmissionById: sbAdmissions.sbGetGuestAdmissionById,
   listAdmissionsByEvent: sbAdmissions.sbListGuestAdmissionsByEvent,
   updateAdmissionStatus: sbAdmissions.sbUpdateGuestAdmissionStatus,
+  countActiveAdmissions: sbAdmissions.sbCountActiveGuestAdmissions,
   isConfigured: isSupabaseConfigured,
 };
+
+async function validateGuestAccess(
+  event: CalendarEvent,
+  accessPasswordInput: unknown,
+  deps: GuestAdmissionDeps,
+): Promise<GuestAdmissionHandlerError | null> {
+  if (!eventRequiresGuestPassword(event)) {
+    return null;
+  }
+
+  if (typeof accessPasswordInput !== "string") {
+    return { status: 403, error: "Guest password required" };
+  }
+
+  const valid = await verifyGuestAccessPassword(
+    accessPasswordInput,
+    event.guestAccessPasswordHash,
+  );
+  if (!valid) {
+    return { status: 403, error: "Invalid guest password" };
+  }
+
+  return null;
+}
+
+async function ensureGuestCapacity(
+  event: CalendarEvent,
+  deps: GuestAdmissionDeps,
+): Promise<GuestAdmissionHandlerError | null> {
+  const activeCount = await deps.countActiveAdmissions(event.id);
+  if (isGuestLimitReached(activeCount, event)) {
+    return { status: 403, error: "Guest limit reached" };
+  }
+  return null;
+}
 
 async function assertCanManageGuestAdmissions(
   session: SessionUser,
@@ -89,6 +131,7 @@ async function assertCanManageGuestAdmissions(
 export async function handleRequestGuestAdmission(
   inviteToken: string,
   displayNameInput: unknown,
+  accessPasswordInput: unknown,
   deps: GuestAdmissionDeps = defaultGuestAdmissionDeps,
   now: Date = new Date(),
 ): Promise<GuestAdmissionRequestResponse | GuestAdmissionHandlerError> {
@@ -108,6 +151,20 @@ export async function handleRequestGuestAdmission(
 
   if (!(deps.isConfigured ?? isSupabaseConfigured)()) {
     return { status: 503, error: "Guest admissions not configured" };
+  }
+
+  const passwordError = await validateGuestAccess(
+    preview.event,
+    accessPasswordInput,
+    deps,
+  );
+  if (passwordError) {
+    return passwordError;
+  }
+
+  const capacityError = await ensureGuestCapacity(preview.event, deps);
+  if (capacityError) {
+    return capacityError;
   }
 
   if (!preview.event.guestWaitingRoom) {
@@ -256,4 +313,53 @@ export async function assertGuestAdmissionForToken(
   }
 
   return admission;
+}
+
+export async function createDirectGuestAdmission(
+  inviteToken: string,
+  displayName: string,
+  accessPasswordInput: unknown,
+  deps: GuestAdmissionDeps = defaultGuestAdmissionDeps,
+  now: Date = new Date(),
+): Promise<
+  | { admissionId: string; guestId: string }
+  | GuestAdmissionHandlerError
+> {
+  const preview = await resolveGuestMeetingPreview(inviteToken, deps, now);
+  if ("error" in preview) {
+    return { status: 404, error: "Invite link invalid" };
+  }
+
+  const passwordError = await validateGuestAccess(
+    preview.event,
+    accessPasswordInput,
+    deps,
+  );
+  if (passwordError) {
+    return passwordError;
+  }
+
+  const capacityError = await ensureGuestCapacity(preview.event, deps);
+  if (capacityError) {
+    return capacityError;
+  }
+
+  const invite = await deps.getInviteByToken(inviteToken.trim());
+  if (!invite) {
+    return { status: 404, error: "Invite link invalid" };
+  }
+
+  const guestId = `guest-${randomUUID()}`;
+  const admission = await deps.insertAdmission({
+    eventId: preview.event.id,
+    inviteId: invite.id,
+    guestId,
+    displayName,
+    status: "admitted",
+  });
+
+  return {
+    admissionId: admission.id,
+    guestId: admission.guestId,
+  };
 }

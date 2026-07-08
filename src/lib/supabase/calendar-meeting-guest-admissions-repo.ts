@@ -40,6 +40,7 @@ export async function sbInsertGuestAdmission(input: {
   inviteId: string;
   guestId: string;
   displayName: string;
+  status?: GuestAdmissionStatus;
 }): Promise<CalendarMeetingGuestAdmission> {
   const row = {
     id: randomUUID(),
@@ -47,7 +48,7 @@ export async function sbInsertGuestAdmission(input: {
     invite_id: input.inviteId,
     guest_id: input.guestId,
     display_name: input.displayName,
-    status: "pending" as const,
+    status: input.status ?? ("pending" as const),
   };
 
   const { data, error } = await getSupabaseAdmin()
@@ -71,6 +72,37 @@ export async function sbGetGuestAdmissionById(
 
   if (error) throw error;
   return data ? mapRow(data as CalendarMeetingGuestAdmissionRow) : null;
+}
+
+export async function sbCountActiveGuestAdmissions(
+  eventId: string,
+): Promise<number> {
+  const { count, error } = await getSupabaseAdmin()
+    .from("calendar_meeting_guest_admissions")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .in("status", ["pending", "admitted"]);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function sbUpdateGuestAdmissionByGuestId(input: {
+  eventId: string;
+  guestId: string;
+  status: GuestAdmissionStatus;
+}): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("calendar_meeting_guest_admissions")
+    .update({
+      status: input.status,
+      decided_at: new Date().toISOString(),
+    })
+    .eq("event_id", input.eventId)
+    .eq("guest_id", input.guestId)
+    .in("status", ["pending", "admitted"]);
+
+  if (error) throw error;
 }
 
 export async function sbListGuestAdmissionsByEvent(

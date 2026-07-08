@@ -30,6 +30,10 @@ import { MeetingControlBar } from "./MeetingControlBar";
 import { MeetingDockGate } from "./MeetingDockGate";
 import { MeetingParticipantPanel } from "./MeetingParticipantPanel";
 import { MeetingSpeakerLayout } from "./MeetingSpeakerLayout";
+import {
+  MeetingGuestWaitingBanner,
+  usePendingGuestAdmissions,
+} from "./MeetingGuestWaitingBanner";
 import styles from "./CalendarMeetRoom.module.css";
 
 type MeetingTokenPayload = {
@@ -81,6 +85,7 @@ function MeetingStage({
 }: MeetingStageProps) {
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const participants = useParticipants();
+  const pendingGuestAdmissions = usePendingGuestAdmissions(event.id);
 
   return (
     <div className={styles.room}>
@@ -117,12 +122,18 @@ function MeetingStage({
         </div>
       ) : null}
 
+      <MeetingGuestWaitingBanner
+        count={pendingGuestAdmissions.length}
+        onOpenParticipants={() => setParticipantsOpen(true)}
+      />
+
       <div className={styles.stage}>
         <MeetingSpeakerLayout compact={isDockMode} />
       </div>
 
       <MeetingControlBar
         participantCount={participants.length}
+        pendingGuestCount={pendingGuestAdmissions.length}
         participantsOpen={participantsOpen}
         onToggleParticipants={() => setParticipantsOpen((open) => !open)}
         onLeave={onLeave}

@@ -29,6 +29,9 @@ const event: CalendarEvent = {
   eventType: "video_meeting",
   videoInviteMode: "all_team",
   guestWaitingRoom: false,
+  guestMaxCount: 10,
+  guestAccessPasswordHash: null,
+  guestAccessPasswordSet: false,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T08:30:00.000Z",
@@ -140,8 +143,8 @@ describe("handleGetOrCreateGuestInvite", () => {
       },
     );
 
-    assert.ok(!("status" in result));
-    if (!("status" in result)) {
+    assert.ok(!("error" in result));
+    if (!("error" in result)) {
       assert.ok(result.guestJoinUrl.includes(`/join/${encodeURIComponent(insertedToken)}`));
     }
   });
@@ -154,10 +157,45 @@ describe("handleMintGuestMeetingToken", () => {
     process.env.LIVEKIT_API_KEY = "devkey";
     process.env.LIVEKIT_API_SECRET = "devsecret";
 
+    const admissionDeps = {
+      getInviteByToken: async () => ({
+        id: "inv-1",
+        eventId: event.id,
+        token: "invite-token",
+        createdByUserId: manager.id,
+        enabled: true,
+        createdAt: "2026-06-20T10:00:00.000Z",
+        revokedAt: null,
+      }),
+      getEventById: async () => event,
+      isConfigured: () => true,
+      countActiveAdmissions: async () => 0,
+      insertAdmission: async (input: {
+        eventId: string;
+        inviteId: string;
+        guestId: string;
+        displayName: string;
+        status?: "pending" | "admitted";
+      }) => ({
+        id: "adm-direct",
+        eventId: input.eventId,
+        inviteId: input.inviteId,
+        guestId: input.guestId,
+        displayName: input.displayName,
+        status: input.status ?? "admitted",
+        createdAt: "2026-06-25T08:05:00.000Z",
+        decidedAt: null,
+        decidedByUserId: null,
+      }),
+      getAdmissionById: async () => null,
+      listAdmissionsByEvent: async () => [],
+      updateAdmissionStatus: async () => null,
+    };
+
     const result = await handleMintGuestMeetingToken(
       "invite-token",
       "Anna Client",
-      undefined,
+      { admissionDeps },
       {
         getInviteByToken: async () => ({
           id: "inv-1",
@@ -174,8 +212,8 @@ describe("handleMintGuestMeetingToken", () => {
       now,
     );
 
-    assert.ok(!("status" in result));
-    if (!("status" in result)) {
+    assert.ok(!("error" in result));
+    if (!("error" in result)) {
       assert.equal(result.eventTitle, "Consultation");
       assert.ok(result.guestId.startsWith("guest-"));
       assert.ok(result.token.length > 20);

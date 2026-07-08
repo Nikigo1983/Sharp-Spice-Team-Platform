@@ -37,6 +37,7 @@
 
 .urlRow {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -53,6 +54,7 @@
 }
 
 .copyButton,
+.emailButton,
 .regenerateButton {
   min-height: 2.4rem;
   padding: 0 0.85rem;
@@ -67,6 +69,7 @@
 }
 
 .copyButton:hover,
+.emailButton:hover,
 .regenerateButton:hover {
   background: rgba(99, 102, 241, 0.28);
 }
@@ -81,12 +84,20 @@
   cursor: not-allowed;
 }
 
+.emailButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 @media (max-width: 640px) {
   .urlRow {
     flex-direction: column;
   }
 
-  .copyButton {
+  .copyButton,
+  .emailButton {
     width: 100%;
   }
 }

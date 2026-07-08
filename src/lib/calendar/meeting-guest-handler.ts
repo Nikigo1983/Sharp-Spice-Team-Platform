@@ -20,6 +20,10 @@ import {
   mintGuestMeetingAccessToken,
 } from "./meeting-token";
 import type { CalendarEvent } from "./types";
+import {
+  eventRequiresGuestPassword,
+  verifyGuestAccessPassword,
+} from "./meeting-guest-access";
 import * as sbAdmissions from "@/lib/supabase/calendar-meeting-guest-admissions-repo";
 import type { CalendarMeetingAuditAction } from "./types";
 
@@ -27,6 +31,7 @@ export type GuestMeetingPreview =
   | {
       event: CalendarEvent;
       phase: MeetingAccessPhase;
+      requiresGuestPassword: boolean;
     }
   | { error: "invalid_invite" | "not_video" | "not_found" | "not_configured" };
 
@@ -73,6 +78,7 @@ export async function resolveGuestMeetingPreview(
   return {
     event,
     phase: getMeetingAccessPhase(event, now),
+    requiresGuestPassword: eventRequiresGuestPassword(event),
   };
 }
 
@@ -93,7 +99,12 @@ export type GuestTokenResponse = {
 export async function handleMintGuestMeetingToken(
   inviteToken: string,
   displayNameInput: unknown,
-  options?: { admissionId?: string; guestId?: string },
+  options?: {
+    admissionId?: string;
+    guestId?: string;
+    accessPassword?: string;
+    admissionDeps?: import("./meeting-guest-admission-handler").GuestAdmissionDeps;
+  },
   deps: GuestMeetingPreviewDeps = defaultGuestMeetingPreviewDeps,
   now: Date = new Date(),
 ): Promise<GuestTokenResponse | GuestTokenHandlerError> {
@@ -120,15 +131,25 @@ export async function handleMintGuestMeetingToken(
     return { status: 403, error: "Meeting window closed" };
   }
 
+  if (preview.requiresGuestPassword) {
+    const valid = await verifyGuestAccessPassword(
+      options?.accessPassword ?? "",
+      preview.event.guestAccessPasswordHash,
+    );
+    if (!valid) {
+      return { status: 403, error: "Invalid guest password" };
+    }
+  }
+
   const env = getLiveKitEnv();
   if (!env) {
     return { status: 503, error: "Meetings not configured" };
   }
 
   let guestId = options?.guestId?.trim() ?? "";
+  let admissionId = options?.admissionId?.trim();
 
   if (preview.event.guestWaitingRoom) {
-    const admissionId = options?.admissionId?.trim();
     if (!admissionId || !guestId) {
       return { status: 403, error: "Guest admission required" };
     }
@@ -147,7 +168,20 @@ export async function handleMintGuestMeetingToken(
       return { status: 403, error: "Guest identity mismatch" };
     }
   } else {
-    guestId = `guest-${randomUUID()}`;
+    const { createDirectGuestAdmission, defaultGuestAdmissionDeps } =
+      await import("./meeting-guest-admission-handler");
+    const directAdmission = await createDirectGuestAdmission(
+      inviteToken,
+      displayName,
+      options?.accessPassword,
+      options?.admissionDeps ?? defaultGuestAdmissionDeps,
+      now,
+    );
+    if ("error" in directAdmission) {
+      return directAdmission;
+    }
+    guestId = directAdmission.guestId;
+    admissionId = directAdmission.admissionId;
   }
 
   const minted = await mintGuestMeetingAccessToken(
@@ -205,6 +239,14 @@ export async function handleRecordGuestMeetingAudit(
     action,
     participantType: "guest",
   });
+
+  if (action === "left") {
+    await sbAdmissions.sbUpdateGuestAdmissionByGuestId({
+      eventId: preview.event.id,
+      guestId,
+      status: "left",
+    });
+  }
 
   return { ok: true };
 }

@@ -1,6 +1,7 @@
 import { GuestMeetRoom } from "@/components/meet/GuestMeetRoom";
 import { GuestMeetingGate } from "@/components/meet/GuestMeetingGate";
 import { resolveGuestMeetingPreview } from "@/lib/calendar/meeting-guest-handler";
+import { sanitizeCalendarEventForClient } from "@/lib/calendar/meeting-guest-access";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -25,5 +26,11 @@ export default async function GuestJoinPage({ params }: PageProps) {
     return <GuestMeetingGate variant="closed" event={preview.event} />;
   }
 
-  return <GuestMeetRoom event={preview.event} inviteToken={token} />;
+  return (
+    <GuestMeetRoom
+      event={sanitizeCalendarEventForClient(preview.event)}
+      inviteToken={token}
+      requiresGuestPassword={preview.requiresGuestPassword}
+    />
+  );
 }

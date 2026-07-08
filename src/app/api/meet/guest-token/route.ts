@@ -25,10 +25,15 @@ export async function POST(request: Request) {
     body && typeof body === "object" && typeof (body as Record<string, unknown>).guestId === "string"
       ? (body as Record<string, string>).guestId
       : undefined;
+  const accessPassword =
+    body && typeof body === "object" && typeof (body as Record<string, unknown>).accessPassword === "string"
+      ? (body as Record<string, string>).accessPassword
+      : undefined;
 
   const result = await handleMintGuestMeetingToken(inviteToken, displayName, {
     admissionId,
     guestId,
+    accessPassword,
   });
 
   if ("status" in result) {

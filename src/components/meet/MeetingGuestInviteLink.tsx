@@ -103,6 +103,18 @@ export function MeetingGuestInviteLink({
     }
   }
 
+  function buildMailtoUrl() {
+    if (!guestJoinUrl) {
+      return null;
+    }
+
+    const subject = encodeURIComponent(`Ссылка на встречу: ${event.title}`);
+    const body = encodeURIComponent(
+      `Здравствуйте!\n\nПриглашаем вас на видеовстречу «${event.title}».\n\nПодключиться можно по ссылке (регистрация не нужна):\n${guestJoinUrl}\n\nДо встречи!`,
+    );
+    return `mailto:?subject=${subject}&body=${body}`;
+  }
+
   return (
     <section className={styles.section} aria-label="Ссылка для клиента">
       <div className={styles.header}>
@@ -129,6 +141,18 @@ export function MeetingGuestInviteLink({
           <button type="button" className={styles.copyButton} onClick={() => void handleCopy()}>
             {copied ? "Скопировано" : "Копировать"}
           </button>
+          <a
+            className={styles.emailButton}
+            href={buildMailtoUrl() ?? undefined}
+            aria-disabled={!guestJoinUrl}
+            onClick={(clickEvent) => {
+              if (!guestJoinUrl) {
+                clickEvent.preventDefault();
+              }
+            }}
+          >
+            Отправить по email
+          </a>
         </div>
       ) : null}
 

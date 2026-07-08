@@ -25,6 +25,11 @@ import {
 import { canViewEvent } from "./permissions";
 import { isUserInvitedToVideoMeeting, normalizeParticipantUserIds } from "./participants";
 import {
+  DEFAULT_GUEST_MAX_COUNT,
+  hashGuestAccessPassword,
+  normalizeGuestAccessPasswordInput,
+} from "./meeting-guest-access";
+import {
   listParticipantUserIdsByEventIds,
   replaceEventParticipants,
 } from "./participants-store";
@@ -137,9 +142,28 @@ function normalizeEvent(event: CalendarEvent): CalendarEvent {
     ...event,
     videoInviteMode: event.videoInviteMode ?? null,
     guestWaitingRoom: event.guestWaitingRoom ?? true,
+    guestMaxCount: event.guestMaxCount ?? null,
+    guestAccessPasswordHash: event.guestAccessPasswordHash ?? null,
+    guestAccessPasswordSet:
+      event.guestAccessPasswordSet ?? Boolean(event.guestAccessPasswordHash),
     participantUserIds: event.participantUserIds ?? [],
     sendReminders: event.sendReminders ?? CALENDAR_DEFAULT_SEND_REMINDERS,
   };
+}
+
+async function resolveGuestAccessPasswordHash(
+  eventType: CalendarEvent["eventType"],
+  passwordInput: string | null | undefined,
+  existingHash: string | null = null,
+): Promise<string | null> {
+  const normalized = normalizeGuestAccessPasswordInput(passwordInput);
+  if (normalized === undefined) {
+    return existingHash;
+  }
+  if (eventType !== "video_meeting" || normalized === null) {
+    return null;
+  }
+  return hashGuestAccessPassword(normalized);
 }
 
 function resolveVideoInviteForCreate(
@@ -256,6 +280,10 @@ export async function createEvent(
 
   const now = new Date().toISOString();
   const { videoInviteMode, participantUserIds } = resolveVideoInviteForCreate(input);
+  const guestAccessPasswordHash = await resolveGuestAccessPasswordHash(
+    input.eventType ?? CALENDAR_DEFAULT_EVENT_TYPE,
+    input.guestAccessPassword,
+  );
   const event: CalendarEvent = {
     id: randomUUID(),
     companyId: CALENDAR_COMPANY_ID,
@@ -269,6 +297,12 @@ export async function createEvent(
       input.eventType === "video_meeting"
         ? input.guestWaitingRoom ?? true
         : true,
+    guestMaxCount:
+      input.eventType === "video_meeting"
+        ? input.guestMaxCount ?? DEFAULT_GUEST_MAX_COUNT
+        : null,
+    guestAccessPasswordHash,
+    guestAccessPasswordSet: Boolean(guestAccessPasswordHash),
     participantUserIds,
     startAt: input.startAt,
     endAt: input.endAt,
@@ -343,6 +377,12 @@ export async function updateEvent(
     }
   }
 
+  const guestAccessPasswordHash = await resolveGuestAccessPasswordHash(
+    rawExisting.eventType,
+    input.guestAccessPassword,
+    rawExisting.guestAccessPasswordHash,
+  );
+
   const updated: CalendarEvent = {
     ...rawExisting,
     title: input.title !== undefined ? input.title.trim() : rawExisting.title,
@@ -364,6 +404,12 @@ export async function updateEvent(
       input.guestWaitingRoom !== undefined
         ? input.guestWaitingRoom
         : rawExisting.guestWaitingRoom,
+    guestMaxCount:
+      input.guestMaxCount !== undefined
+        ? input.guestMaxCount
+        : rawExisting.guestMaxCount,
+    guestAccessPasswordHash,
+    guestAccessPasswordSet: Boolean(guestAccessPasswordHash),
     participantUserIds: nextParticipantUserIds,
     updatedByUserId:
       input.updatedByUserId !== undefined

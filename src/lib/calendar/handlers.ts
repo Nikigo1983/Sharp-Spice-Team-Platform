@@ -20,6 +20,7 @@ import type {
 } from "./types";
 import { CALENDAR_EVENT_TYPES, CALENDAR_SCOPES, VIDEO_INVITE_MODES } from "./types";
 import type { CalendarEventType, VideoInviteMode } from "./types";
+import { normalizeGuestAccessPasswordInput, sanitizeCalendarEventForClient } from "./meeting-guest-access";
 import {
   CalendarValidationError,
   parseIsoRange,
@@ -158,6 +159,15 @@ function parseCreateBody(body: unknown): Omit<
       typeof record.guestWaitingRoom === "boolean"
         ? record.guestWaitingRoom
         : undefined,
+    guestMaxCount:
+      record.guestMaxCount === null
+        ? null
+        : typeof record.guestMaxCount === "number"
+          ? record.guestMaxCount
+          : undefined,
+    guestAccessPassword: normalizeGuestAccessPasswordInput(
+      record.guestAccessPassword,
+    ),
     participantUserIds: parseParticipantUserIds(record.participantUserIds),
   };
 }
@@ -172,6 +182,8 @@ const UPDATE_FIELDS = new Set([
   "sendReminders",
   "videoInviteMode",
   "guestWaitingRoom",
+  "guestMaxCount",
+  "guestAccessPassword",
   "participantUserIds",
 ]);
 
@@ -240,6 +252,22 @@ function parseUpdateBody(body: unknown): UpdateCalendarEventInput {
     }
     input.guestWaitingRoom = record.guestWaitingRoom;
   }
+  if ("guestMaxCount" in record) {
+    if (
+      record.guestMaxCount !== null &&
+      (typeof record.guestMaxCount !== "number" ||
+        record.guestMaxCount < 1 ||
+        record.guestMaxCount > 50)
+    ) {
+      throw new CalendarValidationError("guestMaxCount must be 1-50 or null");
+    }
+    input.guestMaxCount = record.guestMaxCount as number | null;
+  }
+  if ("guestAccessPassword" in record) {
+    input.guestAccessPassword = normalizeGuestAccessPasswordInput(
+      record.guestAccessPassword,
+    );
+  }
   if ("participantUserIds" in record) {
     input.participantUserIds = parseParticipantUserIds(record.participantUserIds);
   }
@@ -279,7 +307,7 @@ export async function handleListCalendarEvents(
       ownerUserId: session.id,
       viewerUserId: session.id,
     });
-    return { events };
+    return { events: events.map(sanitizeCalendarEventForClient) };
   } catch (error) {
     return toHandlerError(error);
   }
@@ -306,7 +334,7 @@ export async function handleCreateCalendarEvent(
 
     validateCreateInput(input);
     const event = await deps.createEvent(input);
-    return { event };
+    return { event: sanitizeCalendarEventForClient(event) };
   } catch (error) {
     return toHandlerError(error);
   }
@@ -321,7 +349,7 @@ export async function handleGetCalendarEvent(
   if (!event || !canViewEvent(session, event)) {
     return { status: 404, error: "Not found" };
   }
-  return { event };
+  return { event: sanitizeCalendarEventForClient(event) };
 }
 
 export async function handleUpdateCalendarEvent(
@@ -349,7 +377,7 @@ export async function handleUpdateCalendarEvent(
     if (!event) {
       return { status: 404, error: "Not found" };
     }
-    return { event };
+    return { event: sanitizeCalendarEventForClient(event) };
   } catch (error) {
     return toHandlerError(error);
   }

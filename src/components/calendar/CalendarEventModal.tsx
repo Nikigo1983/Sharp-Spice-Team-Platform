@@ -101,6 +101,14 @@ export function CalendarEventModal({
                 <dd>{formatParticipantNames(event, teamMembers)}</dd>
               </div>
               <div>
+                <dt>Лимит гостей</dt>
+                <dd>{event.guestMaxCount ?? "Без лимита"}</dd>
+              </div>
+              <div>
+                <dt>Пароль для гостей</dt>
+                <dd>{event.guestAccessPasswordSet ? "Установлен" : "Не задан"}</dd>
+              </div>
+              <div>
                 <dt>Зал ожидания</dt>
                 <dd>{event.guestWaitingRoom ? "Включён для гостей" : "Выключен"}</dd>
               </div>

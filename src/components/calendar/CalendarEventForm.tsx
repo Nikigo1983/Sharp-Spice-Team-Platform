@@ -291,6 +291,48 @@ export function CalendarEventForm({
         </label>
       ) : null}
 
+      {values.eventType === "video_meeting" ? (
+        <label className={styles.field}>
+          <span className={styles.label}>Максимум гостей по ссылке</span>
+          <input
+            className={styles.input}
+            type="number"
+            min={1}
+            max={50}
+            value={values.guestMaxCount ?? 10}
+            onChange={(changeEvent) =>
+              setValues({
+                ...values,
+                guestMaxCount: Number(changeEvent.target.value) || 10,
+              })
+            }
+          />
+        </label>
+      ) : null}
+
+      {values.eventType === "video_meeting" ? (
+        <label className={styles.field}>
+          <span className={styles.label}>Пароль для гостей (необязательно)</span>
+          <input
+            className={styles.input}
+            type="password"
+            value={values.guestAccessPassword}
+            onChange={(changeEvent) =>
+              setValues({
+                ...values,
+                guestAccessPassword: changeEvent.target.value,
+              })
+            }
+            placeholder={
+              mode === "edit"
+                ? "Оставьте пустым, чтобы не менять"
+                : "Без пароля — вход только по ссылке"
+            }
+            autoComplete="new-password"
+          />
+        </label>
+      ) : null}
+
       <label className={styles.field}>
         <span className={styles.label}>Название *</span>
         <input

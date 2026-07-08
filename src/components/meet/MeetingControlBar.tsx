@@ -11,6 +11,7 @@ type MeetingControlBarProps = {
   onLeave: () => void;
   compact?: boolean;
   hideScreenShare?: boolean;
+  pendingGuestCount?: number;
 };
 
 export function MeetingControlBar({
@@ -20,6 +21,7 @@ export function MeetingControlBar({
   onLeave,
   compact = false,
   hideScreenShare = false,
+  pendingGuestCount = 0,
 }: MeetingControlBarProps) {
   const room = useRoomContext();
 
@@ -77,6 +79,9 @@ export function MeetingControlBar({
         >
           <i className="fa-solid fa-users" aria-hidden="true" />
           <span className={styles.count}>{participantCount}</span>
+          {pendingGuestCount > 0 ? (
+            <span className={styles.pendingBadge}>{pendingGuestCount}</span>
+          ) : null}
         </button>
       </div>
       <button

@@ -10,6 +10,8 @@ export type CalendarEventRow = {
   event_type: CalendarEvent["eventType"];
   video_invite_mode: VideoInviteMode | null;
   guest_waiting_room: boolean;
+  guest_max_count: number | null;
+  guest_access_password_hash: string | null;
   start_at: string;
   end_at: string;
   all_day: boolean;
@@ -36,6 +38,9 @@ export function mapCalendarEventRowToEvent(
     eventType: row.event_type,
     videoInviteMode: row.video_invite_mode ?? null,
     guestWaitingRoom: row.guest_waiting_room ?? true,
+    guestMaxCount: row.guest_max_count ?? null,
+    guestAccessPasswordHash: row.guest_access_password_hash ?? null,
+    guestAccessPasswordSet: Boolean(row.guest_access_password_hash),
     participantUserIds,
     startAt: row.start_at,
     endAt: row.end_at,
@@ -61,6 +66,8 @@ export function mapCalendarEventToRow(event: CalendarEvent): CalendarEventRow {
     event_type: event.eventType,
     video_invite_mode: event.videoInviteMode,
     guest_waiting_room: event.guestWaitingRoom,
+    guest_max_count: event.guestMaxCount,
+    guest_access_password_hash: event.guestAccessPasswordHash,
     start_at: event.startAt,
     end_at: event.endAt,
     all_day: event.allDay,

@@ -16,6 +16,9 @@ const sampleEvent: CalendarEvent = {
   eventType: "general",
   videoInviteMode: null,
   guestWaitingRoom: true,
+  guestMaxCount: 10,
+  guestAccessPasswordHash: null,
+  guestAccessPasswordSet: false,
   participantUserIds: [],
   startAt: "2026-06-25T08:00:00.000Z",
   endAt: "2026-06-25T09:00:00.000Z",
@@ -59,5 +62,23 @@ describe("mapCalendarEventToRow / mapCalendarEventRowToEvent", () => {
     const restored = mapCalendarEventRowToEvent(row, ["manager-1"]);
     assert.equal(restored.eventType, "video_meeting");
     assert.deepEqual(restored.participantUserIds, ["manager-1"]);
+  });
+
+  it("round-trips guest access fields for video meetings", () => {
+    const row = mapCalendarEventToRow({
+      ...sampleEvent,
+      eventType: "video_meeting",
+      videoInviteMode: "all_team",
+      guestMaxCount: 5,
+      guestAccessPasswordHash: "hash-value",
+      guestAccessPasswordSet: true,
+    });
+    assert.equal(row.guest_max_count, 5);
+    assert.equal(row.guest_access_password_hash, "hash-value");
+
+    const restored = mapCalendarEventRowToEvent(row);
+    assert.equal(restored.guestMaxCount, 5);
+    assert.equal(restored.guestAccessPasswordHash, "hash-value");
+    assert.equal(restored.guestAccessPasswordSet, true);
   });
 });

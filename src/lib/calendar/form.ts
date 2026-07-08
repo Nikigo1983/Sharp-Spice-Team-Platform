@@ -17,6 +17,8 @@ export type CalendarFormValues = {
   eventType: CalendarEventType;
   videoInviteMode: VideoInviteMode;
   guestWaitingRoom: boolean;
+  guestMaxCount: number;
+  guestAccessPassword: string;
   participantUserIds: string[];
   title: string;
   description: string;
@@ -54,6 +56,8 @@ export function defaultFormValues(
     eventType: CALENDAR_DEFAULT_EVENT_TYPE,
     videoInviteMode: "all_team",
     guestWaitingRoom: true,
+    guestMaxCount: 10,
+    guestAccessPassword: "",
     participantUserIds: [],
     title: "",
     description: "",
@@ -82,6 +86,8 @@ export function eventToFormValues(
       (event.scope === "company" ? "all_team" : "selected"),
     participantUserIds: [...(event.participantUserIds ?? [])],
     guestWaitingRoom: event.guestWaitingRoom ?? true,
+    guestMaxCount: event.guestMaxCount ?? 10,
+    guestAccessPassword: "",
     title: event.title,
     description: event.description,
     startDate: formatDateKey(start, timeZone),
@@ -196,6 +202,14 @@ export function formValuesToCreatePayload(
     sendReminders: values.sendReminders,
     guestWaitingRoom:
       values.eventType === "video_meeting" ? values.guestWaitingRoom : undefined,
+    guestMaxCount:
+      values.eventType === "video_meeting" ? values.guestMaxCount : undefined,
+    guestAccessPassword:
+      values.eventType === "video_meeting" && values.guestAccessPassword.trim()
+        ? values.guestAccessPassword.trim()
+        : values.eventType === "video_meeting"
+          ? null
+          : undefined,
   };
 }
 
@@ -215,6 +229,14 @@ export function formValuesToUpdatePayload(
     sendReminders: values.sendReminders,
     guestWaitingRoom:
       values.eventType === "video_meeting" ? values.guestWaitingRoom : undefined,
+    guestMaxCount:
+      values.eventType === "video_meeting" ? values.guestMaxCount : undefined,
+    guestAccessPassword:
+      values.eventType === "video_meeting" && values.guestAccessPassword.trim()
+        ? values.guestAccessPassword.trim()
+        : values.eventType === "video_meeting"
+          ? null
+          : undefined,
     videoInviteMode:
       values.eventType === "video_meeting"
         ? values.scope === "personal"

@@ -24,6 +24,9 @@ export type CalendarEvent = {
   eventType: CalendarEventType;
   videoInviteMode: VideoInviteMode | null;
   guestWaitingRoom: boolean;
+  guestMaxCount: number | null;
+  guestAccessPasswordHash: string | null;
+  guestAccessPasswordSet: boolean;
   participantUserIds: string[];
   startAt: string;
   endAt: string;
@@ -45,6 +48,8 @@ export type CreateCalendarEventInput = {
   eventType?: CalendarEventType;
   videoInviteMode?: VideoInviteMode;
   guestWaitingRoom?: boolean;
+  guestMaxCount?: number | null;
+  guestAccessPassword?: string | null;
   participantUserIds?: string[];
   startAt: string;
   endAt: string;
@@ -65,6 +70,8 @@ export type UpdateCalendarEventInput = {
   sendReminders?: boolean;
   videoInviteMode?: VideoInviteMode;
   guestWaitingRoom?: boolean;
+  guestMaxCount?: number | null;
+  guestAccessPassword?: string | null;
   participantUserIds?: string[];
   updatedByUserId?: string | null;
 };

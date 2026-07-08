@@ -193,7 +193,8 @@ export function CalendarEventForm({
           </div>
           {values.eventType === "video_meeting" ? (
             <p className={styles.fieldHint}>
-              Комната создаётся на платформе. Ссылка для клиентов не генерируется.
+              Комната создаётся на платформе. После сохранения в карточке встречи
+              появится ссылка для клиентов без аккаунта.
             </p>
           ) : null}
         </fieldset>

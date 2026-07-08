@@ -20,7 +20,7 @@ import {
 } from "@/lib/calendar/meeting-speaker-focus";
 import styles from "./CalendarMeetRoom.module.css";
 
-export function MeetingSpeakerLayout() {
+export function MeetingSpeakerLayout({ compact = false }: { compact?: boolean }) {
   const { localParticipant } = useLocalParticipant();
   const activeSpeakers = useSpeakingParticipants();
   const [pinnedTrack, setPinnedTrack] = useState<
@@ -77,9 +77,23 @@ export function MeetingSpeakerLayout() {
         </div>
       ) : null}
 
-      <div className={styles.speakerLayout}>
+      <div
+        className={[
+          styles.speakerLayout,
+          compact ? styles.speakerLayoutCompact : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
       {carouselTracks.length > 0 ? (
-        <div className={styles.filmstrip}>
+        <div
+          className={[
+            styles.filmstrip,
+            compact ? styles.filmstripCompact : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <CarouselLayout
             tracks={carouselTracks}
             orientation="horizontal"

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -14,9 +14,20 @@ import {
   postMeetingAudit,
   postMeetingAuditBeacon,
 } from "@/lib/calendar/meeting-audit-client";
+import {
+  clearMeetingDockActive,
+  clearMeetingDockNavigate,
+  isMeetingDockMode,
+  markMeetingDockActive,
+  markMeetingDockNavigate,
+  openMeetingDockWindow,
+  readMeetingDockNavigateEventId,
+  readMeetingDockSession,
+} from "@/lib/calendar/meeting-dock";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { MeetingAccessGate, type MeetingAccessGateVariant } from "./MeetingAccessGate";
 import { MeetingControlBar } from "./MeetingControlBar";
+import { MeetingDockGate } from "./MeetingDockGate";
 import { MeetingParticipantPanel } from "./MeetingParticipantPanel";
 import { MeetingSpeakerLayout } from "./MeetingSpeakerLayout";
 import styles from "./CalendarMeetRoom.module.css";
@@ -58,26 +69,56 @@ function mapTokenError(
 type MeetingStageProps = {
   event: CalendarEvent;
   onLeave: () => void;
+  isDockMode: boolean;
+  onWorkOnPlatform: () => void;
 };
 
-function MeetingStage({ event, onLeave }: MeetingStageProps) {
+function MeetingStage({
+  event,
+  onLeave,
+  isDockMode,
+  onWorkOnPlatform,
+}: MeetingStageProps) {
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const participants = useParticipants();
 
   return (
     <div className={styles.room}>
       <header className={styles.topBar}>
-        <Link href={`/calendar?event=${encodeURIComponent(event.id)}`} className={styles.backLink}>
-          ← Выйти
-        </Link>
+        {isDockMode ? (
+          <span className={styles.dockBadge}>Окно звонка</span>
+        ) : (
+          <Link href={`/calendar?event=${encodeURIComponent(event.id)}`} className={styles.backLink}>
+            ← Выйти
+          </Link>
+        )}
         <div className={styles.topMeta}>
           <span className={styles.eventTitle}>{event.title}</span>
           <span className={styles.eventTime}>{formatEventTimeRange(event)}</span>
         </div>
+        {!isDockMode ? (
+          <button
+            type="button"
+            className={styles.platformButton}
+            onClick={onWorkOnPlatform}
+            title="Открыть звонок в отдельном окне и работать на платформе"
+          >
+            <i className="fa-solid fa-desktop" aria-hidden="true" />
+            Работать на платформе
+          </button>
+        ) : null}
       </header>
 
+      {isDockMode ? (
+        <div className={styles.dockHint}>
+          Откройте нужный раздел в основном окне браузера. Затем здесь нажмите
+          «Поделиться экраном» и в диалоге выберите окно с платформой — не это
+          окно звонка.
+        </div>
+      ) : null}
+
       <div className={styles.stage}>
-        <MeetingSpeakerLayout />
+        <MeetingSpeakerLayout compact={isDockMode} />
       </div>
 
       <MeetingControlBar
@@ -85,6 +126,7 @@ function MeetingStage({ event, onLeave }: MeetingStageProps) {
         participantsOpen={participantsOpen}
         onToggleParticipants={() => setParticipantsOpen((open) => !open)}
         onLeave={onLeave}
+        compact={isDockMode}
       />
 
       {participantsOpen ? (
@@ -102,11 +144,33 @@ type CalendarMeetRoomProps = {
 
 export function CalendarMeetRoom({ event }: CalendarMeetRoomProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isDockMode = isMeetingDockMode(searchParams);
+  const [bypassDockGate, setBypassDockGate] = useState(false);
+  const [dockChecked, setDockChecked] = useState(false);
+  const [dockSession, setDockSession] = useState(
+    null as ReturnType<typeof readMeetingDockSession>,
+  );
   const [connectState, setConnectState] = useState<ConnectState>({
     status: "loading",
   });
 
   useEffect(() => {
+    setDockSession(readMeetingDockSession());
+    setDockChecked(true);
+  }, []);
+
+  const showDockGate =
+    dockChecked &&
+    !isDockMode &&
+    !bypassDockGate &&
+    dockSession?.eventId === event.id;
+
+  useEffect(() => {
+    if (showDockGate) {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function loadToken() {
@@ -150,29 +214,95 @@ export function CalendarMeetRoom({ event }: CalendarMeetRoomProps) {
 
     void loadToken();
     return () => controller.abort();
-  }, [event.id]);
+  }, [event.id, showDockGate]);
 
   const handleLeave = useCallback(() => {
+    clearMeetingDockActive();
+    clearMeetingDockNavigate();
     router.push(`/calendar?event=${encodeURIComponent(event.id)}`);
   }, [event.id, router]);
 
   const handleDisconnected = useCallback(() => {
+    if (readMeetingDockNavigateEventId() === event.id) {
+      clearMeetingDockNavigate();
+      router.push("/dashboard");
+      return;
+    }
+
     void postMeetingAudit(event.id, "left");
     handleLeave();
-  }, [event.id, handleLeave]);
+  }, [event.id, handleLeave, router]);
 
   const handleConnected = useCallback(() => {
     void postMeetingAudit(event.id, "joined");
-  }, [event.id]);
+
+    if (isDockMode) {
+      markMeetingDockActive({
+        eventId: event.id,
+        title: event.title,
+        openedAt: new Date().toISOString(),
+      });
+    }
+  }, [event.id, event.title, isDockMode]);
+
+  const handleWorkOnPlatform = useCallback(() => {
+    const popup = openMeetingDockWindow(event.id);
+    if (!popup) {
+      window.alert(
+        "Не удалось открыть окно звонка. Разрешите всплывающие окна для платформы и попробуйте снова.",
+      );
+      return;
+    }
+
+    markMeetingDockActive({
+      eventId: event.id,
+      title: event.title,
+      openedAt: new Date().toISOString(),
+    });
+    markMeetingDockNavigate(event.id);
+
+    window.setTimeout(() => {
+      if (readMeetingDockNavigateEventId() === event.id) {
+        clearMeetingDockNavigate();
+        router.push("/dashboard");
+      }
+    }, 6000);
+  }, [event.id, event.title, router]);
 
   useEffect(() => {
     function onBeforeUnload() {
       postMeetingAuditBeacon(event.id, "left");
+      if (isDockMode) {
+        clearMeetingDockActive();
+      }
     }
 
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [event.id]);
+  }, [event.id, isDockMode]);
+
+  if (!dockChecked) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.loadingCard}>
+          <div className={styles.spinner} aria-hidden="true" />
+          <p>Подключение к видеовстрече…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showDockGate) {
+    return (
+      <div className={styles.page}>
+        <MeetingDockGate
+          eventId={event.id}
+          eventTitle={event.title}
+          onConnectHere={() => setBypassDockGate(true)}
+        />
+      </div>
+    );
+  }
 
   if (connectState.status === "loading") {
     return (
@@ -198,7 +328,7 @@ export function CalendarMeetRoom({ event }: CalendarMeetRoomProps) {
   const { credentials } = connectState;
 
   return (
-    <div className={styles.page}>
+    <div className={[styles.page, isDockMode ? styles.pageDock : ""].filter(Boolean).join(" ")}>
       <LiveKitRoom
         serverUrl={credentials.wsUrl}
         token={credentials.token}
@@ -209,7 +339,12 @@ export function CalendarMeetRoom({ event }: CalendarMeetRoomProps) {
         onDisconnected={handleDisconnected}
         className={styles.livekitRoom}
       >
-        <MeetingStage event={event} onLeave={handleLeave} />
+        <MeetingStage
+          event={event}
+          onLeave={handleLeave}
+          isDockMode={isDockMode}
+          onWorkOnPlatform={handleWorkOnPlatform}
+        />
       </LiveKitRoom>
     </div>
   );

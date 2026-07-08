@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { CalendarMeetRoom } from "@/components/meet/CalendarMeetRoom";
 import { MeetingAccessGate } from "@/components/meet/MeetingAccessGate";
@@ -37,5 +38,15 @@ export default async function CalendarMeetPage({ params }: PageProps) {
     return <MeetingAccessGate variant="closed" event={event} />;
   }
 
-  return <CalendarMeetRoom event={event} />;
+  return (
+    <Suspense
+      fallback={
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+          Подключение к видеовстрече…
+        </div>
+      }
+    >
+      <CalendarMeetRoom event={event} />
+    </Suspense>
+  );
 }

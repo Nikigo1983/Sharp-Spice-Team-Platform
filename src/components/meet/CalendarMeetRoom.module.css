@@ -6,6 +6,15 @@
   color: var(--white);
 }
 
+.pageDock {
+  min-height: 100%;
+}
+
+.pageDock .livekitRoom,
+.pageDock .room {
+  min-height: 100%;
+}
+
 .livekitRoom {
   display: flex;
   flex: 1;
@@ -58,6 +67,42 @@
 .eventTime {
   color: #94a3b8;
   font-size: 0.9rem;
+}
+
+.platformButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.35rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.14);
+  color: #e0e7ff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.platformButton:hover {
+  background: rgba(99, 102, 241, 0.24);
+}
+
+.dockBadge {
+  color: #c7d2fe;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dockHint {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+  background: rgba(99, 102, 241, 0.1);
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.45;
 }
 
 .shareBanner {
@@ -126,6 +171,16 @@
   outline-offset: 1px;
 }
 
+.speakerLayoutCompact {
+  gap: 0.5rem;
+}
+
+.filmstripCompact {
+  flex-basis: 5.5rem;
+  min-height: 5rem;
+  max-height: 6rem;
+}
+
 .loadingCard {
   margin: auto;
   display: flex;
@@ -154,5 +209,10 @@
 @media (max-width: 640px) {
   .topBar {
     flex-wrap: wrap;
+  }
+
+  .platformButton {
+    width: 100%;
+    justify-content: center;
   }
 }

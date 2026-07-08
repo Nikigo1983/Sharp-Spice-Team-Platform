@@ -9,6 +9,7 @@ type MeetingControlBarProps = {
   participantsOpen: boolean;
   onToggleParticipants: () => void;
   onLeave: () => void;
+  compact?: boolean;
 };
 
 export function MeetingControlBar({
@@ -16,6 +17,7 @@ export function MeetingControlBar({
   participantsOpen,
   onToggleParticipants,
   onLeave,
+  compact = false,
 }: MeetingControlBarProps) {
   const room = useRoomContext();
 
@@ -50,7 +52,11 @@ export function MeetingControlBar({
           showIcon={false}
           className={styles.toggle}
           aria-label="Поделиться экраном"
-          title="Поделиться экраном"
+          title={
+            compact
+              ? "Демонстрация — выберите основное окно браузера с платформой"
+              : "Поделиться экраном — выберите окно с платформой или другим сайтом"
+          }
           captureOptions={{
             audio: false,
             selfBrowserSurface: "include",

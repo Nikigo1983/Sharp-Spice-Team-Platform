@@ -15,6 +15,7 @@ export type NotificationItem = {
     | "client_new"
     | "consultation_assigned"
     | "calendar_reminder"
+    | "calendar_video_invite"
     | "system";
   title: string;
   message: string;

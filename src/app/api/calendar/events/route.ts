@@ -4,6 +4,7 @@ import {
   handleListCalendarEvents,
 } from "@/lib/calendar/handlers";
 import { getSession } from "@/lib/auth/session";
+import { notifyVideoMeetingInvite } from "@/lib/notifications/emit";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -38,6 +39,12 @@ export async function POST(request: Request) {
   if ("status" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
+
+  await notifyVideoMeetingInvite({
+    actorId: session.id,
+    actorName: session.name,
+    event: result.event,
+  });
 
   return NextResponse.json({ event: result.event }, { status: 201 });
 }

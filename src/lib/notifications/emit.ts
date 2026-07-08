@@ -1,9 +1,16 @@
 import "server-only";
 
+import { listTeamUsers } from "@/lib/auth/users";
+import { resolveVideoMeetingReminderRecipientIds } from "@/lib/calendar/participants";
 import type { CalendarEvent } from "@/lib/calendar/types";
+import { isVideoMeeting } from "@/lib/calendar/meeting";
 import type { ReminderOffsetMinutes } from "@/lib/calendar/constants";
+import { getDeletedUserIds } from "@/lib/team/store";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/tasks/types";
-import { buildCalendarReminderNotificationContent } from "./calendar-reminder-copy";
+import {
+  buildCalendarReminderNotificationContent,
+  buildVideoMeetingInviteNotificationContent,
+} from "./calendar-reminder-copy";
 import { createNotificationForUser, createNotificationsForTeam } from "./store";
 import type { Notification } from "./types";
 
@@ -295,4 +302,43 @@ export async function notifyCalendarReminder(params: {
     message: content.message,
     author_name: null,
   });
+}
+
+export async function notifyVideoMeetingInvite(params: {
+  actorId: string;
+  actorName: string;
+  event: CalendarEvent;
+}): Promise<void> {
+  if (!isVideoMeeting(params.event)) {
+    return;
+  }
+
+  const deleted = new Set(await getDeletedUserIds());
+  const activeUserIds = listTeamUsers()
+    .filter((user) => !deleted.has(user.id))
+    .map((user) => user.id);
+
+  const recipientIds = resolveVideoMeetingReminderRecipientIds(
+    params.event,
+    activeUserIds,
+  );
+
+  if (!recipientIds.length) {
+    return;
+  }
+
+  const content = buildVideoMeetingInviteNotificationContent(params.event);
+
+  await createNotificationsForTeam(
+    {
+      type: "calendar_video_invite",
+      title: content.title,
+      message: content.message,
+      author_name: params.actorName,
+    },
+    {
+      excludeUserId: params.actorId,
+      onlyUserIds: recipientIds,
+    },
+  );
 }

@@ -47,6 +47,29 @@ describe("notification navigation", () => {
     );
   });
 
+  it("routes video meeting invites to meet page with toast", () => {
+    const message = encodeCalendarReminderMessage(
+      "10:00 – 11:00 — Синк",
+      "evt-invite",
+      { isVideoMeeting: true },
+    );
+
+    assert.equal(
+      getNotificationHref("calendar_video_invite", message),
+      "/calendar/meet/evt-invite",
+    );
+    assert.equal(getNotificationSection("calendar_video_invite"), "calendar");
+    assert.equal(shouldShowNotificationToast("calendar_video_invite"), true);
+    assert.equal(
+      getNotificationDisplayMessage("calendar_video_invite", message),
+      "10:00 – 11:00 — Синк",
+    );
+    assert.equal(
+      getNotificationActionLabel("calendar_video_invite", message),
+      "Присоединиться",
+    );
+  });
+
   it("falls back to calendar index when event id is missing", () => {
     assert.equal(getNotificationHref("calendar_reminder"), "/calendar");
   });

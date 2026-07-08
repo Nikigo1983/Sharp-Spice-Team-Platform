@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import {
   buildCalendarReminderNotificationContent,
+  buildVideoMeetingInviteNotificationContent,
   decodeCalendarReminderMessage,
   encodeCalendarReminderMessage,
   formatCalendarReminderDisplayMessage,
@@ -90,5 +91,17 @@ describe("calendar reminder notification copy", () => {
     const decoded = decodeCalendarReminderMessage(message);
     assert.equal(decoded.eventId, "evt-video");
     assert.equal(decoded.isVideoMeeting, true);
+  });
+
+  it("builds instant video meeting invite copy", () => {
+    const { title, message } = buildVideoMeetingInviteNotificationContent(
+      event({ eventType: "video_meeting", title: "Синк команды" }),
+    );
+
+    assert.equal(title, "Приглашение на видеовстречу");
+    const decoded = decodeCalendarReminderMessage(message);
+    assert.equal(decoded.eventId, "evt-42");
+    assert.equal(decoded.isVideoMeeting, true);
+    assert.match(decoded.display, /Синк команды$/);
   });
 });

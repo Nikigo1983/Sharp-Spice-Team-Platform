@@ -11,7 +11,17 @@ const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
   "client_new",
   "consultation_assigned",
   "calendar_reminder",
+  "calendar_video_invite",
 ]);
+
+const CALENDAR_LINK_TYPES = new Set<NotificationType>([
+  "calendar_reminder",
+  "calendar_video_invite",
+]);
+
+function isCalendarLinkType(type: NotificationType): boolean {
+  return CALENDAR_LINK_TYPES.has(type);
+}
 
 export function shouldShowNotificationToast(type: NotificationType): boolean {
   return TOAST_NOTIFICATION_TYPES.has(type);
@@ -21,7 +31,7 @@ export function getNotificationDisplayMessage(
   type: NotificationType,
   message: string,
 ): string {
-  if (type === "calendar_reminder") {
+  if (isCalendarLinkType(type)) {
     return decodeCalendarReminderMessage(message).display;
   }
   return message;
@@ -41,6 +51,7 @@ export function getNotificationSection(
     case "consultation_assigned":
       return "formgrid";
     case "calendar_reminder":
+    case "calendar_video_invite":
       return "calendar";
     default:
       return null;
@@ -61,11 +72,12 @@ export function getNotificationHref(
     case "client_new":
     case "consultation_assigned":
       return "/new-formgrid-clients";
-    case "calendar_reminder": {
+    case "calendar_reminder":
+    case "calendar_video_invite": {
       const { eventId, isVideoMeeting } = decodeCalendarReminderMessage(
         message ?? "",
       );
-      if (isVideoMeeting && eventId) {
+      if ((isVideoMeeting || type === "calendar_video_invite") && eventId) {
         return `/calendar/meet/${encodeURIComponent(eventId)}`;
       }
       return eventId
@@ -81,6 +93,10 @@ export function getNotificationActionLabel(
   type: NotificationType,
   message?: string,
 ): string | null {
+  if (type === "calendar_video_invite") {
+    return "Присоединиться";
+  }
+
   if (type !== "calendar_reminder") {
     return null;
   }

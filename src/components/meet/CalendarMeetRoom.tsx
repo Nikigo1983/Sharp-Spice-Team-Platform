@@ -4,14 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  GridLayout,
   LiveKitRoom,
-  ParticipantTile,
   RoomAudioRenderer,
   useParticipants,
-  useTracks,
 } from "@livekit/components-react";
-import { Track } from "livekit-client";
 import "@livekit/components-styles";
 import { formatEventTimeRange } from "@/lib/calendar/format";
 import {
@@ -22,6 +18,7 @@ import type { CalendarEvent } from "@/lib/calendar/types";
 import { MeetingAccessGate, type MeetingAccessGateVariant } from "./MeetingAccessGate";
 import { MeetingControlBar } from "./MeetingControlBar";
 import { MeetingParticipantPanel } from "./MeetingParticipantPanel";
+import { MeetingSpeakerLayout } from "./MeetingSpeakerLayout";
 import styles from "./CalendarMeetRoom.module.css";
 
 type MeetingTokenPayload = {
@@ -66,20 +63,6 @@ type MeetingStageProps = {
 function MeetingStage({ event, onLeave }: MeetingStageProps) {
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const participants = useParticipants();
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: true },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
-    { onlySubscribed: false },
-  );
-
-  const screenShareTrack = tracks.find(
-    (track) => track.source === Track.Source.ScreenShare,
-  );
-  const screenSharerName =
-    screenShareTrack?.participant?.name ||
-    screenShareTrack?.participant?.identity;
 
   return (
     <div className={styles.room}>
@@ -93,16 +76,8 @@ function MeetingStage({ event, onLeave }: MeetingStageProps) {
         </div>
       </header>
 
-      {screenSharerName ? (
-        <div className={styles.shareBanner}>
-          {screenSharerName} демонстрирует экран
-        </div>
-      ) : null}
-
       <div className={styles.stage}>
-        <GridLayout tracks={tracks} className={styles.grid}>
-          <ParticipantTile className={styles.tile} />
-        </GridLayout>
+        <MeetingSpeakerLayout />
       </div>
 
       <MeetingControlBar

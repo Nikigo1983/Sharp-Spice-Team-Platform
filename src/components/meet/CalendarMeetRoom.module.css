@@ -73,16 +73,57 @@
   flex: 1;
   min-height: 0;
   padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
 }
 
-.grid {
+.speakerLayout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+.filmstrip {
+  flex: 0 0 7.25rem;
+  min-height: 6.5rem;
+  max-height: 8.5rem;
+}
+
+.filmstripCarousel {
+  height: 100%;
+  width: 100%;
+}
+
+.filmstripCarousel:global(.lk-carousel) {
   height: 100%;
 }
 
-.tile {
+.speakerMain {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.speakerMainTile {
+  flex: 1;
+  min-height: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: #111827;
+}
+
+.filmstripTile {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #111827;
+  cursor: pointer;
+}
+
+.filmstripTile:hover {
+  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline-offset: 1px;
 }
 
 .loadingCard {

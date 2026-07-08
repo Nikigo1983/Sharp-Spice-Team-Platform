@@ -1,5 +1,6 @@
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--surface-hero);
@@ -20,6 +21,7 @@
   flex: 1;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .room {
@@ -27,6 +29,7 @@
   flex: 1;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .topBar {
@@ -112,10 +115,80 @@
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .stage:has(.speakerLayoutScreenShare) {
   padding: 0;
+}
+
+.participantGridStage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.participantGrid {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+.participantGrid :global(.lk-grid-layout) {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  align-content: center;
+  justify-items: stretch;
+}
+
+.gridTile {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #111827;
+  cursor: pointer;
+}
+
+.gridTile:hover {
+  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline-offset: 1px;
+}
+
+.participantGridStage[data-participant-count="1"] :global(.lk-grid-layout) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.participantGridStage[data-participant-count="1"] :global(.lk-participant-tile) {
+  width: min(100%, 52rem);
+  aspect-ratio: 16 / 9;
+  height: auto !important;
+  max-height: min(62vh, 520px);
+}
+
+.participantGridStage[data-participant-count="2"] :global(.lk-grid-layout) {
+  --lk-col-count: 2;
+  --lk-row-count: 1;
+}
+
+.participantGridStage[data-participant-count="3"] :global(.lk-grid-layout),
+.participantGridStage[data-participant-count="4"] :global(.lk-grid-layout) {
+  --lk-col-count: 2;
+  --lk-row-count: 2;
+}
+
+.participantGridStage[data-participant-count="2"] :global(.lk-participant-tile),
+.participantGridStage[data-participant-count="3"] :global(.lk-participant-tile),
+.participantGridStage[data-participant-count="4"] :global(.lk-participant-tile) {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: auto !important;
+  max-height: min(42vh, 360px);
 }
 
 .speakerLayout {
@@ -126,10 +199,14 @@
   gap: 0.75rem;
 }
 
+.speakerLayoutStacked {
+  gap: 0.65rem;
+}
+
 .filmstrip {
-  flex: 0 0 7.25rem;
-  min-height: 6.5rem;
-  max-height: 8.5rem;
+  flex: 0 0 auto;
+  min-height: 5.75rem;
+  max-height: 7.5rem;
 }
 
 .filmstripCarousel {
@@ -139,6 +216,16 @@
 
 .filmstripCarousel:global(.lk-carousel) {
   height: 100%;
+  --lk-max-visible-tiles: 5;
+}
+
+.filmstrip :global(.lk-carousel) :global(.lk-participant-tile) {
+  flex: 0 0 8.5rem;
+  width: 8.5rem;
+  min-width: 8.5rem;
+  max-width: 8.5rem;
+  aspect-ratio: 16 / 10;
+  height: auto;
 }
 
 .speakerMain {
@@ -153,6 +240,12 @@
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: #111827;
+}
+
+.speakerMainTile :global(video),
+.gridTile :global(video),
+.filmstripTile :global(video) {
+  object-fit: cover;
 }
 
 .filmstripTile {
@@ -171,50 +264,38 @@
   gap: 0;
 }
 
+.shareBanner {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.96);
+  color: #c7d2fe;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
 .speakerMainScreenShare {
-  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 .speakerMainTileScreenShare {
   border-radius: 0;
 }
 
-.screenShareOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  pointer-events: none;
-}
-
-.shareBannerOverlay {
-  flex: 0 0 auto;
-  padding: 0.45rem 0.85rem;
-  background: linear-gradient(
-    180deg,
-    rgba(15, 20, 28, 0.92) 0%,
-    rgba(15, 20, 28, 0.55) 70%,
-    transparent 100%
-  );
-  color: #c7d2fe;
-  font-size: 0.85rem;
-  font-weight: 500;
+.speakerMainTileScreenShare :global(video) {
+  object-fit: contain;
+  background: #0b1220;
 }
 
 .filmstripScreenShare {
   flex: 0 0 auto;
   min-height: 0;
   max-height: none;
-  padding: 0.35rem 0.5rem 0.5rem;
-  background: linear-gradient(
-    180deg,
-    rgba(15, 20, 28, 0.72) 0%,
-    rgba(15, 20, 28, 0.35) 65%,
-    transparent 100%
-  );
-  pointer-events: auto;
+  padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.96);
 }
 
 .filmstripScreenShare .filmstripCarousel {
@@ -232,6 +313,9 @@
 
 .filmstripScreenShare :global(.lk-carousel) :global(.lk-participant-tile) {
   flex: 0 0 7.5rem;
+  width: 7.5rem;
+  min-width: 7.5rem;
+  max-width: 7.5rem;
 }
 
 .speakerLayoutCompact {
@@ -292,5 +376,52 @@
   .platformButton {
     width: 100%;
     justify-content: center;
+  }
+
+  .stage {
+    padding: 0.5rem;
+  }
+
+  .stage:has(.speakerLayoutScreenShare) {
+    padding: 0;
+  }
+
+  .participantGridStage[data-participant-count="2"] :global(.lk-grid-layout) {
+    --lk-col-count: 1;
+    --lk-row-count: 2;
+  }
+
+  .participantGridStage[data-participant-count="1"] :global(.lk-participant-tile) {
+    max-height: min(48vh, 360px);
+  }
+
+  .participantGridStage[data-participant-count="2"] :global(.lk-participant-tile),
+  .participantGridStage[data-participant-count="3"] :global(.lk-participant-tile),
+  .participantGridStage[data-participant-count="4"] :global(.lk-participant-tile) {
+    max-height: min(32vh, 240px);
+  }
+
+  .filmstrip {
+    min-height: 5rem;
+    max-height: 6.25rem;
+  }
+
+  .filmstrip :global(.lk-carousel) :global(.lk-participant-tile) {
+    flex-basis: 6.5rem;
+    width: 6.5rem;
+    min-width: 6.5rem;
+    max-width: 6.5rem;
+  }
+
+  .filmstripScreenShare .filmstripCarousel {
+    height: 4rem;
+  }
+
+  .filmstripTileScreenShare,
+  .filmstripScreenShare :global(.lk-carousel) :global(.lk-participant-tile) {
+    width: 6.25rem;
+    min-width: 6.25rem;
+    max-width: 6.25rem;
+    height: 3.5rem;
   }
 }

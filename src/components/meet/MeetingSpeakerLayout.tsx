@@ -6,6 +6,7 @@ import { isTrackReference } from "@livekit/components-core";
 import {
   CarouselLayout,
   FocusLayout,
+  GridLayout,
   ParticipantTile,
   useLocalParticipant,
   useSpeakingParticipants,
@@ -13,6 +14,7 @@ import {
 } from "@livekit/components-react";
 import { RoomEvent, Track } from "livekit-client";
 import {
+  MEETING_GRID_MAX_PARTICIPANTS,
   pickCameraTracks,
   pickScreenShareTrack,
   resolveSpeakerCarouselTracks,
@@ -38,21 +40,29 @@ export function MeetingSpeakerLayout({ compact = false }: { compact?: boolean })
   const cameraTracks = useMemo(() => pickCameraTracks(tracks), [tracks]);
   const screenShareTrack = useMemo(() => pickScreenShareTrack(tracks), [tracks]);
 
+  const useGridLayout =
+    !screenShareTrack &&
+    !compact &&
+    cameraTracks.length <= MEETING_GRID_MAX_PARTICIPANTS;
+
   const focusTrack = useMemo(
     () =>
-      resolveSpeakerFocusTrack({
-        cameraTracks,
-        screenShareTrack,
-        pinnedTrack: screenShareTrack ? null : pinnedTrack,
-        activeSpeakers,
-        localParticipantIdentity: localParticipant.identity,
-      }),
+      useGridLayout
+        ? null
+        : resolveSpeakerFocusTrack({
+            cameraTracks,
+            screenShareTrack,
+            pinnedTrack: screenShareTrack ? null : pinnedTrack,
+            activeSpeakers,
+            localParticipantIdentity: localParticipant.identity,
+          }),
     [
       activeSpeakers,
       cameraTracks,
       localParticipant.identity,
       pinnedTrack,
       screenShareTrack,
+      useGridLayout,
     ],
   );
 
@@ -61,7 +71,7 @@ export function MeetingSpeakerLayout({ compact = false }: { compact?: boolean })
     [cameraTracks, focusTrack],
   );
 
-  function handleCarouselParticipantClick(event: ParticipantClickEvent) {
+  function handleParticipantClick(event: ParticipantClickEvent) {
     if (!isTrackReference(event.track) || event.track.source !== Track.Source.Camera) {
       return;
     }
@@ -91,57 +101,79 @@ export function MeetingSpeakerLayout({ compact = false }: { compact?: boolean })
           ]
             .filter(Boolean)
             .join(" ")}
-          onParticipantClick={handleCarouselParticipantClick}
+          onParticipantClick={handleParticipantClick}
         />
       </CarouselLayout>
     </div>
   ) : null;
 
-  return (
-    <div
-      className={[
-        styles.speakerLayout,
-        screenShareTrack ? styles.speakerLayoutScreenShare : "",
-        compact ? styles.speakerLayoutCompact : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {!screenShareTrack ? filmstrip : null}
+  if (useGridLayout) {
+    return (
+      <div
+        className={styles.participantGridStage}
+        data-participant-count={String(cameraTracks.length)}
+      >
+        <GridLayout tracks={cameraTracks} className={styles.participantGrid}>
+          <ParticipantTile
+            className={styles.gridTile}
+            onParticipantClick={handleParticipantClick}
+          />
+        </GridLayout>
+      </div>
+    );
+  }
 
+  if (screenShareTrack) {
+    return (
       <div
         className={[
-          styles.speakerMain,
-          screenShareTrack ? styles.speakerMainScreenShare : "",
+          styles.speakerLayout,
+          styles.speakerLayoutScreenShare,
+          compact ? styles.speakerLayoutCompact : "",
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        {focusTrack ? (
+        <div className={styles.shareBanner}>
+          {screenShareTrack.participant.name ||
+            screenShareTrack.participant.identity}{" "}
+          демонстрирует экран
+        </div>
+
+        <div className={styles.speakerMainScreenShare}>
           <FocusLayout
-            trackRef={focusTrack}
-            className={[
-              styles.speakerMainTile,
-              screenShareTrack ? styles.speakerMainTileScreenShare : "",
-            ]
+            trackRef={screenShareTrack}
+            className={[styles.speakerMainTile, styles.speakerMainTileScreenShare]
               .filter(Boolean)
               .join(" ")}
           />
-        ) : null}
+        </div>
 
-        {screenShareTrack ? (
-          <>
-            <div className={styles.screenShareOverlay}>
-              <div className={styles.shareBannerOverlay}>
-                {screenShareTrack.participant.name ||
-                  screenShareTrack.participant.identity}{" "}
-                демонстрирует экран
-              </div>
-              {filmstrip}
-            </div>
-          </>
+        {filmstrip}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        styles.speakerLayout,
+        compact ? styles.speakerLayoutCompact : "",
+        styles.speakerLayoutStacked,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className={styles.speakerMain}>
+        {focusTrack ? (
+          <FocusLayout
+            trackRef={focusTrack}
+            className={styles.speakerMainTile}
+          />
         ) : null}
       </div>
+
+      {filmstrip}
     </div>
   );
 }

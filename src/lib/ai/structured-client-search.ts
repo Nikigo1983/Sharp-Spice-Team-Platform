@@ -69,7 +69,14 @@ function crmClientToSearchFields(client: Client): SearchField[] {
   pushField(fields, "адрес букинга", client.bookingAddress, "other");
   pushField(fields, "даты букинга", client.bookingRange, "other");
   pushField(fields, "дата подачи", client.submittedAt, "other");
+  pushField(fields, "предполагаемое одобрение", client.expectedApprovalAt, "other");
   pushField(fields, "дата одобрения", client.approvalAt, "other");
+  pushField(
+    fields,
+    "дата выдачи карточки",
+    client.residenceCardIssuedAt,
+    "other",
+  );
   pushField(fields, "последняя активность", client.lastActivity, "other");
   pushField(fields, "страна", client.country, "other");
   pushField(fields, "направление", client.direction, "other");

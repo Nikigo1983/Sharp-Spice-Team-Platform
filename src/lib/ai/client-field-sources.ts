@@ -50,6 +50,46 @@ const SHEET_FIELD_PRIORITY: Record<
   lastActivity: ["clients", "new_clients"],
 };
 
+const CRM_TABLE_FIELD_KEYS: Array<{ keys: string[]; label: string }> = [
+  { keys: ["submittedAt", "дата подачи"], label: "Дата подачи" },
+  {
+    keys: ["expectedApprovalAt", "предполагаемое одобрение"],
+    label: "Предполагаемое одобрение",
+  },
+  { keys: ["approvalAt", "дата одобрения"], label: "Дата одобрения ВНЖ" },
+  {
+    keys: ["residenceCardIssuedAt", "дата выдачи карточки"],
+    label: "Дата выдачи карточки ВНЖ",
+  },
+  { keys: ["referentName", "референт"], label: "Имя референта" },
+  { keys: ["bookingAddress", "адрес букинга"], label: "Адрес букинга" },
+  {
+    keys: ["bookingRange", "даты букинга", "дата букинга"],
+    label: "Дата букинга (от и до)",
+  },
+  { keys: ["notes", "заметки"], label: "Заметки" },
+];
+
+function appendCrmTableFields(
+  fields: AttributedField[],
+  crmPart: ClientContext,
+): void {
+  const pickDebug = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = crmPart.debugRow[key]?.trim();
+      if (value) return value;
+    }
+    return "";
+  };
+
+  for (const { keys, label } of CRM_TABLE_FIELD_KEYS) {
+    if (fields.some((field) => field.label === label)) continue;
+    const value = pickDebug(...keys);
+    if (!value) continue;
+    fields.push({ label, value, source: "CRM" });
+  }
+}
+
 const FIELD_LABELS: Record<keyof typeof SHEET_FIELD_PRIORITY, string> = {
   email: "Email",
   phone: "Телефон",
@@ -204,6 +244,8 @@ export function resolveClientContextAttribution(
     if (contract) {
       fields.push({ label: "Договор", value: contract, source: "CRM" });
     }
+
+    appendCrmTableFields(fields, crmPart);
   }
 
   const formPart = parts.find((part) => part.source === "new_clients");

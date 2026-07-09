@@ -102,6 +102,38 @@ describe("resolveClientContextAttribution", () => {
     );
   });
 
+  it("includes CRM table dates and booking fields from debug row", () => {
+    const crm = ctx({
+      source: "clients",
+      name: "Иванова",
+      debugRow: {
+        submittedAt: "15.03.2025",
+        expectedApprovalAt: "20.06.2025",
+        approvalAt: "18.06.2025",
+        residenceCardIssuedAt: "01.07.2025",
+        bookingAddress: "Zagreb",
+        bookingRange: "10.06–12.06",
+        notes: "Ждёт карту",
+      },
+    });
+
+    const attribution = resolveClientContextAttribution([crm]);
+    assert.equal(
+      attribution.fields.find((field) => field.label === "Дата подачи")?.value,
+      "15.03.2025",
+    );
+    assert.equal(
+      attribution.fields.find(
+        (field) => field.label === "Дата выдачи карточки ВНЖ",
+      )?.value,
+      "01.07.2025",
+    );
+    assert.equal(
+      attribution.fields.find((field) => field.label === "Адрес букинга")?.value,
+      "Zagreb",
+    );
+  });
+
   it("detects phone conflicts between CRM and Formgrid", () => {
     const crm = ctx({
       source: "clients",

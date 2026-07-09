@@ -13,6 +13,10 @@ import {
 } from "@/lib/google-sheets/formgrid-lookup";
 import { findPossibleDuplicatePairs } from "@/lib/ai/client-deduplication";
 import {
+  buildCrmClientDebugRow,
+  formatClientForAi,
+} from "@/lib/ai/format-client";
+import {
   type FormatClientContextOptions,
   formatMergedClientContextWithSources,
   formatSingleClientContextWithSources,
@@ -94,30 +98,6 @@ export function crmClientToContext(
   score: number,
   matchedFields: string[] = [],
 ): ClientContext {
-  const surveyParts = [
-    client.citizenship && client.citizenship !== "—"
-      ? `Латиница: ${client.citizenship}`
-      : "",
-    client.partnerName && client.partnerName !== "—"
-      ? `Партнер от кого клиент: ${client.partnerName}`
-      : "",
-    client.contract && client.contract !== "—"
-      ? `Договор: ${client.contract}`
-      : "",
-    client.passportNumber && client.passportNumber !== "—"
-      ? `Паспорт: ${client.passportNumber}`
-      : "",
-    client.bookingAddress && client.bookingAddress !== "—"
-      ? `Адрес букинга: ${client.bookingAddress}`
-      : "",
-    client.bookingRange && client.bookingRange !== "—"
-      ? `Даты букинга: ${client.bookingRange}`
-      : "",
-    client.notes && client.notes !== "—"
-      ? `Заметки: ${client.notes.slice(0, 500)}`
-      : "",
-  ].filter(Boolean);
-
   const rawStatus = sanitizeCrmClientStatus(client.status);
   const finalStatus = formatStatusForAiContext(rawStatus, "clients");
 
@@ -140,22 +120,10 @@ export function crmClientToContext(
     status: finalStatus,
     manager: client.manager !== "—" ? client.manager : "",
     lastActivity: client.lastActivity !== "—" ? client.lastActivity : "",
-    surveyData: surveyParts.join("\n"),
+    surveyData: formatClientForAi(client),
     score,
     matchedFields,
-    debugRow: {
-      id: client.id,
-      name: client.name,
-      latinName: client.citizenship ?? "",
-      partner: client.partnerName ?? "",
-      contract: client.contract ?? "",
-      passport: client.passportNumber ?? "",
-      manager: client.manager ?? "",
-      status: rawStatus,
-      statusForAi: finalStatus,
-      bookingAddress: client.bookingAddress ?? "",
-      bookingRange: client.bookingRange ?? "",
-    },
+    debugRow: buildCrmClientDebugRow(client),
   };
 }
 

@@ -4,6 +4,41 @@ import {
 } from "@/lib/ai/client-status";
 import type { Client } from "@/lib/google-sheets/types";
 
+function displayField(value: string | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed !== "—" ? trimmed : "";
+}
+
+/** Все заполненные колонки таблицы «Клиенты» для AI и debug row. */
+export function buildCrmClientDebugRow(client: Client): Record<string, string> {
+  const rawStatus = sanitizeCrmClientStatus(client.status);
+  const row: Record<string, string> = {
+    id: displayField(client.id),
+    name: displayField(client.name),
+    latinName: displayField(client.citizenship),
+    passport: displayField(client.passportNumber),
+    email: displayField(client.email),
+    submittedAt: displayField(client.submittedAt ?? client.createdAt),
+    expectedApprovalAt: displayField(client.expectedApprovalAt),
+    referentName: displayField(client.referentName ?? client.manager),
+    bookingAddress: displayField(client.bookingAddress),
+    bookingRange: displayField(client.bookingRange),
+    approvalAt: displayField(client.approvalAt),
+    notes: displayField(client.notes)?.slice(0, 500) ?? "",
+    residenceCardIssuedAt: displayField(client.residenceCardIssuedAt),
+    partner: displayField(client.partnerName),
+    contract: displayField(client.contract),
+    manager: displayField(client.manager),
+    direction: displayField(client.direction),
+    status: rawStatus,
+    statusForAi: formatStatusForAiContext(rawStatus, "clients"),
+  };
+
+  return Object.fromEntries(
+    Object.entries(row).filter(([, value]) => Boolean(value)),
+  );
+}
+
 function crmExtraFieldLines(client: Client): string[] {
   return [
     client.citizenship && client.citizenship !== "—"
@@ -20,17 +55,18 @@ function crmExtraFieldLines(client: Client): string[] {
 
 /** Поля клиента для AI — все колонки таблицы «Клиенты Хорватия». */
 export function formatClientForAi(client: Client): string {
+  const referent =
+    displayField(client.referentName) || displayField(client.manager);
   const lines = [
     `ФИО/фамилия: ${client.name}`,
     ...crmExtraFieldLines(client),
     client.passportNumber && client.passportNumber !== "—"
       ? `Паспорт: ${client.passportNumber}`
       : "",
+    client.email && client.email !== "—" ? `Email: ${client.email}` : "",
     `Направление: ${client.direction}`,
     `Статус: ${formatStatusForAiContext(sanitizeCrmClientStatus(client.status), "clients")}`,
-    client.manager && client.manager !== "—"
-      ? `Менеджер/референт: ${client.manager}`
-      : "",
+    referent ? `Имя референта: ${referent}` : "",
     client.bookingAddress && client.bookingAddress !== "—"
       ? `Адрес букинга: ${client.bookingAddress}`
       : "Адрес букинга: не указан",
@@ -41,13 +77,16 @@ export function formatClientForAi(client: Client): string {
       ? `Дата подачи: ${client.submittedAt}`
       : "",
     client.expectedApprovalAt && client.expectedApprovalAt !== "—"
-      ? `Ожидаемое одобрение: ${client.expectedApprovalAt}`
+      ? `Предполагаемое одобрение: ${client.expectedApprovalAt}`
       : "",
     client.approvalAt && client.approvalAt !== "—"
-      ? `Дата одобрения: ${client.approvalAt}`
+      ? `Дата одобрения ВНЖ: ${client.approvalAt}`
+      : "",
+    client.residenceCardIssuedAt && client.residenceCardIssuedAt !== "—"
+      ? `Дата выдачи карточки ВНЖ: ${client.residenceCardIssuedAt}`
       : "",
     client.notes && client.notes !== "—"
-      ? `Заметки: ${client.notes.slice(0, 400)}`
+      ? `Заметки: ${client.notes.slice(0, 500)}`
       : "",
   ].filter(Boolean);
 

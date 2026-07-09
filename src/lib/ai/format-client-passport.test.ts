@@ -48,4 +48,42 @@ describe("formatClientForAi", () => {
     assert.match(text, /Партнер от кого клиент: ЛЕНА МОСКВА/);
     assert.match(text, /Договор: дог\.оказания услуг/);
   });
+
+  it("includes submission, approval and residence card dates", async () => {
+    const { formatClientForAi, buildCrmClientDebugRow } = await import(
+      "@/lib/ai/format-client"
+    );
+    const client = {
+      id: "КВ2719292",
+      name: "Белоус Екатерина",
+      phone: "—",
+      email: "anna@example.com",
+      country: "Хорватия",
+      citizenship: "Belavus Katsiaryna",
+      direction: "Хорватия",
+      status: "—",
+      manager: "Злата",
+      lastActivity: "—",
+      createdAt: "01.01.2025",
+      passportNumber: "КВ2719292",
+      submittedAt: "15.03.2025",
+      expectedApprovalAt: "20.06.2025",
+      approvalAt: "18.06.2025",
+      residenceCardIssuedAt: "01.07.2025",
+      referentName: "Злата",
+      bookingAddress: "Zagreb",
+      bookingRange: "10.06–12.06",
+      notes: "Ждёт карту",
+    };
+    const text = formatClientForAi(client);
+    assert.match(text, /Дата подачи: 15\.03\.2025/);
+    assert.match(text, /Предполагаемое одобрение: 20\.06\.2025/);
+    assert.match(text, /Дата одобрения ВНЖ: 18\.06\.2025/);
+    assert.match(text, /Дата выдачи карточки ВНЖ: 01\.07\.2025/);
+    assert.match(text, /Имя референта: Злата/);
+
+    const debugRow = buildCrmClientDebugRow(client);
+    assert.equal(debugRow.submittedAt, "15.03.2025");
+    assert.equal(debugRow.residenceCardIssuedAt, "01.07.2025");
+  });
 });

@@ -2,6 +2,10 @@
 
 import { extractClientEntityFromQuery } from "@/lib/ai/client-entity-extract";
 import {
+  queryContainsDateLiteral,
+  stripDateLiteralsFromQuery,
+} from "@/lib/ai/client-date-parse";
+import {
   buildNormalizedNameParts,
   formatNormalizedQueryLabel,
   getRussianNameLemmaVariants,
@@ -27,6 +31,7 @@ export type SearchFieldCategory =
   | "phone"
   | "email"
   | "notes"
+  | "date"
   | "other";
 
 export type SearchField = {
@@ -159,9 +164,20 @@ export function extractEmailFromQuery(query: string): string | null {
 }
 
 export function extractPhoneFromQuery(query: string): string | null {
-  const digits = query.replace(/\D/g, "");
-  if (digits.length < 7) return null;
-  return digits;
+  const phoneHint = /тел|phone|whatsapp|telegram|телефон/i.test(query);
+  const cleaned = stripDateLiteralsFromQuery(query);
+  const inlinePhone = cleaned.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+  const digits = (inlinePhone?.[0] ?? cleaned).replace(/\D/g, "");
+
+  if (queryContainsDateLiteral(query) && !phoneHint) {
+    return null;
+  }
+
+  if (phoneHint) {
+    return digits.length >= 7 ? digits : null;
+  }
+
+  return digits.length >= 10 ? digits : null;
 }
 
 const QUERY_STOP_WORDS = new Set([

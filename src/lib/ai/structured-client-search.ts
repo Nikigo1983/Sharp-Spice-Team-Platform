@@ -12,6 +12,11 @@ import {
   textMatchesField,
 } from "@/lib/ai/client-search-intent";
 import {
+  bookingEndsInMonth,
+  dateInMonths,
+  parseDateParts,
+} from "@/lib/ai/client-date-parse";
+import {
   buildClientSearchQuery,
   buildNormalizedNameFields,
   normalizePhone,
@@ -68,9 +73,10 @@ function crmClientToSearchFields(client: Client): SearchField[] {
   pushField(fields, "заметки", client.notes, "notes");
   pushField(fields, "адрес букинга", client.bookingAddress, "other");
   pushField(fields, "даты букинга", client.bookingRange, "other");
-  pushField(fields, "дата подачи", client.submittedAt, "other");
-  pushField(fields, "предполагаемое одобрение", client.expectedApprovalAt, "other");
-  pushField(fields, "дата одобрения", client.approvalAt, "other");
+  pushField(fields, "дата подачи", client.submittedAt, "date");
+  pushField(fields, "дата подачи заявки", client.submittedAt, "date");
+  pushField(fields, "предполагаемое одобрение", client.expectedApprovalAt, "date");
+  pushField(fields, "дата одобрения", client.approvalAt, "date");
   pushField(
     fields,
     "дата выдачи карточки",
@@ -102,6 +108,8 @@ function formgridRowToSearchFields(headers: string[], row: string[]): SearchFiel
       category = "email";
     } else if (/коммент|замет|note|comment/i.test(header)) {
       category = "notes";
+    } else if (/дата|date|подач|одобр/i.test(header)) {
+      category = "date";
     }
 
     fields.push({ label: header, value, category });
@@ -109,36 +117,6 @@ function formgridRowToSearchFields(headers: string[], row: string[]): SearchFiel
 
   appendNormalizedNameFields(fields, ...nameValues);
   return fields;
-}
-
-function parseDateParts(value: string): { day: number; month: number; year: number } | null {
-  const trimmed = value.trim();
-  const dmy = trimmed.match(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/);
-  if (dmy) {
-    const year = Number(dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3]);
-    return { day: Number(dmy[1]), month: Number(dmy[2]), year };
-  }
-  const ymd = trimmed.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (ymd) {
-    return { day: Number(ymd[3]), month: Number(ymd[2]), year: Number(ymd[1]) };
-  }
-  return null;
-}
-
-function bookingEndsInMonth(
-  bookingRange: string,
-  month: number,
-  year?: number | null,
-): boolean {
-  const parts = bookingRange.split(/\s*[-–—]\s*/);
-  const endPart = (parts[parts.length - 1] ?? bookingRange).trim();
-  const parsed = parseDateParts(endPart);
-  if (!parsed) {
-    return textMatchesField(bookingRange, String(month));
-  }
-  if (parsed.month !== month) return false;
-  if (year && parsed.year !== year) return false;
-  return true;
 }
 
 function fieldValueByLabel(fields: SearchField[], pattern: RegExp): string {
@@ -200,6 +178,7 @@ function scoreRecordAgainstIntent(
 
   if (intent.phone) {
     const hit = fields.some((field) => {
+      if (field.category === "date") return false;
       const digits = normalizePhone(field.value);
       return digits.includes(intent.phone!) || intent.phone!.includes(digits.slice(-10));
     });
@@ -292,6 +271,22 @@ function scoreRecordAgainstIntent(
       score += 60;
       matchedFields.push(
         `букинг до: ${intent.bookingMonth}${intent.bookingYear ? `/${intent.bookingYear}` : ""}`,
+      );
+    }
+  }
+
+  if (intent.submittedMonths.length > 0) {
+    const submittedHay =
+      client?.submittedAt ??
+      fieldValueByLabel(fields, /дата подачи|submission|подач/i);
+    const hit = submittedHay
+      ? dateInMonths(submittedHay, intent.submittedMonths, intent.submittedYear)
+      : false;
+    required.push(hit);
+    if (hit) {
+      score += 70;
+      matchedFields.push(
+        `дата подачи: ${intent.submittedMonths.join(",")}${intent.submittedYear ? `/${intent.submittedYear}` : ""}`,
       );
     }
   }
@@ -424,6 +419,16 @@ export async function executeStructuredClientSearch(
     clients: deduped.slice(0, limit),
     totalFound: deduped.length,
   };
+}
+
+/** Для тестов и диагностики: проходит ли CRM-клиент по intent-фильтрам. */
+export function crmClientMatchesSearchIntent(
+  client: Client,
+  intent: ClientSearchIntent,
+): boolean {
+  const fields = crmClientToSearchFields(client);
+  const { passed, score } = scoreRecordAgainstIntent(fields, intent, client);
+  return passed && score >= STRUCTURED_MIN_SCORE;
 }
 
 function extractNameFromFallback(query: string): string | null {

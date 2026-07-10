@@ -10,6 +10,16 @@ import {
   extractEmailFromQuery,
   extractPhoneFromQuery,
 } from "@/lib/ai/client-search";
+import {
+  extractAllMonthsFromQuery,
+  extractYearFromQuery,
+  formatMonthsForIntent,
+  isBookingDateQuery,
+  isSubmissionDateQuery,
+  MONTH_PATTERNS,
+  queryContainsDateLiteral,
+} from "@/lib/ai/client-date-parse";
+import { looksLikePassportNumber } from "@/lib/ai/format-client";
 import { normalizeComparable } from "@/lib/ai/search-normalize";
 
 export type ClientSearchIntent = {
@@ -27,6 +37,8 @@ export type ClientSearchIntent = {
   gender: "female" | "male" | null;
   bookingMonth: number | null;
   bookingYear: number | null;
+  submittedMonths: number[];
+  submittedYear: number | null;
   recentActivity: boolean;
   freeText: string[];
   isListQuery: boolean;
@@ -55,25 +67,14 @@ export const EMPTY_CLIENT_SEARCH_INTENT: ClientSearchIntent = {
   gender: null,
   bookingMonth: null,
   bookingYear: null,
+  submittedMonths: [],
+  submittedYear: null,
   recentActivity: false,
   freeText: [],
   isListQuery: false,
 };
 
-const MONTH_PATTERNS: Array<{ pattern: RegExp; month: number }> = [
-  { pattern: /январ/i, month: 1 },
-  { pattern: /феврал/i, month: 2 },
-  { pattern: /март/i, month: 3 },
-  { pattern: /апрел/i, month: 4 },
-  { pattern: /ма[йя]/i, month: 5 },
-  { pattern: /июн/i, month: 6 },
-  { pattern: /июл/i, month: 7 },
-  { pattern: /август/i, month: 8 },
-  { pattern: /сентябр/i, month: 9 },
-  { pattern: /октябр/i, month: 10 },
-  { pattern: /ноябр/i, month: 11 },
-  { pattern: /декабр/i, month: 12 },
-];
+const MONTH_PATTERNS_LEGACY = MONTH_PATTERNS;
 
 const INTENT_SYSTEM_PROMPT = `You extract structured client search filters from manager queries for an immigration CRM (Google Sheets).
 Return ONLY valid JSON (no markdown, no comments). Use null for unknown fields.
@@ -94,6 +95,8 @@ Schema:
   "gender": "female" | "male" | null,
   "bookingMonth": number | null,
   "bookingYear": number | null,
+  "submittedMonths": number[],
+  "submittedYear": number | null,
   "recentActivity": boolean,
   "freeText": string[],
   "isListQuery": boolean
@@ -101,15 +104,26 @@ Schema:
 
 Rules:
 - "у кого", "покажи клиентов", "покажи всех клиентов", "найди клиентов", "клиенты менеджера/референта", "клиенты по Хорватии", "кто находится в работе" → isListQuery: true
+- "заявки подавали в январе и феврале", "дата подачи в марте" → isListQuery: true, submittedMonths: [1,2] or [3], submittedYear if year mentioned
 - "референт Saša Merunka" / "референта X" → manager: "Saša Merunka", isListQuery: true if asking for a list
 - For list queries, clientName is null unless asking about one specific person by name
 - "девушку", "женщину" → gender: "female"
 - "недавно" in activity context → recentActivity: true
-- Extract passport as digits only
-- bookingMonth: 1-12 for phrases like "в июне", "заканчивается в июне"
+- Extract passport as digits only when clearly a passport number, not a calendar date
+- bookingMonth/bookingYear: only for booking end dates ("букинг", "booking")
+- submittedMonths: 1-12 array for "дата подачи", "подавали заявку", "заявки в январе"
 - notesContains: key phrases like "куратор", "запрос куратору"
 - country/direction: e.g. "Хорватия", "Croatia"
 - city: e.g. "Загреб", "Zagreb" — also set address if query mentions address in city`;
+
+function normalizeSubmittedMonths(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(
+    value
+      .filter((item): item is number => typeof item === "number")
+      .filter((month) => month >= 1 && month <= 12),
+  )].sort((left, right) => left - right);
+}
 
 function normalizeIntent(raw: Partial<ClientSearchIntent>): ClientSearchIntent {
   const bookingMonth =
@@ -121,6 +135,10 @@ function normalizeIntent(raw: Partial<ClientSearchIntent>): ClientSearchIntent {
   const bookingYear =
     typeof raw.bookingYear === "number" && raw.bookingYear >= 2000
       ? raw.bookingYear
+      : null;
+  const submittedYear =
+    typeof raw.submittedYear === "number" && raw.submittedYear >= 2000
+      ? raw.submittedYear
       : null;
 
   return {
@@ -145,6 +163,8 @@ function normalizeIntent(raw: Partial<ClientSearchIntent>): ClientSearchIntent {
     gender: raw.gender === "female" || raw.gender === "male" ? raw.gender : null,
     bookingMonth,
     bookingYear,
+    submittedMonths: normalizeSubmittedMonths(raw.submittedMonths),
+    submittedYear,
     recentActivity: raw.recentActivity === true,
     freeText: Array.isArray(raw.freeText)
       ? raw.freeText
@@ -193,8 +213,15 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
   const phone = extractPhoneFromQuery(query);
   if (phone) intent.phone = phone;
 
-  const passportMatch = query.match(/\b(\d{6,12})\b/);
-  if (passportMatch?.[1]) intent.passport = passportMatch[1];
+  const passportMatch = query.match(/\b([A-Za-zА-Яа-я]{0,3}\d{6,12})\b/u);
+  const passportCandidate = passportMatch?.[1]?.replace(/\s/g, "") ?? "";
+  if (
+    passportCandidate &&
+    looksLikePassportNumber(passportCandidate) &&
+    !queryContainsDateLiteral(query)
+  ) {
+    intent.passport = passportCandidate.replace(/\D/g, "") || passportCandidate;
+  }
 
   const staffPatterns = [
     /(?:покажи|найди)\s+клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)\s+([a-zA-Zà-žÀ-Žа-яА-ЯёЁ\sšžćčđŠŽĆČĐ\-'.]+)/iu,
@@ -243,15 +270,32 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
     intent.gender = "male";
   }
 
-  if (/букинг|booking/i.test(lower)) {
-    for (const { pattern, month } of MONTH_PATTERNS) {
+  const monthsInQuery = extractAllMonthsFromQuery(query);
+  const yearInQuery = extractYearFromQuery(query);
+  if (yearInQuery) {
+    intent.submittedYear = yearInQuery;
+    intent.bookingYear = yearInQuery;
+  }
+
+  if (monthsInQuery.length > 0) {
+    if (isSubmissionDateQuery(query)) {
+      intent.submittedMonths = monthsInQuery;
+      intent.isListQuery = true;
+    } else if (isBookingDateQuery(query)) {
+      intent.bookingMonth = monthsInQuery[0] ?? null;
+    } else if (isClientListQuery(query) || /заявк|клиент/i.test(lower)) {
+      intent.submittedMonths = monthsInQuery;
+      intent.isListQuery = true;
+    }
+  }
+
+  if (isBookingDateQuery(query)) {
+    for (const { pattern, month } of MONTH_PATTERNS_LEGACY) {
       if (pattern.test(lower)) {
         intent.bookingMonth = month;
         break;
       }
     }
-    const yearMatch = lower.match(/\b(20\d{2})\b/);
-    if (yearMatch?.[1]) intent.bookingYear = Number(yearMatch[1]);
   }
 
   if (/недавн/i.test(lower) && /отправ|запрос|писал/i.test(lower)) {
@@ -262,7 +306,7 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
     intent.status = intent.status ?? "в работе";
   }
 
-  intent.isListQuery = isClientListQuery(query);
+  intent.isListQuery = intent.isListQuery || isClientListQuery(query);
 
   if (intent.isListQuery) {
     intent.clientName = null;
@@ -287,7 +331,9 @@ export function isClientListQuery(query: string): boolean {
     /клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)/i.test(lower) ||
     /клиент[а-яё]*\s+по\s+/i.test(lower) ||
     /кто\s+находится/i.test(lower) ||
-    /(?:все|всех)\s+клиент/i.test(lower)
+    /(?:все|всех)\s+клиент/i.test(lower) ||
+    (/подавал|подали|подач|заявк/i.test(lower) &&
+      extractAllMonthsFromQuery(query).length > 0)
   );
 }
 
@@ -321,6 +367,9 @@ function mergeIntents(
     gender: ai.gender ?? rules.gender,
     bookingMonth: ai.bookingMonth ?? rules.bookingMonth,
     bookingYear: ai.bookingYear ?? rules.bookingYear,
+    submittedMonths:
+      ai.submittedMonths.length > 0 ? ai.submittedMonths : rules.submittedMonths,
+    submittedYear: ai.submittedYear ?? rules.submittedYear,
     recentActivity: ai.recentActivity || rules.recentActivity,
     freeText:
       ai.freeText.length > 0
@@ -345,6 +394,7 @@ export function hasStructuredSearchFilters(intent: ClientSearchIntent): boolean 
       intent.notesContains ||
       intent.gender ||
       intent.bookingMonth ||
+      intent.submittedMonths.length > 0 ||
       intent.freeText.length > 0 ||
       intent.isListQuery,
   );
@@ -398,6 +448,14 @@ export function formatClientSearchIntentForAi(
         : `месяц ${intent.bookingMonth}`,
     );
   }
+  if (intent.submittedMonths.length > 0) {
+    push(
+      "дата подачи заявки",
+      intent.submittedYear
+        ? `${formatMonthsForIntent(intent.submittedMonths)} ${intent.submittedYear}`
+        : formatMonthsForIntent(intent.submittedMonths),
+    );
+  }
   push("недавняя активность", intent.recentActivity ? "да" : null);
   push("список клиентов", intent.isListQuery ? "да" : null);
   if (intent.freeText.length > 0) {
@@ -421,7 +479,7 @@ export function isClientContextualQuery(query: string): boolean {
     /у\s+кого|покажи\s+клиент|найди\s+клиент|клиентов\s+менеджер|список\s+клиент/i.test(
       lower,
     ) ||
-    /менеджер|статус|паспорт|букинг|адрес|хорват|загреб|куратор|девушк|недавн/i.test(
+    /менеджер|статус|паспорт|букинг|адрес|хорват|загреб|куратор|девушк|недавн|подач|заявк|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр/i.test(
       lower,
     )
   );

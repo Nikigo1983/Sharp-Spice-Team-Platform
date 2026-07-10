@@ -208,6 +208,7 @@ export function AiWorkspaceView() {
   const [pendingClientCandidates, setPendingClientCandidates] = useState<
     ClientContext[]
   >([]);
+  const [needsClientSelection, setNeedsClientSelection] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -504,10 +505,10 @@ export function AiWorkspaceView() {
           setDemo(streamDemo);
           if (meta.needsClientSelection && meta.pendingClientCandidates) {
             setPendingClientCandidates(meta.pendingClientCandidates);
-          } else if (meta.pendingClientCandidates?.length === 0) {
+            setNeedsClientSelection(true);
+          } else {
             setPendingClientCandidates([]);
-          } else if (!meta.needsClientSelection) {
-            setPendingClientCandidates([]);
+            setNeedsClientSelection(false);
           }
           setLoading(false);
           continue;
@@ -664,8 +665,10 @@ export function AiWorkspaceView() {
 
       if (data.needsClientSelection && data.pendingClientCandidates) {
         setPendingClientCandidates(data.pendingClientCandidates);
+        setNeedsClientSelection(true);
       } else {
         setPendingClientCandidates([]);
+        setNeedsClientSelection(false);
       }
 
       const finalHistory: ChatEntry[] = [
@@ -1168,7 +1171,7 @@ export function AiWorkspaceView() {
 
                 ))}
 
-                {!loading && pendingClientCandidates.length > 0 ? (
+                {!loading && needsClientSelection && pendingClientCandidates.length > 0 ? (
                   <div className={styles.clientSelectRow}>
                     <span className={styles.clientSelectLabel}>
                       Выберите клиента:

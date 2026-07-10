@@ -199,6 +199,20 @@ function scoreRecordAgainstIntent(
     }
   }
 
+  if (intent.partnerName) {
+    const partnerHay =
+      client?.partnerName ??
+      fieldValueByLabel(fields, /партнер/i);
+    const hit =
+      textMatchesField(partnerHay, intent.partnerName) ||
+      textMatchesField(allText, intent.partnerName);
+    required.push(hit);
+    if (hit) {
+      score += 75;
+      matchedFields.push(`партнер: ${intent.partnerName}`);
+    }
+  }
+
   if (intent.status) {
     const statusHay = `${fieldValueByLabel(fields, /статус/i)} ${fieldValueByLabel(fields, /замет/i)}`;
     const hit =

@@ -31,7 +31,10 @@ import {
   type EmigrantDeskContextSlice,
   type ResolvedClientContext,
 } from "@/lib/ai/client-context";
-import { formatClientSearchIntentForAi } from "@/lib/ai/client-search-intent";
+import {
+  formatClientSearchIntentForAi,
+  shouldOfferClientSelection,
+} from "@/lib/ai/client-search-intent";
 import {
   buildClientSearchQuery,
   groupDuplicateClients,
@@ -409,25 +412,32 @@ async function prepareWorkspaceRequest(
     ) {
       clientCandidates = [clientLookup.client];
       candidateScenario = "structured";
-      pendingForUi = isMergedClientContext(clientLookup.client)
-        ? clientLookup.client.parts
-        : [clientLookup.client];
     } else if (clientLookup.kind === "single") {
       clientContext = clientLookup.client;
     } else if (clientLookup.kind === "multiple") {
       clientCandidates = clientLookup.clients;
       candidateScenario = aiSearch.usedStructuredSearch ? "structured" : "multiple";
-      pendingForUi = clientLookup.pendingParts;
-      needsClientSelection = clientLookup.clients.length > 1;
+      if (
+        shouldOfferClientSelection(
+          aiSearch.intentType,
+          clientLookup.kind,
+          clientLookup.clients.length,
+        )
+      ) {
+        pendingForUi = clientLookup.pendingParts;
+        needsClientSelection = true;
+      }
     } else if (clientLookup.kind === "weak") {
       clientCandidates = clientLookup.clients;
       candidateScenario = "weak";
-      pendingForUi = clientLookup.clients.flatMap((client) =>
-        isMergedClientContext(client) ? client.parts : [client],
-      );
+      if (aiSearch.intentType !== "list") {
+        pendingForUi = clientLookup.clients.flatMap((client) =>
+          isMergedClientContext(client) ? client.parts : [client],
+        );
+      }
     } else if (clientLookup.kind === "not_found") {
       const fuzzy = await lookupFuzzyClientCandidates(trimmed, 10);
-      if (fuzzy.length > 0) {
+      if (fuzzy.length > 0 && aiSearch.intentType !== "list") {
         clientCandidates = fuzzy;
         candidateScenario = "not_found";
         pendingForUi = fuzzy.flatMap((client) =>

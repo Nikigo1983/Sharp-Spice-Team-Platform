@@ -35,6 +35,7 @@ export type ClientSearchIntent = {
   phone: string | null;
   notesContains: string | null;
   gender: "female" | "male" | null;
+  partnerName: string | null;
   bookingMonth: number | null;
   bookingYear: number | null;
   submittedMonths: number[];
@@ -65,6 +66,7 @@ export const EMPTY_CLIENT_SEARCH_INTENT: ClientSearchIntent = {
   phone: null,
   notesContains: null,
   gender: null,
+  partnerName: null,
   bookingMonth: null,
   bookingYear: null,
   submittedMonths: [],
@@ -93,6 +95,7 @@ Schema:
   "phone": string | null,
   "notesContains": string | null,
   "gender": "female" | "male" | null,
+  "partnerName": string | null,
   "bookingMonth": number | null,
   "bookingYear": number | null,
   "submittedMonths": number[],
@@ -112,6 +115,7 @@ Rules:
 - Extract passport as digits only when clearly a passport number, not a calendar date
 - bookingMonth/bookingYear: only for booking end dates ("букинг", "booking")
 - submittedMonths: 1-12 array for "дата подачи", "подавали заявку", "заявки в январе"
+- partnerName: for "партнер Шарипа", "у каких клиентов партнер X" → isListQuery: true
 - notesContains: key phrases like "куратор", "запрос куратору"
 - country/direction: e.g. "Хорватия", "Croatia"
 - city: e.g. "Загреб", "Zagreb" — also set address if query mentions address in city`;
@@ -161,6 +165,8 @@ function normalizeIntent(raw: Partial<ClientSearchIntent>): ClientSearchIntent {
     notesContains:
       typeof raw.notesContains === "string" ? raw.notesContains.trim() || null : null,
     gender: raw.gender === "female" || raw.gender === "male" ? raw.gender : null,
+    partnerName:
+      typeof raw.partnerName === "string" ? raw.partnerName.trim() || null : null,
     bookingMonth,
     bookingYear,
     submittedMonths: normalizeSubmittedMonths(raw.submittedMonths),
@@ -251,6 +257,14 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
     intent.direction = "Хорватия";
   }
 
+  const partnerMatch = query.match(
+    /партнер[а]?\s+([^?,]+?)(?:\s+у\s+каких|\?|$)/iu,
+  );
+  if (partnerMatch?.[1]) {
+    intent.partnerName = partnerMatch[1].trim().replace(/[.!]+$/u, "");
+    intent.isListQuery = true;
+  }
+
   const cityMatch = query.match(
     /(?:адрес[а]?\s+)?(?:в|во)\s+(загреб|сплит|риек|осиек|zagreb|split|rijeka)/iu,
   );
@@ -332,9 +346,22 @@ export function isClientListQuery(query: string): boolean {
     /клиент[а-яё]*\s+по\s+/i.test(lower) ||
     /кто\s+находится/i.test(lower) ||
     /(?:все|всех)\s+клиент/i.test(lower) ||
+    /у\s+каких\s+клиент/i.test(lower) ||
     (/подавал|подали|подач|заявк/i.test(lower) &&
       extractAllMonthsFromQuery(query).length > 0)
   );
+}
+
+/** Списочный ответ уже дан — не показывать «Выберите клиента». */
+export function shouldOfferClientSelection(
+  intentType: ClientSearchIntentType,
+  lookupKind: "single" | "multiple" | "weak" | "not_found" | "skip",
+  clientCount: number,
+): boolean {
+  if (intentType === "list") {
+    return false;
+  }
+  return lookupKind === "multiple" && clientCount > 1;
 }
 
 export function resolveClientSearchIntentType(
@@ -365,6 +392,7 @@ function mergeIntents(
     phone: ai.phone ?? rules.phone,
     notesContains: ai.notesContains ?? rules.notesContains,
     gender: ai.gender ?? rules.gender,
+    partnerName: ai.partnerName ?? rules.partnerName,
     bookingMonth: ai.bookingMonth ?? rules.bookingMonth,
     bookingYear: ai.bookingYear ?? rules.bookingYear,
     submittedMonths:
@@ -393,6 +421,7 @@ export function hasStructuredSearchFilters(intent: ClientSearchIntent): boolean 
       intent.phone ||
       intent.notesContains ||
       intent.gender ||
+      intent.partnerName ||
       intent.bookingMonth ||
       intent.submittedMonths.length > 0 ||
       intent.freeText.length > 0 ||
@@ -440,6 +469,7 @@ export function formatClientSearchIntentForAi(
   push("телефон", intent.phone);
   push("заметки содержат", intent.notesContains);
   push("пол", intent.gender);
+  push("партнер", intent.partnerName);
   if (intent.bookingMonth) {
     push(
       "букинг заканчивается",
@@ -479,7 +509,7 @@ export function isClientContextualQuery(query: string): boolean {
     /у\s+кого|покажи\s+клиент|найди\s+клиент|клиентов\s+менеджер|список\s+клиент/i.test(
       lower,
     ) ||
-    /менеджер|статус|паспорт|букинг|адрес|хорват|загреб|куратор|девушк|недавн|подач|заявк|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр/i.test(
+    /менеджер|статус|паспорт|букинг|адрес|хорват|загреб|куратор|девушк|недавн|подач|заявк|партнер|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр/i.test(
       lower,
     )
   );

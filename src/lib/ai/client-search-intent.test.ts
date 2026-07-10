@@ -4,10 +4,19 @@ import type { Client } from "@/lib/google-sheets/types";
 import {
   EMPTY_CLIENT_SEARCH_INTENT,
   parseClientSearchIntentRules,
+  shouldOfferClientSelection,
 } from "./client-search-intent";
 import { extractPhoneFromQuery } from "./client-search";
 
 describe("parseClientSearchIntentRules submission dates", () => {
+  it("detects partner list query", () => {
+    const intent = parseClientSearchIntentRules(
+      "Партнер Шарипа у каких клиентов?",
+    );
+    assert.equal(intent.isListQuery, true);
+    assert.equal(intent.partnerName, "Шарипа");
+  });
+
   it("detects january and february submission list query", () => {
     const query =
       "найди клиентов, заявки на которых мы подавали в январе и феврале";
@@ -50,6 +59,17 @@ describe("extractPhoneFromQuery date safety", () => {
       extractPhoneFromQuery("телефон +7 999 123 45 67"),
       "79991234567",
     );
+  });
+});
+
+describe("shouldOfferClientSelection", () => {
+  it("hides picker for list queries even with many matches", () => {
+    assert.equal(shouldOfferClientSelection("list", "multiple", 50), false);
+  });
+
+  it("shows picker for ambiguous single-client lookup", () => {
+    assert.equal(shouldOfferClientSelection("single", "multiple", 3), true);
+    assert.equal(shouldOfferClientSelection("single", "multiple", 1), false);
   });
 });
 
@@ -99,5 +119,41 @@ describe("crmClientMatchesSearchIntent", () => {
     assert.equal(crmClientMatchesSearchIntent(janClient, intent), true);
     assert.equal(crmClientMatchesSearchIntent(febClient, intent), true);
     assert.equal(crmClientMatchesSearchIntent(marClient, intent), false);
+  });
+
+  it("matches clients by partner name", async () => {
+    const { crmClientMatchesSearchIntent } = await import(
+      "./structured-client-search"
+    );
+    const intent = {
+      ...EMPTY_CLIENT_SEARCH_INTENT,
+      partnerName: "Шарипа",
+      isListQuery: true,
+    };
+    const match: Client = {
+      id: "P1",
+      name: "АКУНОВ",
+      phone: "—",
+      email: "—",
+      country: "Хорватия",
+      citizenship: "—",
+      direction: "Хорватия",
+      status: "—",
+      manager: "—",
+      lastActivity: "—",
+      createdAt: "—",
+      partnerName: "Шарипа",
+      rowIndex: 2,
+    };
+    const other: Client = {
+      ...match,
+      id: "P2",
+      name: "Балыка",
+      partnerName: "ЛЕНА МОСКВА",
+      rowIndex: 3,
+    };
+
+    assert.equal(crmClientMatchesSearchIntent(match, intent), true);
+    assert.equal(crmClientMatchesSearchIntent(other, intent), false);
   });
 });

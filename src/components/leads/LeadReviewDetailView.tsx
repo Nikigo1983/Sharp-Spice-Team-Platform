@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import { LeadFieldValue } from "@/components/leads/LeadFieldValue";
 import { LeadReviewStatusBadge } from "@/components/leads/LeadReviewStatusBadge";
 import type { LeadDetail } from "@/lib/leads/lead-review-types";
 import styles from "./LeadReviewQueue.module.css";
@@ -105,7 +106,9 @@ export function LeadReviewDetailView({ leadId }: { leadId: string }) {
             {lead.surveyFields.map((field) => (
               <div key={field.label} className={styles.fieldRow}>
                 <span className={styles.fieldLabel}>{field.label}</span>
-                <span className={styles.fieldValue}>{field.value}</span>
+                <span className={styles.fieldValue}>
+                  <LeadFieldValue value={field.value} fieldLabel={field.label} />
+                </span>
               </div>
             ))}
           </div>

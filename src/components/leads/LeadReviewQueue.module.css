@@ -225,6 +225,16 @@
   word-break: break-word;
 }
 
+.fieldLink {
+  color: var(--accent-burgundy-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fieldLink:hover {
+  color: var(--white);
+}
+
 .alertStrong {
   display: flex;
   gap: 0.75rem;

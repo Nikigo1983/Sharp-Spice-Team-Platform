@@ -110,3 +110,12 @@
   cursor: wait;
   transform: none;
 }
+
+.forgotHint {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-400);
+  line-height: 1.45;
+  text-align: center;
+}

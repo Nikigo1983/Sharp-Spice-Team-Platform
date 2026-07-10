@@ -54,6 +54,10 @@ export function LoginForm({ nextPath }: LoginFormProps) {
       <button type="submit" className={styles.submit} disabled={pending}>
         {pending ? "Вход…" : "Войти"}
       </button>
+      <p className={styles.forgotHint}>
+        Забыли пароль? Напишите администратору платформы — он сбросит его в
+        разделе Settings.
+      </p>
     </form>
   );
 }

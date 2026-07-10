@@ -6,8 +6,8 @@ import { createSession, destroySession } from "@/lib/auth/session";
 import {
   findUserByEmail,
   toSessionUser,
-  verifyUserPassword,
 } from "@/lib/auth/users";
+import { verifyUserPassword } from "@/lib/auth/verify-password";
 import { isUserDeleted } from "@/lib/team/store";
 
 export type SignInState = {

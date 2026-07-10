@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import type { SessionUser, UserRole } from "./types";
 
 export type TeamUser = SessionUser & {
@@ -44,7 +43,7 @@ const DEV_DEFAULT_PASSWORDS: Record<string, string> = {
   "manager-3": "manager3-dev",
 };
 
-function getStoredPassword(user: TeamUser): string | undefined {
+export function getEnvStoredPassword(user: TeamUser): string | undefined {
   const fromEnv = process.env[user.passwordEnvKey]?.trim();
   if (fromEnv) return fromEnv;
 
@@ -62,20 +61,6 @@ export function listTeamUsers(): TeamUser[] {
 export function findUserByEmail(email: string): TeamUser | undefined {
   const normalized = email.trim().toLowerCase();
   return TEAM_USERS.find((u) => u.email.toLowerCase() === normalized);
-}
-
-export async function verifyUserPassword(
-  user: TeamUser,
-  password: string,
-): Promise<boolean> {
-  const stored = getStoredPassword(user);
-  if (!stored) return false;
-
-  if (stored.startsWith("$2a$") || stored.startsWith("$2b$")) {
-    return bcrypt.compare(password, stored);
-  }
-
-  return password === stored;
 }
 
 export function toSessionUser(user: TeamUser): SessionUser {

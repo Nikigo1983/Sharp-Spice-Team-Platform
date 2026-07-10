@@ -4,6 +4,7 @@ import styles from "@/components/layout/AppShell.module.css";
 import { TeamChatView } from "@/components/team-chat/TeamChatView";
 import { getSession } from "@/lib/auth/session";
 import {
+  listPinnedTeamChatMessages,
   listTeamChatMessages,
   markTeamChatSeen,
 } from "@/lib/team-chat/store";
@@ -17,6 +18,7 @@ export default async function TeamChatPage() {
   await markTeamChatSeen(session.id);
 
   const initial = await listTeamChatMessages({ limit: 100 });
+  const pinned = await listPinnedTeamChatMessages();
 
   return (
     <AppShell
@@ -28,6 +30,7 @@ export default async function TeamChatPage() {
         initialMessages={initial.messages}
         initialLatestCreatedAt={initial.latestCreatedAt}
         initialHasMoreBefore={initial.hasMoreBefore}
+        initialPinnedMessages={pinned}
       />
     </AppShell>
   );

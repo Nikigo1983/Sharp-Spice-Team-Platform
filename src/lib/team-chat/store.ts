@@ -31,13 +31,18 @@ import {
 import type {
   CreateTeamChatMessageInput,
   CreateVoiceTeamChatMessageInput,
+  TeamChatLinkItem,
   TeamChatMessage,
+  TeamChatSharedMediaResult,
+  TeamChatSharedMediaType,
 } from "./types";
 import {
   FILE_MESSAGE_SEARCH_LABEL,
   IMAGE_MESSAGE_SEARCH_LABEL,
   VOICE_MESSAGE_SEARCH_LABEL,
 } from "./types";
+import { buildMessagePreview } from "./message-preview";
+import { linkifyText } from "./linkify";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbChat from "@/lib/supabase/team-chat-repo";
 
@@ -82,6 +87,18 @@ function emptyMessageMediaFields() {
   };
 }
 
+function emptyReplyPinFields() {
+  return {
+    reply_to_message_id: null as string | null,
+    reply_to_user_name: null as string | null,
+    reply_to_message_type: null as TeamChatMessage["message_type"] | null,
+    reply_to_preview: null as string | null,
+    is_pinned: false,
+    pinned_at: null as string | null,
+    pinned_by_user_id: null as string | null,
+  };
+}
+
 function normalizeTeamChatMessage(message: TeamChatMessage): TeamChatMessage {
   const messageType =
     message.message_type === "voice"
@@ -95,6 +112,7 @@ function normalizeTeamChatMessage(message: TeamChatMessage): TeamChatMessage {
     ...message,
     message_type: messageType,
     ...emptyMessageMediaFields(),
+    ...emptyReplyPinFields(),
     audio_url: message.audio_url ?? null,
     audio_duration_ms: message.audio_duration_ms ?? null,
     image_url: message.image_url ?? null,
@@ -102,6 +120,13 @@ function normalizeTeamChatMessage(message: TeamChatMessage): TeamChatMessage {
     file_name: message.file_name ?? null,
     file_content_type: message.file_content_type ?? null,
     file_size: message.file_size ?? null,
+    reply_to_message_id: message.reply_to_message_id ?? null,
+    reply_to_user_name: message.reply_to_user_name ?? null,
+    reply_to_message_type: message.reply_to_message_type ?? null,
+    reply_to_preview: message.reply_to_preview ?? null,
+    is_pinned: Boolean(message.is_pinned),
+    pinned_at: message.pinned_at ?? null,
+    pinned_by_user_id: message.pinned_by_user_id ?? null,
   };
 }
 
@@ -156,6 +181,28 @@ function validateCaption(text: string | undefined): string {
     throw new Error("Caption too long");
   }
   return normalized;
+}
+
+async function applyReplyToMessage(
+  message: TeamChatMessage,
+  replyToId?: string,
+): Promise<void> {
+  if (!replyToId?.trim()) return;
+
+  const parent = isSupabaseConfigured()
+    ? await sbChat.sbGetTeamChatMessage(replyToId.trim())
+    : (await readMessagesStore()).messages.find(
+        (item) => item.id === replyToId.trim(),
+      ) ?? null;
+
+  if (!parent) {
+    throw new Error("Reply message not found");
+  }
+
+  message.reply_to_message_id = parent.id;
+  message.reply_to_user_name = parent.user_name;
+  message.reply_to_message_type = parent.message_type;
+  message.reply_to_preview = buildMessagePreview(parent);
 }
 
 export async function listTeamChatMessages(opts: {
@@ -255,9 +302,12 @@ export async function createTeamChatMessage(
     message_type: "text",
     message_text: text,
     ...emptyMessageMediaFields(),
+    ...emptyReplyPinFields(),
     created_at: now,
     updated_at: now,
   };
+
+  await applyReplyToMessage(message, input.replyToId);
 
   if (isSupabaseConfigured()) {
     try {
@@ -301,11 +351,14 @@ export async function createVoiceTeamChatMessage(
     message_type: "voice",
     message_text: "",
     ...emptyMessageMediaFields(),
+    ...emptyReplyPinFields(),
     audio_duration_ms: durationMs,
     created_at: now,
     updated_at: now,
   };
   message.audio_url = getTeamChatAudioApiPath(message.id);
+
+  await applyReplyToMessage(message, input.replyToId);
 
   await saveTeamChatAudio(message.id, audioBuffer, normalizedType);
 
@@ -330,6 +383,7 @@ export async function createImageTeamChatMessage(
   imageBuffer: Buffer,
   contentType: string,
   caption?: string,
+  replyToId?: string,
 ): Promise<TeamChatMessage> {
   const normalizedType = normalizeTeamChatImageContentType(contentType);
   if (!normalizedType) {
@@ -351,10 +405,13 @@ export async function createImageTeamChatMessage(
     message_type: "image",
     message_text: validateCaption(caption),
     ...emptyMessageMediaFields(),
+    ...emptyReplyPinFields(),
     created_at: now,
     updated_at: now,
   };
   message.image_url = getTeamChatImageApiPath(message.id);
+
+  await applyReplyToMessage(message, replyToId);
 
   await saveTeamChatImage(message.id, imageBuffer, normalizedType);
 
@@ -380,6 +437,7 @@ export async function createFileTeamChatMessage(
   fileName: string,
   contentType: string,
   caption?: string,
+  replyToId?: string,
 ): Promise<TeamChatMessage> {
   const normalizedName = fileName.trim() || "file";
   const normalizedType = normalizeTeamChatFileContentType(
@@ -405,6 +463,7 @@ export async function createFileTeamChatMessage(
     message_type: "file",
     message_text: validateCaption(caption),
     ...emptyMessageMediaFields(),
+    ...emptyReplyPinFields(),
     created_at: now,
     updated_at: now,
   };
@@ -412,6 +471,8 @@ export async function createFileTeamChatMessage(
   message.file_name = normalizedName;
   message.file_content_type = normalizedType;
   message.file_size = fileBuffer.length;
+
+  await applyReplyToMessage(message, replyToId);
 
   await saveTeamChatFile(message.id, normalizedName, fileBuffer, normalizedType);
 
@@ -576,4 +637,132 @@ export async function listLatestTeamChatForDashboard(
   return store.messages
     .slice(-safeLimit)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function listPinnedTeamChatMessages(): Promise<TeamChatMessage[]> {
+  const store = await loadMessagesStore();
+  return store.messages
+    .filter((message) => message.is_pinned)
+    .sort((a, b) => (b.pinned_at ?? "").localeCompare(a.pinned_at ?? ""));
+}
+
+export async function setTeamChatMessagePinned(
+  id: string,
+  pinned: boolean,
+  user: SessionUser,
+): Promise<TeamChatMessage | null> {
+  const store = await loadMessagesStore();
+  const message = store.messages.find((item) => item.id === id);
+  if (!message) return null;
+
+  const now = new Date().toISOString();
+  const nextPinned = pinned;
+  const pinnedAt = nextPinned ? now : null;
+  const pinnedBy = nextPinned ? user.id : null;
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbChat.sbUpdateTeamChatMessagePin(
+        id,
+        nextPinned,
+        pinnedBy,
+        pinnedAt,
+        now,
+      );
+    } catch (error) {
+      console.error("[team-chat] supabase pin", error);
+      return null;
+    }
+  }
+
+  message.is_pinned = nextPinned;
+  message.pinned_at = pinnedAt;
+  message.pinned_by_user_id = pinnedBy;
+  message.updated_at = now;
+  await writeMessagesStore(store);
+  return message;
+}
+
+function collectMessageTextForLinks(message: TeamChatMessage): string {
+  if (message.message_type === "text") {
+    return message.message_text;
+  }
+  if (message.message_type === "image" || message.message_type === "file") {
+    return message.message_text.trim();
+  }
+  return "";
+}
+
+function extractLinksFromMessages(messages: TeamChatMessage[]): TeamChatLinkItem[] {
+  const links: TeamChatLinkItem[] = [];
+
+  for (const message of messages) {
+    const text = collectMessageTextForLinks(message);
+    if (!text.trim()) continue;
+
+    for (const part of linkifyText(text)) {
+      if (part.type !== "link") continue;
+      links.push({
+        url: part.href,
+        message_id: message.id,
+        user_name: message.user_name,
+        created_at: message.created_at,
+        context: buildMessagePreview(message),
+      });
+    }
+  }
+
+  return links;
+}
+
+export async function listTeamChatSharedMedia(opts: {
+  type: TeamChatSharedMediaType;
+  limit: number;
+  beforeCreatedAt?: string;
+}): Promise<TeamChatSharedMediaResult> {
+  const store = await loadMessagesStore();
+  const limit = Math.max(1, Math.min(100, opts.limit));
+
+  if (opts.type === "links") {
+    let candidates = store.messages.filter((message) =>
+      Boolean(collectMessageTextForLinks(message).trim()),
+    );
+
+    if (opts.beforeCreatedAt) {
+      candidates = candidates.filter(
+        (message) => message.created_at < opts.beforeCreatedAt!,
+      );
+    }
+
+    candidates.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const links = extractLinksFromMessages(candidates).slice(0, limit);
+    const hasMore =
+      extractLinksFromMessages(candidates).length > links.length ||
+      candidates.length > limit;
+
+    return {
+      type: "links",
+      links,
+      hasMore,
+    };
+  }
+
+  let filtered = store.messages.filter(
+    (message) => message.message_type === opts.type,
+  );
+
+  if (opts.beforeCreatedAt) {
+    filtered = filtered.filter(
+      (message) => message.created_at < opts.beforeCreatedAt!,
+    );
+  }
+
+  filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const slice = filtered.slice(0, limit);
+
+  return {
+    type: opts.type,
+    messages: slice,
+    hasMore: filtered.length > slice.length,
+  };
 }

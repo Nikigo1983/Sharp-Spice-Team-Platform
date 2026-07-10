@@ -20,14 +20,45 @@ export type TeamChatMessage = {
   file_name: string | null;
   file_content_type: string | null;
   file_size: number | null;
+  reply_to_message_id: string | null;
+  reply_to_user_name: string | null;
+  reply_to_message_type: TeamChatMessageType | null;
+  reply_to_preview: string | null;
+  is_pinned: boolean;
+  pinned_at: string | null;
+  pinned_by_user_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type CreateTeamChatMessageInput = {
   text: string;
+  replyToId?: string;
 };
 
 export type CreateVoiceTeamChatMessageInput = {
   durationMs: number;
+  replyToId?: string;
 };
+
+export type TeamChatSharedMediaType = "image" | "file" | "voice" | "links";
+
+export type TeamChatLinkItem = {
+  url: string;
+  message_id: string;
+  user_name: string;
+  created_at: string;
+  context: string;
+};
+
+export type TeamChatSharedMediaResult =
+  | {
+      type: "image" | "file" | "voice";
+      messages: TeamChatMessage[];
+      hasMore: boolean;
+    }
+  | {
+      type: "links";
+      links: TeamChatLinkItem[];
+      hasMore: boolean;
+    };

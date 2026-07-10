@@ -33,6 +33,7 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await fileEntry.arrayBuffer());
   const caption = String(formData.get("text") ?? formData.get("caption") ?? "");
+  const replyToId = String(formData.get("replyToId") ?? "").trim() || undefined;
 
   try {
     const message = await createFileTeamChatMessage(
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       fileName,
       contentType,
       caption,
+      replyToId,
     );
 
     await notifyTeamChatMessage({

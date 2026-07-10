@@ -29,6 +29,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid duration" }, { status: 400 });
   }
 
+  const replyToId = String(formData.get("replyToId") ?? "").trim() || undefined;
+
   const contentType = normalizeTeamChatAudioContentType(
     audioEntry.type || "audio/webm",
   );
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
 
   try {
     const message = await createVoiceTeamChatMessage(
-      { durationMs },
+      { durationMs, replyToId },
       session,
       buffer,
       contentType,

@@ -31,6 +31,7 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await imageEntry.arrayBuffer());
   const caption = String(formData.get("text") ?? formData.get("caption") ?? "");
+  const replyToId = String(formData.get("replyToId") ?? "").trim() || undefined;
 
   try {
     const message = await createImageTeamChatMessage(
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       buffer,
       contentType,
       caption,
+      replyToId,
     );
 
     await notifyTeamChatMessage({

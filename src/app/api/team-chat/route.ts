@@ -34,13 +34,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as { text?: string };
+  const body = (await request.json()) as { text?: string; replyToId?: string };
   if (!body?.text || typeof body.text !== "string") {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   try {
-    const message = await createTeamChatMessage({ text: body.text }, session);
+    const message = await createTeamChatMessage(
+      {
+        text: body.text,
+        replyToId:
+          typeof body.replyToId === "string" ? body.replyToId : undefined,
+      },
+      session,
+    );
     await notifyTeamChatMessage({
       senderId: session.id,
       senderName: session.name,

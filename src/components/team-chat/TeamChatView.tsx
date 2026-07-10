@@ -12,7 +12,8 @@ import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
 import type { SessionUser } from "@/lib/auth/types";
 import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type { PresenceMap } from "@/lib/presence/types";
-import type { TeamChatMessage } from "@/lib/team-chat/types";
+import type { TeamChatMessage, TeamChatSharedMediaType } from "@/lib/team-chat/types";
+import { buildMessagePreview } from "@/lib/team-chat/message-preview";
 import { formatTeamChatDateTime, formatVoiceDuration } from "@/lib/team-chat/format";
 import { Button } from "@/components/ui/Button";
 import { useVoiceRecorder } from "./useVoiceRecorder";
@@ -20,6 +21,9 @@ import { VoiceMessageAudio } from "./VoiceMessageAudio";
 import { ChatImageMessage } from "./ChatImageMessage";
 import { ChatFileMessage, CHAT_DOCUMENT_ACCEPT } from "./ChatFileMessage";
 import { ChatMessageText } from "./ChatMessageText";
+import { ChatMessageReply, ChatReplyQuote } from "./ChatReplyQuote";
+import { ChatPinnedBar } from "./ChatPinnedBar";
+import { TeamChatSharedPanel } from "./TeamChatSharedPanel";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FileTypeIcon, UiIcon } from "@/components/ui/UiIcon";
@@ -31,6 +35,7 @@ type TeamChatViewProps = {
   initialMessages: TeamChatMessage[];
   initialLatestCreatedAt: string | null;
   initialHasMoreBefore: boolean;
+  initialPinnedMessages?: TeamChatMessage[];
 };
 
 type PendingAttachment = {
@@ -50,6 +55,7 @@ export function TeamChatView({
   initialMessages,
   initialLatestCreatedAt,
   initialHasMoreBefore,
+  initialPinnedMessages = [],
 }: TeamChatViewProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -78,6 +84,12 @@ export function TeamChatView({
   );
   const [clearOpen, setClearOpen] = useState(false);
   const [presence, setPresence] = useState<PresenceMap>({});
+  const [replyTarget, setReplyTarget] = useState<TeamChatMessage | null>(null);
+  const [pinnedMessages, setPinnedMessages] = useState<TeamChatMessage[]>(
+    initialPinnedMessages,
+  );
+  const [viewMode, setViewMode] = useState<"chat" | "shared">("chat");
+  const [sharedTab, setSharedTab] = useState<TeamChatSharedMediaType>("image");
 
   const isOwner = user.role === "owner";
 
@@ -135,6 +147,91 @@ export function TeamChatView({
       }
     };
   }, [pendingAttachment?.previewUrl]);
+
+  async function fetchPinned() {
+    try {
+      const res = await fetch("/api/team-chat/pinned");
+      if (!res.ok) return;
+      const data = (await res.json()) as { messages?: TeamChatMessage[] };
+      const nextPinned = data.messages ?? [];
+      setPinnedMessages(nextPinned);
+      const pinnedIds = new Set(nextPinned.map((message) => message.id));
+      setMessages((prev) =>
+        prev.map((message) => ({
+          ...message,
+          is_pinned: pinnedIds.has(message.id),
+          pinned_at:
+            nextPinned.find((item) => item.id === message.id)?.pinned_at ??
+            null,
+          pinned_by_user_id:
+            nextPinned.find((item) => item.id === message.id)
+              ?.pinned_by_user_id ?? null,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    void fetchPinned();
+    const interval = setInterval(() => {
+      void fetchPinned();
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  function jumpToMessage(messageId: string) {
+    setViewMode("chat");
+    setSearchQuery("");
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`message-${messageId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.classList.add(styles.messageHighlight);
+      window.setTimeout(() => {
+        el?.classList.remove(styles.messageHighlight);
+      }, 1800);
+    });
+  }
+
+  async function togglePin(message: TeamChatMessage) {
+    const nextPinned = !message.is_pinned;
+    const res = await fetch(
+      `/api/team-chat/${encodeURIComponent(message.id)}/pin`,
+      {
+        method: nextPinned ? "POST" : "DELETE",
+        headers: nextPinned ? { "Content-Type": "application/json" } : undefined,
+        body: nextPinned ? JSON.stringify({ pinned: true }) : undefined,
+      },
+    );
+    if (!res.ok) {
+      setToast({
+        text: nextPinned
+          ? "Не удалось закрепить сообщение."
+          : "Не удалось открепить сообщение.",
+        type: "error",
+      });
+      return;
+    }
+
+    const data = (await res.json()) as { message: TeamChatMessage };
+    setMessages((prev) =>
+      prev.map((item) => (item.id === data.message.id ? data.message : item)),
+    );
+    await fetchPinned();
+    setToast({
+      text: nextPinned ? "Сообщение закреплено." : "Сообщение откреплено.",
+    });
+  }
+
+  function startReply(message: TeamChatMessage) {
+    setReplyTarget(message);
+    setViewMode("chat");
+  }
+
+  function clearReply() {
+    setReplyTarget(null);
+  }
 
   async function fetchInitialOrReset() {
     const res = await fetch("/api/team-chat?limit=100");
@@ -317,6 +414,7 @@ export function TeamChatView({
       formData.append("image", file, fallbackName);
       const trimmedCaption = caption.trim();
       if (trimmedCaption) formData.append("text", trimmedCaption);
+      if (replyTarget) formData.append("replyToId", replyTarget.id);
 
       const res = await fetch("/api/team-chat/image", {
         method: "POST",
@@ -333,6 +431,7 @@ export function TeamChatView({
 
       const data = (await res.json()) as { message: TeamChatMessage };
       await appendMessage(data.message);
+      clearReply();
       setToast({ text: "Изображение отправлено." });
       return true;
     } finally {
@@ -349,6 +448,7 @@ export function TeamChatView({
       formData.append("file", file, file.name || "file");
       const trimmedCaption = caption.trim();
       if (trimmedCaption) formData.append("text", trimmedCaption);
+      if (replyTarget) formData.append("replyToId", replyTarget.id);
 
       const res = await fetch("/api/team-chat/file", {
         method: "POST",
@@ -365,6 +465,7 @@ export function TeamChatView({
 
       const data = (await res.json()) as { message: TeamChatMessage };
       await appendMessage(data.message);
+      clearReply();
       setToast({ text: "Файл отправлен." });
       return true;
     } finally {
@@ -418,6 +519,7 @@ export function TeamChatView({
       const formData = new FormData();
       formData.append("audio", recording.blob, "voice-message.webm");
       formData.append("duration_ms", String(Math.round(recording.durationMs)));
+      if (replyTarget) formData.append("replyToId", replyTarget.id);
 
       const res = await fetch("/api/team-chat/voice", {
         method: "POST",
@@ -434,6 +536,7 @@ export function TeamChatView({
 
       const data = (await res.json()) as { message: TeamChatMessage };
       await appendMessage(data.message);
+      clearReply();
       setToast({ text: "Голосовое сообщение отправлено." });
     } finally {
       voiceRecorder.setUploading(false);
@@ -481,7 +584,10 @@ export function TeamChatView({
       const res = await fetch("/api/team-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text,
+          replyToId: replyTarget?.id,
+        }),
       });
       if (!res.ok) {
         setError("Не удалось отправить сообщение.");
@@ -490,6 +596,7 @@ export function TeamChatView({
 
       const data = (await res.json()) as { message: TeamChatMessage };
       setComposerText("");
+      clearReply();
       await appendMessage(data.message);
       setToast({ text: "Сообщение отправлено." });
     } finally {
@@ -552,6 +659,7 @@ export function TeamChatView({
       setLatestCreatedAt(next.at(-1)?.created_at ?? null);
       return next;
     });
+    setPinnedMessages((prev) => prev.filter((message) => message.id !== targetId));
     setToast({ text: "Сообщение удалено." });
   }
 
@@ -603,9 +711,35 @@ export function TeamChatView({
           placeholder="Поиск по тексту и автору…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          disabled={viewMode === "shared"}
         />
+        <Button
+          type="button"
+          variant={viewMode === "shared" ? "primary" : "secondary"}
+          className={styles.viewToggleBtn}
+          onClick={() =>
+            setViewMode((current) => (current === "chat" ? "shared" : "chat"))
+          }
+        >
+          {viewMode === "shared" ? "К чату" : "Материалы"}
+        </Button>
       </div>
 
+      {viewMode === "chat" && pinnedMessages.length > 0 ? (
+        <ChatPinnedBar
+          messages={pinnedMessages}
+          onSelect={jumpToMessage}
+          onUnpin={(message) => void togglePin(message)}
+        />
+      ) : null}
+
+      {viewMode === "shared" ? (
+        <TeamChatSharedPanel
+          activeTab={sharedTab}
+          onTabChange={setSharedTab}
+          onOpenMessage={jumpToMessage}
+        />
+      ) : (
       <div className={styles.list} ref={listRef} onScroll={onScroll}>
         {loadingOlder && !searchQuery.trim() ? (
           <p className={styles.loading}>Загрузка старых сообщений…</p>
@@ -614,7 +748,11 @@ export function TeamChatView({
         {messages.map((message) => {
           const showDelete = canDeleteMessage(message);
           return (
-            <div key={message.id} className={styles.messageWrap}>
+            <div
+              key={message.id}
+              id={`message-${message.id}`}
+              className={styles.messageWrap}
+            >
               <Card className={styles.messageCard}>
                 <div className={styles.messageTop}>
                   <div className={styles.messageUser}>
@@ -625,20 +763,48 @@ export function TeamChatView({
                       />
                     </span>
                   </div>
-                  {showDelete ? (
-                    <Button
+                  <div className={styles.messageActions}>
+                    <button
                       type="button"
-                      variant="danger"
-                      className={styles.deleteBtn}
-                      onClick={() => setDeleteTarget(message)}
+                      className={styles.actionBtn}
+                      onClick={() => startReply(message)}
+                      title="Ответить"
                     >
-                      🗑 Удалить
-                    </Button>
-                  ) : null}
+                      <UiIcon icon="reply" className={styles.actionIcon} />
+                      Ответить
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        message.is_pinned
+                          ? `${styles.actionBtn} ${styles.actionBtnActive}`
+                          : styles.actionBtn
+                      }
+                      onClick={() => void togglePin(message)}
+                      title={message.is_pinned ? "Открепить" : "Закрепить"}
+                    >
+                      <UiIcon icon="thumbtack" className={styles.actionIcon} />
+                      {message.is_pinned ? "Открепить" : "Закрепить"}
+                    </button>
+                    {showDelete ? (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        className={styles.deleteBtn}
+                        onClick={() => setDeleteTarget(message)}
+                      >
+                        🗑 Удалить
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className={styles.messageTime}>
                   {formatTeamChatDateTime(message.created_at)}
                 </div>
+                <ChatMessageReply
+                  message={message}
+                  onJumpToParent={jumpToMessage}
+                />
                 {renderMessageBody(message)}
               </Card>
             </div>
@@ -649,8 +815,27 @@ export function TeamChatView({
           <p className={styles.empty}>Пока нет сообщений.</p>
         ) : null}
       </div>
+      )}
 
       <div className={styles.composer}>
+        {replyTarget ? (
+          <div className={styles.composerReply}>
+            <ChatReplyQuote
+              userName={replyTarget.user_name}
+              messageType={replyTarget.message_type}
+              preview={buildMessagePreview(replyTarget)}
+              compact
+            />
+            <button
+              type="button"
+              className={styles.composerReplyClear}
+              onClick={clearReply}
+              aria-label="Отменить ответ"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
         {voiceRecorder.state === "recording" ? (
           <div className={styles.recordingBar}>
             <span className={styles.recordingDot} aria-hidden />

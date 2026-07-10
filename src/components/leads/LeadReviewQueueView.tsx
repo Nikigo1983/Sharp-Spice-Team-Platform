@@ -29,8 +29,10 @@ export function LeadReviewQueueView() {
     "all",
   );
 
-  const fetchQueue = useCallback(async () => {
-    setLoading(true);
+  const fetchQueue = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     try {
       const res = await fetch("/api/crm/leads");
       if (!res.ok) throw new Error("fetch failed");
@@ -47,7 +49,7 @@ export function LeadReviewQueueView() {
   useEffect(() => {
     void fetchQueue();
     const interval = setInterval(() => {
-      void fetchQueue();
+      void fetchQueue({ silent: true });
     }, 30_000);
     return () => clearInterval(interval);
   }, [fetchQueue]);
@@ -107,7 +109,9 @@ export function LeadReviewQueueView() {
       </div>
 
       <p className={styles.meta}>
-        {loading ? "Загрузка…" : `${filtered.length} лидов`}
+        {loading && items.length === 0
+          ? "Загрузка…"
+          : `${filtered.length} лидов`}
         <span className={styles.source}>
           {source === "google_sheets" ? "Formgrid · Google Sheets" : source}
         </span>

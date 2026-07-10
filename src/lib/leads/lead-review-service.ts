@@ -33,9 +33,15 @@ import { listAllClients } from "@/lib/google-sheets/service";
 import { LEAD_REVIEW_STATUS_LABELS } from "@/lib/leads/lead-review-types";
 import { getFormgridClientFields } from "@/lib/google-sheets/formgrid-lookup";
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
+import { getCached, invalidateCache, setCached } from "@/lib/google-sheets/cache";
 import { listEmigrantDeskClients } from "@/lib/emigrant-desk/clients";
 
 type CrmWriteMode = "status_only" | "dry_run" | "write_blocked" | "write";
+
+const LEAD_QUEUE_CACHE_KEY = "lead-review:queue";
+const LEAD_DEDUP_CONTEXTS_CACHE_KEY = "lead-review:dedup-contexts";
+
+type DedupContexts = Awaited<ReturnType<typeof loadDedupContexts>>;
 
 export class LeadReviewActionError extends Error {
   status: number;
@@ -91,7 +97,15 @@ function toQueueItem(
   };
 }
 
-async function loadFormgridContexts() {
+async function loadDedupContexts(): Promise<{
+  formgrid: Awaited<ReturnType<typeof getFormgridLeadsTable>>;
+  fgContexts: ReturnType<typeof formgridRowToContext>[];
+  crmContexts: ReturnType<typeof crmClientToContext>[];
+  deskClients: Awaited<ReturnType<typeof listEmigrantDeskClients>>;
+}> {
+  const cached = getCached<DedupContexts>(LEAD_DEDUP_CONTEXTS_CACHE_KEY);
+  if (cached) return cached;
+
   const [formgrid, { items: crmClients }, deskClients] = await Promise.all([
     getFormgridLeadsTable(),
     listAllClients(),
@@ -105,16 +119,26 @@ async function loadFormgridContexts() {
     crmClientToContext(client, 100 - index),
   );
 
-  return { formgrid, fgContexts, crmContexts, deskClients };
+  const result = { formgrid, fgContexts, crmContexts, deskClients };
+  setCached(LEAD_DEDUP_CONTEXTS_CACHE_KEY, result);
+  return result;
+}
+
+async function persistLeadReview(
+  record: LeadReviewRecord,
+): Promise<LeadReviewRecord> {
+  const saved = await upsertLeadReview(record);
+  invalidateCache(LEAD_QUEUE_CACHE_KEY);
+  return saved;
 }
 
 function analyzeLeadDedupForRow(
   leadCtx: ReturnType<typeof formgridRowToContext>,
   headers: string[],
   row: string[],
-  crmContexts: Awaited<ReturnType<typeof loadFormgridContexts>>["crmContexts"],
-  fgContexts: Awaited<ReturnType<typeof loadFormgridContexts>>["fgContexts"],
-  deskClients: Awaited<ReturnType<typeof loadFormgridContexts>>["deskClients"],
+  crmContexts: DedupContexts["crmContexts"],
+  fgContexts: DedupContexts["fgContexts"],
+  deskClients: DedupContexts["deskClients"],
 ) {
   const fields = getFormgridClientFields(headers, row);
   return analyzeLeadDuplicates(leadCtx, crmContexts, fgContexts, deskClients, {
@@ -146,20 +170,19 @@ export async function listLeadReviewQueue(): Promise<{
   source: string;
   total: number;
 }> {
-  const { formgrid, fgContexts, crmContexts, deskClients } =
-    await loadFormgridContexts();
-  const reviewStore = await readLeadReviewStore();
+  const cached = getCached<{
+    items: LeadQueueItem[];
+    source: string;
+    total: number;
+  }>(LEAD_QUEUE_CACHE_KEY);
+  if (cached) return cached;
+
+  const [formgrid, reviewStore] = await Promise.all([
+    getFormgridLeadsTable(),
+    readLeadReviewStore(),
+  ]);
 
   const items = formgrid.rows.map((row, index) => {
-    const leadCtx = fgContexts[index];
-    const dedup = analyzeLeadDedupForRow(
-      leadCtx,
-      formgrid.headers,
-      row,
-      crmContexts,
-      fgContexts,
-      deskClients,
-    );
     const rowKey = buildFormgridRowKey(formgrid.headers, row);
     const reviewStatus = resolveReviewStatus(rowKey, reviewStore);
     const review = reviewStore.reviews[rowKey];
@@ -169,19 +192,21 @@ export async function listLeadReviewQueue(): Promise<{
       row,
       index,
       reviewStatus,
-      dedup.hasBlockingStrongMatch,
-      dedup.hasPossibleMatch,
+      false,
+      false,
       review?.updatedAt,
     );
   });
 
   items.sort((a, b) => b.sheetRow - a.sheetRow);
 
-  return {
+  const result = {
     items,
     source: formgrid.source,
     total: items.length,
   };
+  setCached(LEAD_QUEUE_CACHE_KEY, result);
+  return result;
 }
 
 export async function getLeadReviewDetail(
@@ -191,7 +216,7 @@ export async function getLeadReviewDetail(
   if (dataRowIndex < 0) return null;
 
   const { formgrid, fgContexts, crmContexts, deskClients } =
-    await loadFormgridContexts();
+    await loadDedupContexts();
   const row = formgrid.rows[dataRowIndex];
   if (!row) return null;
 
@@ -264,7 +289,7 @@ export async function applyLeadReviewAction(
     const dataRowIndex = formgridDataRowIndexFromSheetRow(detail.sheetRow);
     if (dataRowIndex < 0) return null;
 
-    const { formgrid } = await loadFormgridContexts();
+    const { formgrid } = await loadDedupContexts();
     const row = formgrid.rows[dataRowIndex];
     if (!row) return null;
     const fields = getFormgridClientFields(formgrid.headers, row);
@@ -311,7 +336,7 @@ export async function applyLeadReviewAction(
         targetRange,
         rowValues,
       };
-      await upsertLeadReview(record);
+      await persistLeadReview(record);
       return getLeadReviewDetail(sheetRow);
     }
 
@@ -326,7 +351,7 @@ export async function applyLeadReviewAction(
         targetRange,
         rowValues,
       };
-      await upsertLeadReview(record);
+      await persistLeadReview(record);
       return getLeadReviewDetail(sheetRow);
     }
 
@@ -348,6 +373,6 @@ export async function applyLeadReviewAction(
     };
   }
 
-  await upsertLeadReview(record);
+  await persistLeadReview(record);
   return getLeadReviewDetail(sheetRow);
 }

@@ -14,12 +14,18 @@ import {
   isQuestionVisible,
   pickLabel,
 } from "./questionnaire-types";
+import { validateRequiredAnswers } from "./questionnaire-progress";
 import {
   findQuestionnaireById,
   findQuestionnaireByUserId,
   listSubmittedQuestionnaires,
   upsertQuestionnaire,
 } from "./questionnaire-store";
+
+export {
+  calculateProgress,
+  validateRequiredAnswers,
+} from "./questionnaire-progress";
 
 export function getPublishedSchema(): QuestionnaireSchema {
   return SHARP_SPICE_ONBOARDING_SCHEMA;
@@ -46,14 +52,53 @@ function hydrateAnswers(
   return next;
 }
 
+/** Old drafts stored invite firstName as FIO — clear that leftover. */
+function stripLegacyNamePrefill(
+  answers: QuestionnaireAnswers,
+  firstName: string,
+): QuestionnaireAnswers {
+  const next = { ...answers };
+  delete next.first_name;
+  const inviteName = firstName.trim();
+  const cyrillic = String(next.full_name_cyrillic ?? "").trim();
+  if (inviteName && cyrillic === inviteName) {
+    delete next.full_name_cyrillic;
+  }
+  return next;
+}
+
+function answersChanged(
+  before: QuestionnaireAnswers,
+  after: QuestionnaireAnswers,
+): boolean {
+  const beforeKeys = Object.keys(before).sort();
+  const afterKeys = Object.keys(after).sort();
+  if (beforeKeys.length !== afterKeys.length) return true;
+  if (beforeKeys.some((key, i) => key !== afterKeys[i])) return true;
+  return beforeKeys.some((key) => before[key] !== after[key]);
+}
+
 export async function getOrCreateQuestionnaire(
   session: ClientSession,
 ): Promise<QuestionnaireRecord> {
   const existing = await findQuestionnaireByUserId(session.id);
   if (existing) {
+    let answers = hydrateAnswers(existing.answers, session.email);
+    if (existing.status === "draft") {
+      answers = stripLegacyNamePrefill(answers, session.firstName);
+      if (answersChanged(existing.answers, answers)) {
+        const cleaned: QuestionnaireRecord = {
+          ...existing,
+          answers,
+          updatedAt: new Date().toISOString(),
+        };
+        await upsertQuestionnaire(cleaned);
+        return cleaned;
+      }
+    }
     return {
       ...existing,
-      answers: hydrateAnswers(existing.answers, session.email),
+      answers,
     };
   }
 
@@ -76,6 +121,22 @@ export async function getOrCreateQuestionnaire(
   return record;
 }
 
+/** Merge patch into answers; `null` clears a field (needed for file delete). */
+function applyAnswerPatch(
+  current: QuestionnaireAnswers,
+  patch: QuestionnaireAnswers,
+): QuestionnaireAnswers {
+  const next: QuestionnaireAnswers = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) {
+      delete next[key];
+    } else {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
 export async function saveQuestionnaireAnswers(
   session: ClientSession,
   input: { id: string; answers: QuestionnaireAnswers; expectedRevision: number },
@@ -95,7 +156,7 @@ export async function saveQuestionnaireAnswers(
   const next: QuestionnaireRecord = {
     ...current,
     answers: hydrateAnswers(
-      { ...current.answers, ...input.answers },
+      applyAnswerPatch(current.answers, input.answers),
       session.email,
     ),
     revision: current.revision + 1,
@@ -105,52 +166,29 @@ export async function saveQuestionnaireAnswers(
   return next;
 }
 
-function isAnswerFilled(
-  question: QuestionDefinition,
-  value: unknown,
-): boolean {
-  if (question.type === "information") return true;
-  if (question.type === "boolean") return value === true;
-  if (question.type === "yes_no") return value === "yes" || value === "no";
-  if (question.type === "file") return isFileAnswer(value);
-  return value !== undefined && value !== null && String(value).trim() !== "";
-}
-
-export function validateRequiredAnswers(
-  answers: QuestionnaireAnswers,
-  locale: "ru" | "en" = "ru",
-): string[] {
-  const errors: string[] = [];
-  for (const question of allQuestions()) {
-    if (question.type === "information" || !question.required) continue;
-    if (!isQuestionVisible(question, answers)) continue;
-    if (!isAnswerFilled(question, answers[question.id])) {
-      errors.push(pickLabel(question.label, locale));
-    }
-  }
-
-  const email = String(answers.contact_email ?? "").trim().toLowerCase();
-  if (email && !email.endsWith(".com")) {
-    errors.push(
-      locale === "ru"
-        ? "Электронный адрес должен быть в домене .com"
-        : "Email must use a .com domain",
-    );
-  }
-
-  return errors;
-}
-
 export async function submitQuestionnaire(
   session: ClientSession,
   id: string,
+  answers?: QuestionnaireAnswers,
+  expectedRevision?: number,
 ): Promise<QuestionnaireRecord> {
-  const current = await findQuestionnaireById(id);
+  let current = await findQuestionnaireById(id);
   if (!current || current.clientPortalUserId !== session.id) {
     throw new Error("NOT_FOUND");
   }
   if (current.status === "submitted") {
     return current;
+  }
+
+  if (answers) {
+    current = await saveQuestionnaireAnswers(session, {
+      id,
+      answers,
+      expectedRevision:
+        typeof expectedRevision === "number"
+          ? expectedRevision
+          : current.revision,
+    });
   }
 
   const missing = validateRequiredAnswers(current.answers, "ru");
@@ -194,21 +232,6 @@ export async function markQuestionnaireOpenedByStaff(
     staffOpenedAt: now,
     updatedAt: now,
   });
-}
-
-export function calculateProgress(answers: QuestionnaireAnswers): number {
-  const required = allQuestions().filter(
-    (question) =>
-      question.required &&
-      question.type !== "information" &&
-      isQuestionVisible(question, answers),
-  );
-  if (required.length === 0) return 100;
-  let done = 0;
-  for (const question of required) {
-    if (isAnswerFilled(question, answers[question.id])) done += 1;
-  }
-  return Math.round((done / required.length) * 100);
 }
 
 export function buildReviewRows(

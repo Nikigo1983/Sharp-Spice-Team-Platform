@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type {
   FileAnswer,
@@ -15,6 +15,10 @@ import {
   isQuestionVisible,
   pickLabel,
 } from "@/lib/client-portal/questionnaire-types";
+import {
+  calculateProgress,
+  validateRequiredAnswers,
+} from "@/lib/client-portal/questionnaire-progress";
 import styles from "./ClientQuestionnaire.module.css";
 
 type LoadPayload = {
@@ -94,12 +98,17 @@ function FileField({
   question,
   value,
   disabled,
+  prepareUpload,
   onUploaded,
   onRemoved,
 }: {
   question: QuestionDefinition;
   value: unknown;
   disabled: boolean;
+  prepareUpload: () => Promise<{
+    ok: boolean;
+    answers: Record<string, unknown>;
+  }>;
   onUploaded: (
     file: FileAnswer,
     questionnaire: QuestionnaireRecord,
@@ -119,9 +128,15 @@ function FileField({
     setUploading(true);
     setError(null);
     try {
+      const prep = await prepareUpload();
+      if (!prep.ok) {
+        setError("Сначала сохраните анкету и попробуйте снова");
+        return;
+      }
       const body = new FormData();
       body.set("questionId", question.id);
       body.set("file", picked);
+      body.set("answers", JSON.stringify(prep.answers));
       const res = await fetch("/api/client/questionnaire/attachments", {
         method: "POST",
         body,
@@ -138,7 +153,9 @@ function FileField({
             ? `Файл больше ${maxMb} МБ`
             : data.error === "UNSUPPORTED_FILE_TYPE"
               ? "Недопустимый формат файла"
-              : "Не удалось загрузить файл",
+              : data.error === "REVISION_CONFLICT"
+                ? "Анкета изменилась. Обновите страницу."
+                : "Не удалось загрузить файл",
         );
         return;
       }
@@ -153,6 +170,11 @@ function FileField({
     setUploading(true);
     setError(null);
     try {
+      const prep = await prepareUpload();
+      if (!prep.ok) {
+        setError("Сначала сохраните анкету и попробуйте снова");
+        return;
+      }
       const res = await fetch(
         `/api/client/questionnaire/attachments?id=${encodeURIComponent(file.id)}&questionId=${encodeURIComponent(question.id)}`,
         { method: "DELETE" },
@@ -229,6 +251,12 @@ export function ClientQuestionnaireForm({
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const recordRef = useRef<QuestionnaireRecord | null>(null);
+
+  const setRecordSync = useCallback((next: QuestionnaireRecord) => {
+    recordRef.current = next;
+    setRecord(next);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -239,9 +267,9 @@ export function ClientQuestionnaireForm({
     }
     const data = (await res.json()) as LoadPayload;
     setSchema(data.schema);
-    setRecord(data.questionnaire);
+    setRecordSync(data.questionnaire);
     setProgress(data.progress);
-  }, []);
+  }, [setRecordSync]);
 
   useEffect(() => {
     void load();
@@ -263,19 +291,25 @@ export function ClientQuestionnaireForm({
       .filter((question) => isQuestionVisible(question, record.answers));
   }, [section, record]);
 
-  async function saveDraft(nextAnswers?: Record<string, unknown>) {
-    if (!record || submitted) return false;
+  async function saveDraft(
+    nextAnswers?: Record<string, unknown>,
+    options?: { silent?: boolean },
+  ) {
+    const current = recordRef.current;
+    if (!current || current.status === "submitted") return false;
     setSaving(true);
-    setStatus(null);
-    setError(null);
+    if (!options?.silent) {
+      setStatus(null);
+      setError(null);
+    }
     try {
       const res = await fetch("/api/client/questionnaire", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: record.id,
-          expectedRevision: record.revision,
-          answers: nextAnswers ?? record.answers,
+          id: current.id,
+          expectedRevision: current.revision,
+          answers: nextAnswers ?? current.answers,
         }),
       });
       const data = (await res.json()) as {
@@ -291,9 +325,9 @@ export function ClientQuestionnaireForm({
         );
         return false;
       }
-      setRecord(data.questionnaire);
+      setRecordSync(data.questionnaire);
       setProgress(data.progress ?? 0);
-      setStatus("Сохранено");
+      if (!options?.silent) setStatus("Сохранено");
       return true;
     } finally {
       setSaving(false);
@@ -301,22 +335,36 @@ export function ClientQuestionnaireForm({
   }
 
   function updateAnswer(questionId: string, value: unknown) {
-    if (!record || readOnly) return;
-    const answers = { ...record.answers, [questionId]: value };
-    setRecord({ ...record, answers });
+    const current = recordRef.current;
+    if (!current || readOnly) return;
+    const answers = { ...current.answers, [questionId]: value };
+    const next = { ...current, answers };
+    setRecordSync(next);
+    setProgress(calculateProgress(answers));
   }
 
   async function onSubmit() {
-    if (!record || submitted) return;
+    const current = recordRef.current;
+    if (!current || current.status === "submitted") return;
     setSubmitting(true);
     setError(null);
+    setStatus(null);
     try {
-      const saved = await saveDraft(record.answers);
-      if (!saved) return;
+      const missing = validateRequiredAnswers(current.answers, "ru");
+      if (missing.length > 0) {
+        setError(
+          `Заполните обязательные поля: ${missing.join(", ")}. Проверьте все вкладки — ответы могли не сохраниться.`,
+        );
+        return;
+      }
       const res = await fetch("/api/client/questionnaire/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: record.id }),
+        body: JSON.stringify({
+          id: current.id,
+          expectedRevision: current.revision,
+          answers: current.answers,
+        }),
       });
       const data = (await res.json()) as {
         questionnaire?: QuestionnaireRecord;
@@ -326,14 +374,18 @@ export function ClientQuestionnaireForm({
       };
       if (!res.ok) {
         if (data.error === "MISSING_REQUIRED" && data.fields?.length) {
-          setError(`Заполните обязательные поля: ${data.fields.join(", ")}`);
+          setError(
+            `Заполните обязательные поля: ${data.fields.join(", ")}. Проверьте все вкладки.`,
+          );
+        } else if (data.error === "REVISION_CONFLICT") {
+          setError("Анкета изменилась. Обновите страницу.");
         } else {
           setError("Не удалось отправить анкету.");
         }
         return;
       }
       if (data.questionnaire) {
-        setRecord(data.questionnaire);
+        setRecordSync(data.questionnaire);
         setProgress(data.progress ?? 100);
         setStatus("Анкета отправлена");
       }
@@ -453,15 +505,23 @@ export function ClientQuestionnaireForm({
                     question={question}
                     value={record.answers[question.id]}
                     disabled={readOnly}
+                    prepareUpload={async () => {
+                      const answers = recordRef.current?.answers ?? {};
+                      const ok = await saveDraft(answers, { silent: true });
+                      return {
+                        ok,
+                        answers: recordRef.current?.answers ?? answers,
+                      };
+                    }}
                     onUploaded={(_file, questionnaire, nextProgress) => {
-                      setRecord(questionnaire);
+                      setRecordSync(questionnaire);
                       if (typeof nextProgress === "number") {
                         setProgress(nextProgress);
                       }
                       setStatus("Файл загружен");
                     }}
                     onRemoved={(questionnaire, nextProgress) => {
-                      setRecord(questionnaire);
+                      setRecordSync(questionnaire);
                       if (typeof nextProgress === "number") {
                         setProgress(nextProgress);
                       }
@@ -518,6 +578,8 @@ export function ClientQuestionnaireForm({
                         : styles.textarea
                     }
                     rows={4}
+                    name={question.id}
+                    autoComplete="off"
                     placeholder={placeholder}
                     value={String(value ?? "")}
                     disabled={readOnly || question.readOnly}
@@ -560,6 +622,14 @@ export function ClientQuestionnaireForm({
                       : styles.input
                   }
                   type={inputType}
+                  name={question.id}
+                  autoComplete={
+                    question.type === "email"
+                      ? "email"
+                      : question.type === "phone"
+                        ? "tel"
+                        : "off"
+                  }
                   placeholder={placeholder}
                   value={String(value ?? "")}
                   disabled={readOnly || question.readOnly}

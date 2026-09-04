@@ -65,6 +65,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
+  let clientAnswers: Record<string, unknown> | null = null;
+  const answersRaw = formData.get("answers");
+  if (typeof answersRaw === "string" && answersRaw.trim()) {
+    try {
+      const parsed = JSON.parse(answersRaw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        clientAnswers = parsed as Record<string, unknown>;
+      }
+    } catch {
+      return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+    }
+  }
+
   const question = getPublishedSchema()
     .sections.flatMap((section) => section.questions)
     .find((item) => item.id === questionId);
@@ -119,10 +132,14 @@ export async function POST(request: Request) {
     sizeBytes: buffer.length,
   };
 
+  const baseAnswers = clientAnswers
+    ? { ...record.answers, ...clientAnswers }
+    : { ...record.answers };
+
   const updated = await saveQuestionnaireAnswers(session, {
     id: record.id,
     expectedRevision: record.revision,
-    answers: { ...record.answers, [questionId]: attachment },
+    answers: { ...baseAnswers, [questionId]: attachment },
   });
 
   return NextResponse.json({
@@ -160,12 +177,10 @@ export async function DELETE(request: Request) {
     current.id,
     current.fileName,
   );
-  const nextAnswers = { ...record.answers };
-  delete nextAnswers[questionId];
   const updated = await saveQuestionnaireAnswers(session, {
     id: record.id,
     expectedRevision: record.revision,
-    answers: nextAnswers,
+    answers: { [questionId]: null },
   });
 
   return NextResponse.json({

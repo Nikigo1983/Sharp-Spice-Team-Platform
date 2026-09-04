@@ -4,6 +4,7 @@ import {
   calculateProgress,
   submitQuestionnaire,
 } from "@/lib/client-portal/questionnaire-service";
+import type { QuestionnaireAnswers } from "@/lib/client-portal/questionnaire-types";
 
 export async function POST(request: Request) {
   const session = await getClientSession();
@@ -11,13 +12,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const body = (await request.json()) as { id?: string };
+  const body = (await request.json()) as {
+    id?: string;
+    answers?: QuestionnaireAnswers;
+    expectedRevision?: number;
+  };
   if (!body.id) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
   try {
-    const record = await submitQuestionnaire(session, body.id);
+    const record = await submitQuestionnaire(
+      session,
+      body.id,
+      body.answers,
+      body.expectedRevision,
+    );
     return NextResponse.json({
       questionnaire: record,
       progress: calculateProgress(record.answers),
@@ -33,7 +43,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const status = message === "NOT_FOUND" ? 404 : 400;
+    const status =
+      message === "NOT_FOUND"
+        ? 404
+        : message === "REVISION_CONFLICT"
+          ? 409
+          : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

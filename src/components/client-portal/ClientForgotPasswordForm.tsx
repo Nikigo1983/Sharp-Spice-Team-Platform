@@ -26,9 +26,6 @@ export function ClientForgotPasswordForm() {
           </div>
           <h1 className={styles.title}>Письмо отправлено</h1>
           <div className={styles.statusOk} role="status">
-            <p className={styles.statusOkLead}>
-              Письмо со ссылкой на изменение пароля успешно отправлено.
-            </p>
             <p className={styles.statusOkHint}>
               Проверьте вашу почту. Если во входящих нет письма, загляните в
               папку «Спам».

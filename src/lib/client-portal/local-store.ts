@@ -2,13 +2,18 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ClientPortalInvitation, ClientPortalUser } from "./types";
+import type {
+  ClientPortalInvitation,
+  ClientPortalPasswordReset,
+  ClientPortalUser,
+} from "./types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sb from "@/lib/supabase/client-portal-repo";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const USERS_PATH = path.join(DATA_DIR, "client-portal-users.json");
 const INVITES_PATH = path.join(DATA_DIR, "client-portal-invitations.json");
+const RESETS_PATH = path.join(DATA_DIR, "client-portal-password-resets.json");
 
 async function ensureDataDir(): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
@@ -120,4 +125,49 @@ export async function upsertInvitation(
   }
   await saveClientPortalInvitations(invitations);
   return invitation;
+}
+
+export async function insertPasswordReset(
+  reset: ClientPortalPasswordReset,
+): Promise<ClientPortalPasswordReset> {
+  if (isSupabaseConfigured()) {
+    return sb.sbInsertPasswordReset(reset);
+  }
+  const resets = await readJsonFile<ClientPortalPasswordReset[]>(RESETS_PATH, []);
+  resets.unshift(reset);
+  await writeJsonFile(RESETS_PATH, resets);
+  return reset;
+}
+
+export async function findValidPasswordResetByTokenHash(
+  tokenHash: string,
+): Promise<ClientPortalPasswordReset | null> {
+  if (isSupabaseConfigured()) {
+    return sb.sbFindValidPasswordResetByTokenHash(tokenHash);
+  }
+  const resets = await readJsonFile<ClientPortalPasswordReset[]>(RESETS_PATH, []);
+  const now = Date.now();
+  return (
+    resets.find(
+      (item) =>
+        item.tokenHash === tokenHash &&
+        !item.usedAt &&
+        Date.parse(item.expiresAt) > now,
+    ) ?? null
+  );
+}
+
+export async function markPasswordResetUsed(
+  id: string,
+  usedAt: string,
+): Promise<void> {
+  if (isSupabaseConfigured()) {
+    await sb.sbMarkPasswordResetUsed(id, usedAt);
+    return;
+  }
+  const resets = await readJsonFile<ClientPortalPasswordReset[]>(RESETS_PATH, []);
+  const index = resets.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  resets[index] = { ...resets[index]!, usedAt };
+  await writeJsonFile(RESETS_PATH, resets);
 }

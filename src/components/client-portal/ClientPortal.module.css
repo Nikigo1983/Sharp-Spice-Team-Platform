@@ -52,6 +52,19 @@
   text-align: left;
 }
 
+.statusOk {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(134, 239, 172, 0.35);
+  color: #86efac;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  text-align: left;
+  line-height: 1.45;
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -113,6 +126,12 @@
   font-size: 0.8125rem;
   color: var(--gray-400);
   line-height: 1.45;
+}
+
+.forgotLink {
+  color: #ffb74a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .portalPage {

@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   "/api/webhooks",
   "/client/login",
   "/client/invite",
+  "/client/forgot-password",
+  "/client/reset-password",
 ];
 
 const PROTECTED_PREFIXES = [
@@ -50,7 +52,11 @@ function isClientPublicPath(pathname: string) {
   return (
     pathname === "/client/login" ||
     pathname.startsWith("/client/login/") ||
-    pathname.startsWith("/client/invite/")
+    pathname.startsWith("/client/invite/") ||
+    pathname === "/client/forgot-password" ||
+    pathname.startsWith("/client/forgot-password/") ||
+    pathname === "/client/reset-password" ||
+    pathname.startsWith("/client/reset-password/")
   );
 }
 

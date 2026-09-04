@@ -138,6 +138,45 @@
   padding: 1rem 0;
 }
 
+.createdBox {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  background: rgba(26, 26, 26, 0.72);
+}
+
+.createdTitle {
+  margin: 0 0 0.5rem;
+  color: #86efac;
+  font-weight: 600;
+}
+
+.warning {
+  margin: 0 0 0.65rem;
+  color: #ffb74a;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.createdActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.75rem 0;
+}
+
+.passwordReveal {
+  margin: 0;
+  color: var(--gray-300);
+  font-size: 0.9rem;
+}
+
+.passwordReveal code {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 800px) {
   .form {
     grid-template-columns: 1fr;

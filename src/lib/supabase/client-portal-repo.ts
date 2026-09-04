@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "./server";
 import type {
   ClientPortalInvitation,
   ClientPortalLocale,
+  ClientPortalPasswordReset,
   ClientPortalUser,
 } from "@/lib/client-portal/types";
 import type {
@@ -33,6 +34,15 @@ type UserRow = {
   password_hash: string;
   created_at: string;
   updated_at: string;
+};
+
+type PasswordResetRow = {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
 };
 
 type QuestionnaireRow = {
@@ -264,4 +274,59 @@ export async function sbListSubmittedQuestionnaires(): Promise<
     .order("submitted_at", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as QuestionnaireRow[]).map(mapQuestionnaire);
+}
+
+function mapPasswordReset(row: PasswordResetRow): ClientPortalPasswordReset {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    tokenHash: row.token_hash,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at,
+    createdAt: row.created_at,
+  };
+}
+
+export async function sbInsertPasswordReset(
+  reset: ClientPortalPasswordReset,
+): Promise<ClientPortalPasswordReset> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("client_portal_password_resets")
+    .insert({
+      id: reset.id,
+      user_id: reset.userId,
+      token_hash: reset.tokenHash,
+      expires_at: reset.expiresAt,
+      used_at: reset.usedAt,
+      created_at: reset.createdAt,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return mapPasswordReset(data as PasswordResetRow);
+}
+
+export async function sbFindValidPasswordResetByTokenHash(
+  tokenHash: string,
+): Promise<ClientPortalPasswordReset | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("client_portal_password_resets")
+    .select("*")
+    .eq("token_hash", tokenHash)
+    .is("used_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapPasswordReset(data as PasswordResetRow) : null;
+}
+
+export async function sbMarkPasswordResetUsed(
+  id: string,
+  usedAt: string,
+): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from("client_portal_password_resets")
+    .update({ used_at: usedAt })
+    .eq("id", id);
+  if (error) throw error;
 }

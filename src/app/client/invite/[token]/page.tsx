@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { ClientInviteAcceptForm } from "@/components/client-portal/ClientInviteAcceptForm";
-import { findInvitationByToken } from "@/lib/client-portal/local-store";
+import {
+  findClientPortalUserByEmail,
+  findInvitationByToken,
+} from "@/lib/client-portal/local-store";
 import { BRAND_NAME } from "@/lib/brand";
+import styles from "@/components/client-portal/ClientPortal.module.css";
+import { Logo } from "@/components/ui/Logo";
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -20,14 +25,45 @@ export default async function ClientInvitePage({ params }: Props) {
   }
 
   const invitation = token ? await findInvitationByToken(token) : null;
-  const invalid = !invitation || invitation.status !== "pending";
+  if (!invitation) {
+    return (
+      <ClientInviteAcceptForm
+        token={token}
+        email=""
+        firstName=""
+        invalid
+      />
+    );
+  }
+
+  const existingUser = await findClientPortalUserByEmail(invitation.email);
+  if (existingUser || invitation.status === "accepted") {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logoWrap}>
+            <Logo size="md" />
+          </div>
+          <h1 className={styles.title}>Аккаунт уже создан</h1>
+          <p className={styles.subtitle}>
+            Войдите в клиентский портал с email и временным паролем из
+            письма-приглашения. Если пароль забыт — используйте «Забыли
+            пароль?».
+          </p>
+          <a className={styles.linkButton} href="/client/login">
+            Перейти ко входу
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ClientInviteAcceptForm
       token={token}
-      email={invitation?.email ?? ""}
-      firstName={invitation?.firstName ?? ""}
-      invalid={invalid}
+      email={invitation.email}
+      firstName={invitation.firstName}
+      invalid={false}
     />
   );
 }

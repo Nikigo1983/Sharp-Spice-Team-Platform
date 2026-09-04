@@ -12,7 +12,14 @@ export async function createClientInvitationAction(input: {
   email: string;
   firstName: string;
 }): Promise<
-  | { ok: true; invitation: InvitationRow }
+  | {
+      ok: true;
+      invitation: InvitationRow;
+      temporaryPassword: string;
+      loginUrl: string;
+      emailSent: boolean;
+      emailWarning?: string;
+    }
   | { ok: false; error: string }
 > {
   const session = await getSession();
@@ -21,28 +28,39 @@ export async function createClientInvitationAction(input: {
   }
 
   try {
-    const invitation = await createClientInvitation({
-      email: input.email,
-      firstName: input.firstName,
-      createdByUserId: session.id,
-    });
-
     const headerStore = await headers();
     const host =
       headerStore.get("x-forwarded-host") ?? headerStore.get("host") ?? "";
     const proto = headerStore.get("x-forwarded-proto") ?? "http";
-    const origin = host ? `${proto}://${host}` : "http://localhost:3000";
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      (host ? `${proto}://${host}` : "http://localhost:3000");
+
+    const result = await createClientInvitation({
+      email: input.email,
+      firstName: input.firstName,
+      createdByUserId: session.id,
+      origin,
+    });
 
     return {
       ok: true,
       invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        firstName: invitation.firstName,
-        status: invitation.status,
-        createdAt: invitation.createdAt,
-        inviteUrl: buildInviteUrl(invitation.token, origin),
+        id: result.invitation.id,
+        email: result.invitation.email,
+        firstName: result.invitation.firstName,
+        status: result.invitation.status,
+        createdAt: result.invitation.createdAt,
+        inviteUrl: buildInviteUrl(result.invitation.token, origin),
       },
+      temporaryPassword: result.temporaryPassword,
+      loginUrl: result.loginUrl,
+      emailSent: result.emailSent,
+      emailWarning: result.emailSent
+        ? undefined
+        : result.emailError === "EMAIL_NOT_CONFIGURED"
+          ? "Письмо не отправлено: на сервере не задан RESEND_API_KEY. Скопируйте пароль и передайте клиенту вручную."
+          : "Не удалось отправить письмо. Скопируйте пароль и передайте клиенту вручную.",
     };
   } catch (error) {
     console.error("[client-portal] create invitation", error);
@@ -50,11 +68,17 @@ export async function createClientInvitationAction(input: {
     if (message === "INVALID_INVITE") {
       return { ok: false, error: "Укажите имя и корректный email." };
     }
+    if (message === "EMAIL_TAKEN") {
+      return {
+        ok: false,
+        error: "Клиент с этим email уже есть в портале.",
+      };
+    }
     if (/relation .* does not exist|Could not find the table/i.test(message)) {
       return {
         ok: false,
         error:
-          "Таблицы клиентского портала ещё не созданы в Supabase. Выполните миграцию 021_client_portal.sql.",
+          "Таблицы клиентского портала ещё не созданы в Supabase. Выполните миграции 021 и 022.",
       };
     }
     return {

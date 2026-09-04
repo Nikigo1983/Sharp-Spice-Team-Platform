@@ -25,8 +25,7 @@ export function ClientPortalLoginForm() {
         </div>
         <h1 className={styles.title}>Клиентский портал</h1>
         <p className={styles.subtitle}>
-          Вход для клиентов {BRAND_NAME}. Старый поток Formgrid / App Emigrant не
-          затронут — это новый канал.
+          Вход для клиентов {BRAND_NAME}.
         </p>
         {state.error ? (
           <p className={styles.error} role="alert">
@@ -61,7 +60,12 @@ export function ClientPortalLoginForm() {
           </button>
         </form>
         <p className={styles.hint}>
-          Нет аккаунта? Используйте ссылку из приглашения менеджера.
+          <a className={styles.forgotLink} href="/client/forgot-password">
+            Забыли пароль?
+          </a>
+        </p>
+        <p className={styles.hint}>
+          Нет аккаунта? Используйте письмо-приглашение от менеджера.
         </p>
       </div>
     </div>

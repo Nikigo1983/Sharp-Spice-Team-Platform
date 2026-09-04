@@ -32,6 +32,15 @@ export type ClientPortalUser = {
   updatedAt: string;
 };
 
+export type ClientPortalPasswordReset = {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
+};
+
 export function isClientPortalLocale(value: string): value is ClientPortalLocale {
   return value === "ru" || value === "en";
 }

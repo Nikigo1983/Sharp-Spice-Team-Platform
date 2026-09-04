@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createClientInvitationAction } from "@/app/(app)/client-invitations/actions";
 import { BRAND_NAME } from "@/lib/brand";
@@ -15,6 +15,15 @@ export type InvitationRow = {
   inviteUrl: string;
 };
 
+type CreatedCredentials = {
+  invitationId: string;
+  email: string;
+  loginUrl: string;
+  temporaryPassword: string;
+  emailSent: boolean;
+  emailWarning?: string;
+};
+
 export function ClientInvitationsPanel({
   initialInvitations,
 }: {
@@ -24,17 +33,14 @@ export function ClientInvitationsPanel({
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [created, setCreated] = useState<CreatedCredentials | null>(null);
+  const [copied, setCopied] = useState<"password" | "login" | null>(null);
   const [pending, startTransition] = useTransition();
-
-  const pendingCount = useMemo(
-    () => invitations.filter((item) => item.status === "pending").length,
-    [invitations],
-  );
 
   function onCreate(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    setCreated(null);
     startTransition(async () => {
       const result = await createClientInvitationAction({ email, firstName });
       if (!result.ok) {
@@ -42,18 +48,26 @@ export function ClientInvitationsPanel({
         return;
       }
       setInvitations((prev) => [result.invitation, ...prev]);
+      setCreated({
+        invitationId: result.invitation.id,
+        email: result.invitation.email,
+        loginUrl: result.loginUrl,
+        temporaryPassword: result.temporaryPassword,
+        emailSent: result.emailSent,
+        emailWarning: result.emailWarning,
+      });
       setEmail("");
       setFirstName("");
     });
   }
 
-  async function copyLink(id: string, url: string) {
+  async function copyText(kind: "password" | "login", value: string) {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopiedId(id);
-      window.setTimeout(() => setCopiedId(null), 2000);
+      await navigator.clipboard.writeText(value);
+      setCopied(kind);
+      window.setTimeout(() => setCopied(null), 2000);
     } catch {
-      setError("Не удалось скопировать ссылку.");
+      setError("Не удалось скопировать.");
     }
   }
 
@@ -78,7 +92,7 @@ export function ClientInvitationsPanel({
             «Забыли пароль?». Сотрудники не сбрасывают пароль клиента.
           </p>
         </div>
-        <span className={styles.badge}>Ожидают: {pendingCount}</span>
+        <span className={styles.badge}>Всего: {invitations.length}</span>
       </header>
 
       <form className={styles.form} onSubmit={onCreate}>
@@ -114,6 +128,45 @@ export function ClientInvitationsPanel({
         </p>
       ) : null}
 
+      {created ? (
+        <div className={styles.createdBox} role="status">
+          <p className={styles.createdTitle}>
+            {created.emailSent
+              ? "Приглашение создано и письмо отправлено."
+              : "Приглашение создано."}
+          </p>
+          {created.emailWarning ? (
+            <p className={styles.warning}>{created.emailWarning}</p>
+          ) : null}
+          <p className={styles.meta}>
+            Email: <strong>{created.email}</strong>
+          </p>
+          <div className={styles.createdActions}>
+            <button
+              type="button"
+              className={styles.copy}
+              onClick={() => void copyText("login", created.loginUrl)}
+            >
+              {copied === "login" ? "Ссылка скопирована" : "Скопировать вход"}
+            </button>
+            <button
+              type="button"
+              className={styles.copy}
+              onClick={() =>
+                void copyText("password", created.temporaryPassword)
+              }
+            >
+              {copied === "password"
+                ? "Пароль скопирован"
+                : "Скопировать временный пароль"}
+            </button>
+          </div>
+          <p className={styles.passwordReveal}>
+            Временный пароль: <code>{created.temporaryPassword}</code>
+          </p>
+        </div>
+      ) : null}
+
       <ul className={styles.list}>
         {invitations.length === 0 ? (
           <li className={styles.empty}>Пока нет приглашений.</li>
@@ -127,15 +180,7 @@ export function ClientInvitationsPanel({
                   {new Date(item.createdAt).toLocaleString("ru-RU")}
                 </div>
               </div>
-              {item.status === "pending" ? (
-                <button
-                  type="button"
-                  className={styles.copy}
-                  onClick={() => void copyLink(item.id, item.inviteUrl)}
-                >
-                  {copiedId === item.id ? "Скопировано" : "Скопировать ссылку"}
-                </button>
-              ) : null}
+              <span className={styles.meta}>Аккаунт создан</span>
             </li>
           ))
         )}

@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { createClientInvitationAction } from "@/app/(app)/client-invitations/actions";
+import { BRAND_NAME } from "@/lib/brand";
 import styles from "./ClientInvitationsPanel.module.css";
 
 export type InvitationRow = {
@@ -57,12 +59,23 @@ export function ClientInvitationsPanel({
 
   return (
     <div className={styles.wrap}>
+      <div className={styles.topBar}>
+        <Link href="/dashboard" className={styles.backLink}>
+          ← На платформу
+        </Link>
+      </div>
+
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Приглашения в клиентский портал</h1>
           <p className={styles.lead}>
-            Новый канал для клиентов (как в Spiora). Старый поток Formgrid / App
-            Emigrant продолжается отдельно в «Новые клиенты из анкеты».
+            Создайте приглашение — {BRAND_NAME} отправит ссылку и временный
+            пароль на email клиента.
+          </p>
+          <p className={styles.lead}>
+            Приглашение нужно только для первого доступа. После регистрации
+            клиент сам управляет паролем через вход в клиентский портал →
+            «Забыли пароль?». Сотрудники не сбрасывают пароль клиента.
           </p>
         </div>
         <span className={styles.badge}>Ожидают: {pendingCount}</span>

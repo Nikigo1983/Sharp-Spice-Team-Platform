@@ -42,7 +42,7 @@ export default async function ClientInvitePage({ params }: Props) {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="md" />
+            <Logo size="auth" />
           </div>
           <h1 className={styles.title}>Аккаунт уже создан</h1>
           <p className={styles.subtitle}>

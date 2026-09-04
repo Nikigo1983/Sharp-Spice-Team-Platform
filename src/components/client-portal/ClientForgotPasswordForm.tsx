@@ -22,7 +22,7 @@ export function ClientForgotPasswordForm() {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="md" />
+            <Logo size="auth" />
           </div>
           <h1 className={styles.title}>Письмо отправлено</h1>
           <div className={styles.statusOk} role="status">
@@ -48,7 +48,7 @@ export function ClientForgotPasswordForm() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="md" />
+          <Logo size="auth" />
         </div>
         <h1 className={styles.title}>Забыли пароль?</h1>
         <p className={styles.subtitle}>

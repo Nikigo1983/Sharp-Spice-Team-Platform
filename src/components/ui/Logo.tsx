@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BRAND_NAME, LOGO_PATH } from "@/lib/brand";
 import styles from "./Logo.module.css";
 
-export type LogoSize = "sm" | "md" | "lg" | "sidebar";
+export type LogoSize = "sm" | "md" | "lg" | "auth" | "sidebar";
 
 const LOGO_DIMENSIONS: Record<
   LogoSize,
@@ -12,6 +12,7 @@ const LOGO_DIMENSIONS: Record<
   sm: { width: 104, height: 32 },
   md: { width: 180, height: 44 },
   lg: { width: 220, height: 64 },
+  auth: { width: 280, height: 88 },
   sidebar: { width: 252, height: 108 },
 };
 

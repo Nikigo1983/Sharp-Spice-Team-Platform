@@ -22,7 +22,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="md" />
+            <Logo size="auth" />
           </div>
           <h1 className={styles.title}>Ссылка недействительна</h1>
           <p className={styles.subtitle}>
@@ -40,7 +40,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="md" />
+          <Logo size="auth" />
         </div>
         <h1 className={styles.title}>Новый пароль</h1>
         <p className={styles.subtitle}>

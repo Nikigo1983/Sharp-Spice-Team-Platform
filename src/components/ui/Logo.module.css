@@ -25,6 +25,11 @@
   height: 64px;
 }
 
+.auth {
+  max-width: 280px;
+  height: 88px;
+}
+
 .sidebar {
   width: 100%;
   max-width: 252px;

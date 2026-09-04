@@ -34,7 +34,7 @@ export function ClientInviteAcceptForm({
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="md" />
+            <Logo size="auth" />
           </div>
           <h1 className={styles.title}>Приглашение недоступно</h1>
           <p className={styles.subtitle}>
@@ -53,7 +53,7 @@ export function ClientInviteAcceptForm({
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="md" />
+          <Logo size="auth" />
         </div>
         <h1 className={styles.title}>Добро пожаловать, {firstName}</h1>
         <p className={styles.subtitle}>

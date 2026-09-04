@@ -100,6 +100,7 @@ export async function POST(request: Request) {
     attachmentId,
     fileName,
     buffer,
+    allowed.mimeType,
   );
 
   const previous = record.answers[questionId];

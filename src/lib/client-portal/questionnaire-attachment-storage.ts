@@ -6,7 +6,11 @@ import {
   contentTypeFromExt,
   extFromFileName,
 } from "./questionnaire-attachment-formats";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
+const BUCKET = "task-attachments";
+const OBJECT_PREFIX = "client-portal";
 const LOCAL_DIR = path.join(process.cwd(), ".data", "questionnaire-attachments");
 
 function safeSegment(value: string): string {
@@ -18,7 +22,7 @@ function storageObjectName(
   attachmentId: string,
   ext: string,
 ): string {
-  return `${safeSegment(ownerKey)}/${attachmentId}.${ext}`;
+  return `${OBJECT_PREFIX}/${safeSegment(ownerKey)}/${attachmentId}.${ext}`;
 }
 
 export async function saveQuestionnaireAttachmentFile(
@@ -26,9 +30,22 @@ export async function saveQuestionnaireAttachmentFile(
   attachmentId: string,
   fileName: string,
   data: Buffer,
+  contentType?: string,
 ): Promise<void> {
   const ext = extFromFileName(fileName) || "bin";
   const objectName = storageObjectName(ownerKey, attachmentId, ext);
+
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabaseAdmin()
+      .storage.from(BUCKET)
+      .upload(objectName, data, {
+        contentType: contentType || contentTypeFromExt(ext),
+        upsert: true,
+      });
+    if (error) throw error;
+    return;
+  }
+
   const fullPath = path.join(LOCAL_DIR, objectName);
   await mkdir(path.dirname(fullPath), { recursive: true });
   await writeFile(fullPath, data);
@@ -41,6 +58,20 @@ export async function readQuestionnaireAttachmentFile(
 ): Promise<{ data: Buffer; contentType: string } | null> {
   const ext = extFromFileName(fileName) || "bin";
   const objectName = storageObjectName(ownerKey, attachmentId, ext);
+
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseAdmin()
+      .storage.from(BUCKET)
+      .download(objectName);
+    if (!error && data) {
+      return {
+        data: Buffer.from(await data.arrayBuffer()),
+        contentType: contentTypeFromExt(ext),
+      };
+    }
+    return null;
+  }
+
   try {
     const data = await readFile(path.join(LOCAL_DIR, objectName));
     return { data, contentType: contentTypeFromExt(ext) };
@@ -56,6 +87,16 @@ export async function deleteQuestionnaireAttachmentFile(
 ): Promise<void> {
   const ext = extFromFileName(fileName) || "bin";
   const objectName = storageObjectName(ownerKey, attachmentId, ext);
+
+  if (isSupabaseConfigured()) {
+    try {
+      await getSupabaseAdmin().storage.from(BUCKET).remove([objectName]);
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
   try {
     await unlink(path.join(LOCAL_DIR, objectName));
   } catch {

@@ -44,7 +44,22 @@ export async function createClientInvitationAction(input: {
         inviteUrl: buildInviteUrl(invitation.token, origin),
       },
     };
-  } catch {
-    return { ok: false, error: "Не удалось создать приглашение." };
+  } catch (error) {
+    console.error("[client-portal] create invitation", error);
+    const message = error instanceof Error ? error.message : "";
+    if (message === "INVALID_INVITE") {
+      return { ok: false, error: "Укажите имя и корректный email." };
+    }
+    if (/relation .* does not exist|Could not find the table/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          "Таблицы клиентского портала ещё не созданы в Supabase. Выполните миграцию 021_client_portal.sql.",
+      };
+    }
+    return {
+      ok: false,
+      error: "Не удалось создать приглашение. Проверьте подключение к базе.",
+    };
   }
 }

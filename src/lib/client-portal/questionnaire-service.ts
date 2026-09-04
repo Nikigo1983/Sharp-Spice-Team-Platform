@@ -65,12 +65,7 @@ export async function getOrCreateQuestionnaire(
     email: session.email,
     firstName: session.firstName,
     status: "draft",
-    answers: hydrateAnswers(
-      {
-        full_name_cyrillic: session.firstName,
-      },
-      session.email,
-    ),
+    answers: hydrateAnswers({}, session.email),
     revision: 1,
     createdAt: now,
     updatedAt: now,

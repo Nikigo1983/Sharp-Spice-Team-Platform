@@ -22,16 +22,17 @@ export default async function ClientPortalHomePage() {
   return (
     <div className={styles.portalPage}>
       <header className={styles.portalHeader}>
-        <div>
+        <div className={styles.portalHeaderText}>
           <h1 className={styles.portalTitle}>
             Здравствуйте, {session.firstName}
           </h1>
           <p className={styles.portalLead}>
-            Клиентский портал {BRAND_NAME}. Заполните анкету — договор и
-            ассистент появятся на следующих этапах.
+            Вас приветствует Клиентский портал {BRAND_NAME}.
+            <br />
+            Это ваш личный кабинет.
           </p>
         </div>
-        <form action={clientSignOutAction}>
+        <form action={clientSignOutAction} className={styles.signOutForm}>
           <button type="submit" className={styles.signOut}>
             Выйти
           </button>

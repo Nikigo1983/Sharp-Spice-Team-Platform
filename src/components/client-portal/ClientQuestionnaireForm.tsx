@@ -276,7 +276,7 @@ export function ClientQuestionnaireForm({
   }, [load]);
 
   useEffect(() => {
-    if (!status || status === "Анкета отправлена") return;
+    if (!status) return;
     const timer = window.setTimeout(() => setStatus(null), 2500);
     return () => window.clearTimeout(timer);
   }, [status]);
@@ -397,7 +397,7 @@ export function ClientQuestionnaireForm({
       if (data.questionnaire) {
         setRecordSync(data.questionnaire);
         setProgress(data.progress ?? 100);
-        setStatus("Анкета отправлена");
+        setStatus(null);
       }
     } finally {
       setSubmitting(false);

@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type {
+  FileAnswer,
   QuestionnaireRecord,
   QuestionnaireSchema,
   QuestionDefinition,
   SectionDefinition,
 } from "@/lib/client-portal/questionnaire-types";
-import { pickLabel } from "@/lib/client-portal/questionnaire-types";
+import {
+  isFileAnswer,
+  isQuestionVisible,
+  pickLabel,
+} from "@/lib/client-portal/questionnaire-types";
 import styles from "./ClientQuestionnaire.module.css";
 
 type LoadPayload = {
@@ -17,77 +22,190 @@ type LoadPayload = {
   progress: number;
 };
 
-function renderInput(
-  question: QuestionDefinition,
-  value: unknown,
-  onChange: (next: unknown) => void,
-  disabled: boolean,
-) {
-  if (question.type === "information") {
-    return <p className={styles.info}>{pickLabel(question.label)}</p>;
+function LabelWithLink({ question }: { question: QuestionDefinition }) {
+  const text = pickLabel(question.label);
+  if (!question.linkHref || !question.linkLabel) {
+    return <>{text}{question.required ? " *" : ""}</>;
   }
-
-  if (question.type === "boolean") {
+  const linkText = pickLabel(question.linkLabel);
+  const idx = text.indexOf(linkText);
+  if (idx < 0) {
     return (
-      <label className={styles.checkRow}>
-        <input
-          type="checkbox"
-          checked={value === true}
-          disabled={disabled || question.readOnly}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span>{pickLabel(question.label)}</span>
-      </label>
+      <>
+        {text}{" "}
+        <Link href={question.linkHref} className={styles.inlineLink}>
+          {linkText}
+        </Link>
+        {question.required ? " *" : ""}
+      </>
     );
   }
+  return (
+    <>
+      {text.slice(0, idx)}
+      <Link href={question.linkHref} className={styles.inlineLink}>
+        {linkText}
+      </Link>
+      {text.slice(idx + linkText.length)}
+      {question.required ? " *" : ""}
+    </>
+  );
+}
 
-  if (question.type === "select") {
-    return (
-      <select
-        className={styles.input}
-        value={String(value ?? "")}
-        disabled={disabled || question.readOnly}
-        onChange={(event) => onChange(event.target.value)}
+function YesNoButtons({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: unknown;
+  disabled: boolean;
+  onChange: (next: "yes" | "no") => void;
+}) {
+  return (
+    <div className={styles.yesNo}>
+      <button
+        type="button"
+        className={value === "yes" ? styles.yesNoActive : styles.yesNoBtn}
+        disabled={disabled}
+        onClick={() => onChange("yes")}
       >
-        <option value="">Выберите…</option>
-        {(question.options ?? []).map((option) => (
-          <option key={option.value} value={option.value}>
-            {pickLabel(option.label)}
-          </option>
-        ))}
-      </select>
-    );
+        Да
+      </button>
+      <button
+        type="button"
+        className={value === "no" ? styles.yesNoActive : styles.yesNoBtn}
+        disabled={disabled}
+        onClick={() => onChange("no")}
+      >
+        Нет
+      </button>
+    </div>
+  );
+}
+
+function FileField({
+  question,
+  value,
+  disabled,
+  onUploaded,
+  onRemoved,
+}: {
+  question: QuestionDefinition;
+  value: unknown;
+  disabled: boolean;
+  onUploaded: (
+    file: FileAnswer,
+    questionnaire: QuestionnaireRecord,
+    progress?: number,
+  ) => void;
+  onRemoved: (questionnaire: QuestionnaireRecord, progress?: number) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const file = isFileAnswer(value) ? value : null;
+  const maxMb = question.maxSizeMb ?? 10;
+  const accept = question.accept ?? ".pdf";
+
+  async function onPick(fileList: FileList | null) {
+    const picked = fileList?.[0];
+    if (!picked || disabled) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.set("questionId", question.id);
+      body.set("file", picked);
+      const res = await fetch("/api/client/questionnaire/attachments", {
+        method: "POST",
+        body,
+      });
+      const data = (await res.json()) as {
+        attachment?: FileAnswer;
+        questionnaire?: QuestionnaireRecord;
+        progress?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.attachment || !data.questionnaire) {
+        setError(
+          data.error === "FILE_TOO_LARGE"
+            ? `Файл больше ${maxMb} МБ`
+            : data.error === "UNSUPPORTED_FILE_TYPE"
+              ? "Недопустимый формат файла"
+              : "Не удалось загрузить файл",
+        );
+        return;
+      }
+      onUploaded(data.attachment, data.questionnaire, data.progress);
+    } finally {
+      setUploading(false);
+    }
   }
 
-  if (question.type === "textarea") {
-    return (
-      <textarea
-        className={styles.textarea}
-        rows={4}
-        value={String(value ?? "")}
-        disabled={disabled || question.readOnly}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    );
+  async function onRemove() {
+    if (!file || disabled) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/client/questionnaire/attachments?id=${encodeURIComponent(file.id)}&questionId=${encodeURIComponent(question.id)}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json()) as {
+        questionnaire?: QuestionnaireRecord;
+        progress?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.questionnaire) {
+        setError("Не удалось удалить файл");
+        return;
+      }
+      onRemoved(data.questionnaire, data.progress);
+    } finally {
+      setUploading(false);
+    }
   }
-
-  const inputType =
-    question.type === "email"
-      ? "email"
-      : question.type === "date"
-        ? "date"
-        : question.type === "phone"
-          ? "tel"
-          : "text";
 
   return (
-    <input
-      className={styles.input}
-      type={inputType}
-      value={String(value ?? "")}
-      disabled={disabled || question.readOnly}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <div className={styles.fileBox}>
+      {file ? (
+        <div className={styles.fileReady}>
+          <a
+            href={`/api/client/questionnaire/attachments/${encodeURIComponent(file.id)}`}
+            className={styles.inlineLink}
+          >
+            {file.fileName}
+          </a>
+          {!disabled ? (
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={uploading}
+              onClick={() => void onRemove()}
+            >
+              Удалить
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <label className={styles.fileDrop}>
+          <input
+            type="file"
+            accept={accept}
+            disabled={disabled || uploading}
+            onChange={(event) => {
+              void onPick(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <span>{uploading ? "Загрузка…" : "Выбрать файл"}</span>
+          <span className={styles.fileHint}>
+            Допустимые форматы: {accept.replace(/application\/pdf/gi, ".pdf").replace(/image\//gi, ".")}
+          </span>
+          <span className={styles.fileHint}>Максимальный размер: {maxMb} МБ</span>
+        </label>
+      )}
+      {error ? <p className={styles.error}>{error}</p> : null}
+    </div>
   );
 }
 
@@ -130,6 +248,13 @@ export function ClientQuestionnaireForm({
   const section = sections[sectionIndex] ?? null;
   const submitted = record?.status === "submitted";
   const readOnly = submitted || mode === "review";
+
+  const visibleQuestions = useMemo(() => {
+    if (!section || !record) return [];
+    return [...section.questions]
+      .sort((a, b) => a.order - b.order)
+      .filter((question) => isQuestionVisible(question, record.answers));
+  }, [section, record]);
 
   async function saveDraft(nextAnswers?: Record<string, unknown>) {
     if (!record || submitted) return false;
@@ -258,25 +383,167 @@ export function ClientQuestionnaireForm({
         ) : null}
 
         <div className={styles.fields}>
-          {[...section.questions]
-            .sort((a, b) => a.order - b.order)
-            .map((question) => (
-              <div key={question.id} className={styles.field}>
-                {question.type !== "information" &&
-                question.type !== "boolean" ? (
+          {visibleQuestions.map((question) => {
+            const fieldClass =
+              question.layout === "half" ? styles.fieldHalf : styles.field;
+
+            if (question.type === "information") {
+              return (
+                <div key={question.id} className={styles.field}>
+                  <p className={styles.info}>{pickLabel(question.label)}</p>
+                </div>
+              );
+            }
+
+            if (question.type === "boolean") {
+              return (
+                <div key={question.id} className={styles.field}>
+                  <p className={styles.label}>
+                    <LabelWithLink question={question} />
+                  </p>
+                  <div className={styles.yesNo}>
+                    <button
+                      type="button"
+                      className={
+                        record.answers[question.id] === true
+                          ? styles.yesNoActive
+                          : styles.yesNoBtn
+                      }
+                      disabled={readOnly}
+                      onClick={() => updateAnswer(question.id, true)}
+                    >
+                      Да
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (question.type === "yes_no") {
+              return (
+                <div key={question.id} className={styles.field}>
                   <label className={styles.label}>
                     {pickLabel(question.label)}
                     {question.required ? " *" : ""}
                   </label>
-                ) : null}
-                {renderInput(
-                  question,
-                  record.answers[question.id],
-                  (value) => updateAnswer(question.id, value),
-                  readOnly,
-                )}
+                  <YesNoButtons
+                    value={record.answers[question.id]}
+                    disabled={readOnly}
+                    onChange={(next) => updateAnswer(question.id, next)}
+                  />
+                </div>
+              );
+            }
+
+            if (question.type === "file") {
+              return (
+                <div key={question.id} className={styles.field}>
+                  <label className={styles.label}>
+                    {pickLabel(question.label)}
+                    {question.required ? " *" : ""}
+                  </label>
+                  <FileField
+                    question={question}
+                    value={record.answers[question.id]}
+                    disabled={readOnly}
+                    onUploaded={(_file, questionnaire, nextProgress) => {
+                      setRecord(questionnaire);
+                      if (typeof nextProgress === "number") {
+                        setProgress(nextProgress);
+                      }
+                      setStatus("Файл загружен");
+                    }}
+                    onRemoved={(questionnaire, nextProgress) => {
+                      setRecord(questionnaire);
+                      if (typeof nextProgress === "number") {
+                        setProgress(nextProgress);
+                      }
+                      setStatus("Файл удалён");
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            const placeholder = question.placeholder
+              ? pickLabel(question.placeholder)
+              : undefined;
+
+            if (question.type === "select") {
+              return (
+                <div key={question.id} className={fieldClass}>
+                  <label className={styles.label}>
+                    {pickLabel(question.label)}
+                    {question.required ? " *" : ""}
+                  </label>
+                  <select
+                    className={styles.input}
+                    value={String(record.answers[question.id] ?? "")}
+                    disabled={readOnly || question.readOnly}
+                    onChange={(event) =>
+                      updateAnswer(question.id, event.target.value)
+                    }
+                  >
+                    <option value="">Выберите…</option>
+                    {(question.options ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {pickLabel(option.label)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
+
+            if (question.type === "textarea") {
+              return (
+                <div key={question.id} className={fieldClass}>
+                  <label className={styles.label}>
+                    {pickLabel(question.label)}
+                    {question.required ? " *" : ""}
+                  </label>
+                  <textarea
+                    className={styles.textarea}
+                    rows={4}
+                    placeholder={placeholder}
+                    value={String(record.answers[question.id] ?? "")}
+                    disabled={readOnly || question.readOnly}
+                    onChange={(event) =>
+                      updateAnswer(question.id, event.target.value)
+                    }
+                  />
+                </div>
+              );
+            }
+
+            const inputType =
+              question.type === "email"
+                ? "email"
+                : question.type === "date"
+                  ? "date"
+                  : question.type === "phone"
+                    ? "tel"
+                    : "text";
+
+            return (
+              <div key={question.id} className={fieldClass}>
+                <label className={styles.label}>
+                  {pickLabel(question.label)}
+                  {question.required ? " *" : ""}
+                </label>
+                <input
+                  className={styles.input}
+                  type={inputType}
+                  placeholder={placeholder}
+                  value={String(record.answers[question.id] ?? "")}
+                  disabled={readOnly || question.readOnly}
+                  onChange={(event) =>
+                    updateAnswer(question.id, event.target.value)
+                  }
+                />
               </div>
-            ))}
+            );
+          })}
         </div>
 
         {error ? (

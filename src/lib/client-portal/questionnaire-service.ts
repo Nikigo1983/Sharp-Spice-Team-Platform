@@ -7,8 +7,13 @@ import type {
   QuestionnaireAnswers,
   QuestionnaireRecord,
   QuestionnaireSchema,
+  QuestionDefinition,
 } from "./questionnaire-types";
-import { pickLabel } from "./questionnaire-types";
+import {
+  isFileAnswer,
+  isQuestionVisible,
+  pickLabel,
+} from "./questionnaire-types";
 import {
   findQuestionnaireById,
   findQuestionnaireByUserId,
@@ -20,14 +25,20 @@ export function getPublishedSchema(): QuestionnaireSchema {
   return SHARP_SPICE_ONBOARDING_SCHEMA;
 }
 
+function allQuestions(): QuestionDefinition[] {
+  return SHARP_SPICE_ONBOARDING_SCHEMA.sections.flatMap(
+    (section) => section.questions,
+  );
+}
+
 function hydrateAnswers(
   answers: QuestionnaireAnswers,
   portalEmail: string,
 ): QuestionnaireAnswers {
   const next = { ...answers };
-  for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
-    for (const question of section.questions) {
-      if (question.derivedFrom === "portal_email") {
+  for (const question of allQuestions()) {
+    if (question.derivedFrom === "portal_email") {
+      if (!next[question.id] || String(next[question.id]).trim() === "") {
         next[question.id] = portalEmail;
       }
     }
@@ -56,7 +67,7 @@ export async function getOrCreateQuestionnaire(
     status: "draft",
     answers: hydrateAnswers(
       {
-        first_name: session.firstName,
+        full_name_cyrillic: session.firstName,
       },
       session.email,
     ),
@@ -98,25 +109,39 @@ export async function saveQuestionnaireAnswers(
   return next;
 }
 
+function isAnswerFilled(
+  question: QuestionDefinition,
+  value: unknown,
+): boolean {
+  if (question.type === "information") return true;
+  if (question.type === "boolean") return value === true;
+  if (question.type === "yes_no") return value === "yes" || value === "no";
+  if (question.type === "file") return isFileAnswer(value);
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
 export function validateRequiredAnswers(
   answers: QuestionnaireAnswers,
   locale: "ru" | "en" = "ru",
 ): string[] {
   const errors: string[] = [];
-  for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
-    for (const question of section.questions) {
-      if (question.type === "information" || !question.required) continue;
-      const value = answers[question.id];
-      const empty =
-        value === undefined ||
-        value === null ||
-        value === "" ||
-        (question.type === "boolean" && value !== true);
-      if (empty) {
-        errors.push(pickLabel(question.label, locale));
-      }
+  for (const question of allQuestions()) {
+    if (question.type === "information" || !question.required) continue;
+    if (!isQuestionVisible(question, answers)) continue;
+    if (!isAnswerFilled(question, answers[question.id])) {
+      errors.push(pickLabel(question.label, locale));
     }
   }
+
+  const email = String(answers.contact_email ?? "").trim().toLowerCase();
+  if (email && !email.endsWith(".com")) {
+    errors.push(
+      locale === "ru"
+        ? "Электронный адрес должен быть в домене .com"
+        : "Email must use a .com domain",
+    );
+  }
+
   return errors;
 }
 
@@ -162,20 +187,16 @@ export async function getSubmittedForStaff(
 }
 
 export function calculateProgress(answers: QuestionnaireAnswers): number {
-  const required = SHARP_SPICE_ONBOARDING_SCHEMA.sections.flatMap((section) =>
-    section.questions.filter(
-      (question) => question.required && question.type !== "information",
-    ),
+  const required = allQuestions().filter(
+    (question) =>
+      question.required &&
+      question.type !== "information" &&
+      isQuestionVisible(question, answers),
   );
   if (required.length === 0) return 100;
   let done = 0;
   for (const question of required) {
-    const value = answers[question.id];
-    const ok =
-      question.type === "boolean"
-        ? value === true
-        : value !== undefined && value !== null && String(value).trim() !== "";
-    if (ok) done += 1;
+    if (isAnswerFilled(question, answers[question.id])) done += 1;
   }
   return Math.round((done / required.length) * 100);
 }
@@ -183,15 +204,52 @@ export function calculateProgress(answers: QuestionnaireAnswers): number {
 export function buildReviewRows(
   answers: QuestionnaireAnswers,
   locale: "ru" | "en" = "ru",
-): Array<{ section: string; label: string; value: string }> {
-  const rows: Array<{ section: string; label: string; value: string }> = [];
+): Array<{
+  section: string;
+  label: string;
+  value: string;
+  questionId: string;
+  fileId?: string;
+}> {
+  const rows: Array<{
+    section: string;
+    label: string;
+    value: string;
+    questionId: string;
+    fileId?: string;
+  }> = [];
   for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
     for (const question of section.questions) {
       if (question.type === "information") continue;
+      if (!isQuestionVisible(question, answers)) continue;
       const raw = answers[question.id];
       let value = "";
+      let fileId: string | undefined;
       if (question.type === "boolean") {
-        value = raw === true ? (locale === "ru" ? "Да" : "Yes") : "";
+        value =
+          raw === true
+            ? locale === "ru"
+              ? "Да"
+              : "Yes"
+            : raw === false
+              ? locale === "ru"
+                ? "Нет"
+                : "No"
+              : "";
+      } else if (question.type === "yes_no") {
+        value =
+          raw === "yes"
+            ? locale === "ru"
+              ? "Да"
+              : "Yes"
+            : raw === "no"
+              ? locale === "ru"
+                ? "Нет"
+                : "No"
+              : "";
+      } else if (question.type === "file" && isFileAnswer(raw)) {
+        value = `${raw.fileName} (${Math.round(raw.sizeBytes / 1024)} KB)`;
+        fileId = raw.id;
       } else if (question.type === "select" && question.options) {
         const option = question.options.find((item) => item.value === raw);
         value = option ? pickLabel(option.label, locale) : String(raw ?? "");
@@ -202,8 +260,22 @@ export function buildReviewRows(
         section: pickLabel(section.title, locale),
         label: pickLabel(question.label, locale),
         value,
+        questionId: question.id,
+        fileId,
       });
     }
   }
   return rows;
+}
+
+export function findFileAnswerInRecord(
+  record: QuestionnaireRecord,
+  attachmentId: string,
+) {
+  for (const value of Object.values(record.answers)) {
+    if (isFileAnswer(value) && value.id === attachmentId) {
+      return value;
+    }
+  }
+  return null;
 }

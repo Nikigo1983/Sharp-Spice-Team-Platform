@@ -17,6 +17,8 @@ type ReviewRow = {
   section: string;
   label: string;
   value: string;
+  questionId?: string;
+  fileId?: string;
 };
 
 export function ClientPortalIntakePanel() {
@@ -87,7 +89,17 @@ export function ClientPortalIntakePanel() {
                 <span className={styles.section}>{row.section}</span>
                 <span className={styles.label}>{row.label}</span>
               </div>
-              <div className={styles.value}>{row.value || "—"}</div>
+              <div className={styles.value}>
+                {row.fileId && selectedId ? (
+                  <a
+                    href={`/api/client-cases/files/${encodeURIComponent(row.fileId)}?questionnaireId=${encodeURIComponent(selectedId)}`}
+                  >
+                    {row.value || "Скачать файл"}
+                  </a>
+                ) : (
+                  row.value || "—"
+                )}
+              </div>
             </div>
           ))}
         </div>

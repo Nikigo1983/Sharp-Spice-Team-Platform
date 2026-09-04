@@ -8,11 +8,25 @@ export type QuestionType =
   | "date"
   | "select"
   | "boolean"
+  | "yes_no"
+  | "file"
   | "information";
 
 export type QuestionOption = {
   value: string;
   label: LocaleLabel;
+};
+
+export type FileAnswer = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type QuestionVisibleWhen = {
+  questionId: string;
+  equals: string | boolean;
 };
 
 export type QuestionDefinition = {
@@ -22,8 +36,19 @@ export type QuestionDefinition = {
   label: LocaleLabel;
   required?: boolean;
   options?: QuestionOption[];
+  placeholder?: LocaleLabel;
+  /** Prefill from portal session email */
   derivedFrom?: "portal_email";
   readOnly?: boolean;
+  /** Show only when another answer matches */
+  visibleWhen?: QuestionVisibleWhen;
+  /** Accept attribute for file inputs, e.g. ".pdf" or ".jpg,.jpeg,.png" */
+  accept?: string;
+  maxSizeMb?: number;
+  /** Optional link inside label (consent / privacy) */
+  linkHref?: string;
+  linkLabel?: LocaleLabel;
+  layout?: "full" | "half";
 };
 
 export type SectionDefinition = {
@@ -65,4 +90,27 @@ export function pickLabel(
   locale: "ru" | "en" = "ru",
 ): string {
   return locale === "en" ? label.en : label.ru;
+}
+
+export function isFileAnswer(value: unknown): value is FileAnswer {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const rec = value as Record<string, unknown>;
+  return (
+    typeof rec.id === "string" &&
+    rec.id.length > 0 &&
+    typeof rec.fileName === "string" &&
+    rec.fileName.length > 0 &&
+    typeof rec.mimeType === "string" &&
+    typeof rec.sizeBytes === "number" &&
+    Number.isFinite(rec.sizeBytes) &&
+    rec.sizeBytes >= 0
+  );
+}
+
+export function isQuestionVisible(
+  question: QuestionDefinition,
+  answers: QuestionnaireAnswers,
+): boolean {
+  if (!question.visibleWhen) return true;
+  return answers[question.visibleWhen.questionId] === question.visibleWhen.equals;
 }

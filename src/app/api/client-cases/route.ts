@@ -35,8 +35,13 @@ export async function GET(request: Request) {
       id: item.id,
       email: item.email,
       firstName: item.firstName,
-      lastName: String(item.answers.last_name ?? ""),
-      serviceType: String(item.answers.service_type ?? ""),
+      lastName: String(
+        item.answers.full_name_latin ??
+          item.answers.full_name_cyrillic ??
+          item.answers.last_name ??
+          "",
+      ),
+      serviceType: String(item.answers.citizenship_latin ?? ""),
       submittedAt: item.submittedAt,
     })),
   });

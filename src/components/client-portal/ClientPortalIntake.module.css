@@ -108,6 +108,10 @@
   white-space: pre-wrap;
 }
 
+.value a {
+  color: #ffb74a;
+}
+
 .error {
   color: #fca5a5;
 }

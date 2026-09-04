@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -129,8 +128,7 @@ export function ClientPortalIntakePanel() {
           <h1 className={styles.title}>Заявки клиентского портала</h1>
           <p className={styles.lead}>
             Анкеты, отправленные клиентами через портал. Нажмите на имя, чтобы
-            открыть все ответы. Formgrid отдельно:{" "}
-            <Link href="/new-formgrid-clients">Новые клиенты из анкеты</Link>.
+            открыть все ответы.
           </p>
         </div>
         <button type="button" className={styles.refresh} onClick={() => void loadList()}>

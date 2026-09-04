@@ -53,16 +53,32 @@
 }
 
 .statusOk {
-  margin: 0 0 1rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-sm);
-  background: rgba(34, 197, 94, 0.12);
+  margin: 0 0 0.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    160deg,
+    rgba(34, 197, 94, 0.16),
+    rgba(34, 197, 94, 0.06)
+  );
   border: 1px solid rgba(134, 239, 172, 0.35);
-  color: #86efac;
+  color: #d1fae5;
   font-family: Inter, sans-serif;
-  font-size: 0.875rem;
   text-align: left;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+.statusOkLead {
+  margin: 0;
+  color: #bbf7d0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.statusOkHint {
+  margin: 0.55rem 0 0;
+  color: rgba(209, 250, 229, 0.82);
+  font-size: 0.875rem;
 }
 
 .form {

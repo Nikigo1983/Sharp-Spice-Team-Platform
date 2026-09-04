@@ -14,13 +14,19 @@ import {
   isQuestionVisible,
   pickLabel,
 } from "./questionnaire-types";
-import { validateRequiredAnswers } from "./questionnaire-progress";
+import {
+  isOrphanedDraftAnswers,
+  validateRequiredAnswers,
+} from "./questionnaire-progress";
 import {
   findQuestionnaireById,
   findQuestionnaireByUserId,
   listSubmittedQuestionnaires,
   upsertQuestionnaire,
 } from "./questionnaire-store";
+import {
+  deleteQuestionnaireAttachmentFile,
+} from "./questionnaire-attachment-storage";
 
 export {
   calculateProgress,
@@ -78,6 +84,16 @@ function answersChanged(
   return beforeKeys.some((key) => before[key] !== after[key]);
 }
 
+async function purgeFileAnswers(
+  ownerKey: string,
+  answers: QuestionnaireAnswers,
+): Promise<void> {
+  for (const value of Object.values(answers)) {
+    if (!isFileAnswer(value)) continue;
+    void deleteQuestionnaireAttachmentFile(ownerKey, value.id, value.fileName);
+  }
+}
+
 export async function getOrCreateQuestionnaire(
   session: ClientSession,
 ): Promise<QuestionnaireRecord> {
@@ -86,6 +102,10 @@ export async function getOrCreateQuestionnaire(
     let answers = hydrateAnswers(existing.answers, session.email);
     if (existing.status === "draft") {
       answers = stripLegacyNamePrefill(answers, session.firstName);
+      if (isOrphanedDraftAnswers(answers)) {
+        await purgeFileAnswers(session.id, answers);
+        answers = hydrateAnswers({}, session.email);
+      }
       if (answersChanged(existing.answers, answers)) {
         const cleaned: QuestionnaireRecord = {
           ...existing,

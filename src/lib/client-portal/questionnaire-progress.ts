@@ -15,6 +15,14 @@ function allQuestions(): QuestionDefinition[] {
   );
 }
 
+function countsTowardProgress(question: QuestionDefinition): boolean {
+  if (!question.required) return false;
+  if (question.type === "information") return false;
+  if (question.derivedFrom) return false;
+  if (question.readOnly) return false;
+  return true;
+}
+
 export function isAnswerFilled(
   question: QuestionDefinition,
   value: unknown,
@@ -26,14 +34,35 @@ export function isAnswerFilled(
   return value !== undefined && value !== null && String(value).trim() !== "";
 }
 
+/** True when draft has uploads/flags but no typed answers (leftover after wipe). */
+export function isOrphanedDraftAnswers(answers: QuestionnaireAnswers): boolean {
+  let hasTypedAnswer = false;
+  let hasOtherProgress = false;
+  for (const question of allQuestions()) {
+    if (question.type === "information" || question.derivedFrom) continue;
+    if (!isAnswerFilled(question, answers[question.id])) continue;
+    if (
+      question.type === "text" ||
+      question.type === "textarea" ||
+      question.type === "phone" ||
+      question.type === "date" ||
+      question.type === "email" ||
+      question.type === "select"
+    ) {
+      hasTypedAnswer = true;
+    } else {
+      hasOtherProgress = true;
+    }
+  }
+  return hasOtherProgress && !hasTypedAnswer;
+}
+
 export function calculateProgress(answers: QuestionnaireAnswers): number {
   const required = allQuestions().filter(
     (question) =>
-      question.required &&
-      question.type !== "information" &&
-      isQuestionVisible(question, answers),
+      countsTowardProgress(question) && isQuestionVisible(question, answers),
   );
-  if (required.length === 0) return 100;
+  if (required.length === 0) return 0;
   let done = 0;
   for (const question of required) {
     if (isAnswerFilled(question, answers[question.id])) done += 1;

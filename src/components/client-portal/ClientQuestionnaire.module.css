@@ -152,6 +152,12 @@
   color: #fff;
 }
 
+.input::placeholder,
+.textarea::placeholder {
+  color: rgba(148, 163, 184, 0.75);
+  opacity: 1;
+}
+
 .textarea {
   resize: vertical;
   min-height: 110px;

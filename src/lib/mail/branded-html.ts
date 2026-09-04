@@ -46,22 +46,23 @@ export function buildBrandedEmailHtml(input: {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(input.title)}</title>
 </head>
-<body style="margin:0;padding:0;background:#0f1419;font-family:Inter,Segoe UI,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f1419;padding:28px 12px;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Inter,Segoe UI,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:28px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
           <tr>
-            <td style="padding:28px 28px 12px;text-align:center;background:#111827;">
-              <img src="${logoUrl}" width="160" height="160" alt="${escapeHtml(BRAND_NAME)}" style="display:inline-block;width:160px;height:auto;max-width:70%;border:0;outline:none;text-decoration:none;" />
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:28px 28px 8px;">
+            <td style="padding:32px 28px 28px;background:#ffffff;">
+              <div style="text-align:center;margin:0 0 24px;">
+                <img src="${logoUrl}" width="140" height="140" alt="${escapeHtml(BRAND_NAME)}" style="display:inline-block;width:140px;height:auto;max-width:56%;border:0;outline:none;text-decoration:none;" />
+              </div>
               <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;font-weight:700;">${escapeHtml(input.title)}</h1>
               <p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#334155;">${escapeHtml(input.greeting)}</p>
               ${paragraphsHtml}
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 8px;">
+              <p style="margin:0 0 18px;padding:12px 14px;font-size:13px;line-height:1.55;color:#57534e;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;">
+                Если письмо попало в «Спам», некоторые сервисы отключают ссылки и кнопки. Отметьте письмо как «Не спам» — и они снова станут активными.
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0;">
                 <tr>
                   <td align="center" bgcolor="#910d0d" style="border-radius:8px;">
                     <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 22px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;background:#910d0d;">

@@ -189,3 +189,7 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
+
+.portalCard .linkButton {
+  margin-top: 0.85rem;
+}

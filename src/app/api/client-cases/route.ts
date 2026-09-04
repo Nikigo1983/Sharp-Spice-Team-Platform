@@ -5,6 +5,7 @@ import {
   getPublishedSchema,
   getSubmittedForStaff,
   listSubmittedForStaff,
+  markQuestionnaireOpenedByStaff,
 } from "@/lib/client-portal/questionnaire-service";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 
@@ -18,7 +19,8 @@ export async function GET(request: Request) {
   const id = searchParams.get("id");
 
   if (id) {
-    const record = await getSubmittedForStaff(id);
+    const opened = await markQuestionnaireOpenedByStaff(id);
+    const record = opened ?? (await getSubmittedForStaff(id));
     if (!record) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
@@ -31,18 +33,30 @@ export async function GET(request: Request) {
 
   const items = await listSubmittedForStaff();
   return NextResponse.json({
-    items: items.map((item) => ({
-      id: item.id,
-      email: item.email,
-      firstName: item.firstName,
-      lastName: String(
-        item.answers.full_name_latin ??
-          item.answers.full_name_cyrillic ??
-          item.answers.last_name ??
-          "",
-      ),
-      serviceType: String(item.answers.citizenship_latin ?? ""),
-      submittedAt: item.submittedAt,
-    })),
+    items: items.map((item) => {
+      const displayName =
+        String(item.answers.full_name_cyrillic ?? "").trim() ||
+        String(item.answers.full_name_latin ?? "").trim() ||
+        [item.firstName, String(item.answers.last_name ?? "")]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        item.email;
+      return {
+        id: item.id,
+        email: item.email,
+        displayName,
+        firstName: item.firstName,
+        lastName: String(
+          item.answers.full_name_latin ??
+            item.answers.full_name_cyrillic ??
+            item.answers.last_name ??
+            "",
+        ),
+        serviceType: String(item.answers.citizenship_latin ?? ""),
+        submittedAt: item.submittedAt,
+        isNew: !item.staffOpenedAt,
+      };
+    }),
   });
 }

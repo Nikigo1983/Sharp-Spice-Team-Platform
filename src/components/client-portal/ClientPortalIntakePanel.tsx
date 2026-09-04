@@ -7,10 +7,12 @@ import styles from "./ClientPortalIntake.module.css";
 type ListItem = {
   id: string;
   email: string;
+  displayName?: string;
   firstName: string;
   lastName: string;
   serviceType: string;
   submittedAt: string | null;
+  isNew?: boolean;
 };
 
 type ReviewRow = {
@@ -26,6 +28,7 @@ export function ClientPortalIntakePanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [schemaTitle, setSchemaTitle] = useState("");
+  const [clientLabel, setClientLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,10 +52,15 @@ export function ClientPortalIntakePanel() {
     void loadList();
   }, [loadList]);
 
-  async function openCase(id: string) {
-    setSelectedId(id);
+  async function openCase(item: ListItem) {
+    setSelectedId(item.id);
+    setClientLabel(
+      item.displayName ||
+        [item.firstName, item.lastName].filter(Boolean).join(" ") ||
+        item.email,
+    );
     setError(null);
-    const res = await fetch(`/api/client-cases?id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/client-cases?id=${encodeURIComponent(item.id)}`, {
       cache: "no-store",
     });
     if (!res.ok) {
@@ -65,6 +73,11 @@ export function ClientPortalIntakePanel() {
     };
     setSchemaTitle(data.schemaTitle);
     setReview(data.review ?? []);
+    setItems((prev) =>
+      prev.map((row) =>
+        row.id === item.id ? { ...row, isNew: false } : row,
+      ),
+    );
   }
 
   if (selectedId) {
@@ -76,11 +89,13 @@ export function ClientPortalIntakePanel() {
           onClick={() => {
             setSelectedId(null);
             setReview([]);
+            setClientLabel("");
           }}
         >
           ← К списку
         </button>
         <h1 className={styles.title}>{schemaTitle || "Анкета клиента"}</h1>
+        {clientLabel ? <p className={styles.lead}>{clientLabel}</p> : null}
         {error ? <p className={styles.error}>{error}</p> : null}
         <div className={styles.review}>
           {review.map((row, index) => (
@@ -113,7 +128,8 @@ export function ClientPortalIntakePanel() {
         <div>
           <h1 className={styles.title}>Заявки клиентского портала</h1>
           <p className={styles.lead}>
-            Анкеты, отправленные через новый портал. Formgrid остаётся отдельно:{" "}
+            Анкеты, отправленные клиентами через портал. Нажмите на имя, чтобы
+            открыть все ответы. Formgrid отдельно:{" "}
             <Link href="/new-formgrid-clients">Новые клиенты из анкеты</Link>.
           </p>
         </div>
@@ -130,27 +146,35 @@ export function ClientPortalIntakePanel() {
       ) : null}
 
       <ul className={styles.list}>
-        {items.map((item) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              className={styles.item}
-              onClick={() => void openCase(item.id)}
-            >
-              <span className={styles.itemTitle}>
-                {[item.firstName, item.lastName].filter(Boolean).join(" ") ||
-                  item.email}
-              </span>
-              <span className={styles.itemMeta}>
-                {item.email}
-                {item.serviceType ? ` · ${item.serviceType}` : ""}
-                {item.submittedAt
-                  ? ` · ${new Date(item.submittedAt).toLocaleString("ru-RU")}`
-                  : ""}
-              </span>
-            </button>
-          </li>
-        ))}
+        {items.map((item) => {
+          const name =
+            item.displayName ||
+            [item.firstName, item.lastName].filter(Boolean).join(" ") ||
+            item.email;
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                className={styles.item}
+                onClick={() => void openCase(item)}
+              >
+                <span className={styles.itemTitleRow}>
+                  <span className={styles.itemTitle}>{name}</span>
+                  {item.isNew ? (
+                    <span className={styles.newBadge}>Новая</span>
+                  ) : null}
+                </span>
+                <span className={styles.itemMeta}>
+                  {item.email}
+                  {item.serviceType ? ` · ${item.serviceType}` : ""}
+                  {item.submittedAt
+                    ? ` · ${new Date(item.submittedAt).toLocaleString("ru-RU")}`
+                    : ""}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

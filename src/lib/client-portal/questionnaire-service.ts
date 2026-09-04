@@ -75,6 +75,7 @@ export async function getOrCreateQuestionnaire(
     createdAt: now,
     updatedAt: now,
     submittedAt: null,
+    staffOpenedAt: null,
   };
   await upsertQuestionnaire(record);
   return record;
@@ -184,6 +185,20 @@ export async function getSubmittedForStaff(
   const record = await findQuestionnaireById(id);
   if (!record || record.status !== "submitted") return null;
   return record;
+}
+
+export async function markQuestionnaireOpenedByStaff(
+  id: string,
+): Promise<QuestionnaireRecord | null> {
+  const record = await getSubmittedForStaff(id);
+  if (!record) return null;
+  if (record.staffOpenedAt) return record;
+  const now = new Date().toISOString();
+  return upsertQuestionnaire({
+    ...record,
+    staffOpenedAt: now,
+    updatedAt: now,
+  });
 }
 
 export function calculateProgress(answers: QuestionnaireAnswers): number {

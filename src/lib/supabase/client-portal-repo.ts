@@ -57,6 +57,7 @@ type QuestionnaireRow = {
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
+  staff_opened_at?: string | null;
 };
 
 function asLocale(value: string): ClientPortalLocale {
@@ -106,6 +107,7 @@ function mapQuestionnaire(row: QuestionnaireRow): QuestionnaireRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     submittedAt: row.submitted_at,
+    staffOpenedAt: row.staff_opened_at ?? null,
   };
 }
 
@@ -255,6 +257,7 @@ export async function sbUpsertQuestionnaire(
         created_at: record.createdAt,
         updated_at: record.updatedAt,
         submitted_at: record.submittedAt,
+        staff_opened_at: record.staffOpenedAt,
       },
       { onConflict: "id" },
     )

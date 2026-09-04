@@ -83,6 +83,8 @@ export type QuestionnaireRecord = {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
+  /** Set when a staff member opens the case in intake */
+  staffOpenedAt: string | null;
 };
 
 export function pickLabel(

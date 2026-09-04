@@ -275,6 +275,16 @@ export function ClientQuestionnaireForm({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!status || status === "Анкета отправлена") return;
+    const timer = window.setTimeout(() => setStatus(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  useEffect(() => {
+    setStatus(null);
+  }, [sectionIndex]);
+
   const sections = useMemo(
     () =>
       [...(schema?.sections ?? [])].sort((a, b) => a.order - b.order) as SectionDefinition[],

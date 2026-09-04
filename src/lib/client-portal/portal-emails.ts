@@ -1,27 +1,8 @@
 import "server-only";
 
 import { BRAND_NAME } from "@/lib/brand";
+import { buildBrandedEmailHtml } from "@/lib/mail/branded-html";
 import { sendEmail, type SendEmailResult } from "@/lib/mail/send-email";
-
-function linkify(htmlEscapedText: string, urls: string[]): string {
-  let html = htmlEscapedText;
-  for (const url of urls) {
-    const escaped = escapeHtml(url);
-    html = html.replaceAll(
-      escaped,
-      `<a href="${escaped}" target="_blank" rel="noopener noreferrer">${escaped}</a>`,
-    );
-  }
-  return html;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 export async function sendClientInviteEmail(input: {
   to: string;
@@ -35,7 +16,7 @@ export async function sendClientInviteEmail(input: {
     "",
     `Вас пригласили в клиентский портал ${BRAND_NAME}.`,
     "",
-    `Вход: ${input.loginUrl}`,
+    `Откройте вход: ${input.loginUrl}`,
     `Email: ${input.to}`,
     `Временный пароль: ${input.temporaryPassword}`,
     "",
@@ -44,15 +25,24 @@ export async function sendClientInviteEmail(input: {
     `— Команда ${BRAND_NAME}`,
   ].join("\n");
 
-  const htmlBody = linkify(escapeHtml(text).replaceAll("\n", "<br/>"), [
-    input.loginUrl,
-  ]);
+  const html = buildBrandedEmailHtml({
+    title: "Доступ в клиентский портал",
+    greeting: `Здравствуйте, ${input.firstName}!`,
+    paragraphs: [
+      `Вас пригласили в клиентский портал ${BRAND_NAME}.`,
+      `Email для входа: ${input.to}`,
+      `Временный пароль: ${input.temporaryPassword}`,
+      "После входа вы можете сменить пароль через «Забыли пароль?» на странице входа.",
+    ],
+    ctaLabel: "Открыть вход в портал",
+    ctaUrl: input.loginUrl,
+  });
 
   return sendEmail({
     to: input.to,
     subject,
     text,
-    html: `<p style="font-family:Inter,system-ui,sans-serif;line-height:1.5">${htmlBody}</p>`,
+    html,
   });
 }
 
@@ -73,14 +63,22 @@ export async function sendClientPasswordResetEmail(input: {
     `— Команда ${BRAND_NAME}`,
   ].join("\n");
 
-  const htmlBody = linkify(escapeHtml(text).replaceAll("\n", "<br/>"), [
-    input.resetUrl,
-  ]);
+  const html = buildBrandedEmailHtml({
+    title: "Сброс пароля",
+    greeting: `Здравствуйте, ${input.firstName}!`,
+    paragraphs: [
+      `Чтобы задать новый пароль для клиентского портала ${BRAND_NAME}, нажмите кнопку ниже. Ссылка действует ограниченное время.`,
+    ],
+    ctaLabel: "Задать новый пароль",
+    ctaUrl: input.resetUrl,
+    footerNote:
+      "Если вы не запрашивали сброс, просто проигнорируйте это письмо.",
+  });
 
   return sendEmail({
     to: input.to,
     subject,
     text,
-    html: `<p style="font-family:Inter,system-ui,sans-serif;line-height:1.5">${htmlBody}</p>`,
+    html,
   });
 }

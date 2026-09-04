@@ -49,6 +49,8 @@ export type QuestionDefinition = {
   linkHref?: string;
   linkLabel?: LocaleLabel;
   layout?: "full" | "half";
+  /** Expected writing system for free-text answers */
+  script?: "latin" | "cyrillic";
 };
 
 export type SectionDefinition = {
@@ -115,4 +117,11 @@ export function isQuestionVisible(
 ): boolean {
   if (!question.visibleWhen) return true;
   return answers[question.visibleWhen.questionId] === question.visibleWhen.equals;
+}
+
+const CYRILLIC_RE = /[\u0400-\u04FF]/;
+
+/** True if value contains Cyrillic letters (used for Latin-only fields). */
+export function containsCyrillic(value: unknown): boolean {
+  return typeof value === "string" && CYRILLIC_RE.test(value);
 }

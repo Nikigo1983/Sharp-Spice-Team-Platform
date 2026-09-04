@@ -48,6 +48,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           placeholder: { en: "IVANOV IVAN", ru: "IVANOV IVAN" },
           required: true,
           layout: "full",
+          script: "latin",
         },
         {
           id: "birth_surname_latin",
@@ -58,6 +59,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
             ru: "3. Фамилия при рождении (латинскими)",
           },
           layout: "full",
+          script: "latin",
         },
         {
           id: "date_of_birth",
@@ -79,6 +81,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           placeholder: { en: "Moscow, Russia", ru: "Moscow, Russia" },
           required: true,
           layout: "half",
+          script: "latin",
         },
         {
           id: "residence_address_latin",
@@ -94,6 +97,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           required: true,
           layout: "full",
+          script: "latin",
         },
         {
           id: "phone",
@@ -139,6 +143,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           placeholder: { en: "MVD 123", ru: "MVD 123" },
           layout: "half",
+          script: "latin",
         },
         {
           id: "passport_issue_date",
@@ -169,6 +174,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
             ru: "Moscow State University",
           },
           layout: "full",
+          script: "latin",
         },
         {
           id: "citizenship_latin",
@@ -184,6 +190,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           required: true,
           layout: "half",
+          script: "latin",
         },
         {
           id: "nationality_latin",
@@ -196,6 +203,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           placeholder: { en: "Russian", ru: "Russian" },
           required: true,
           layout: "half",
+          script: "latin",
         },
         {
           id: "marital_status_latin",
@@ -211,6 +219,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           required: true,
           layout: "full",
+          script: "latin",
         },
         {
           id: "father_name_latin",
@@ -222,6 +231,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           placeholder: { en: "IVANOV IVAN", ru: "IVANOV IVAN" },
           layout: "half",
+          script: "latin",
         },
         {
           id: "mother_name_latin",
@@ -233,6 +243,7 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
           placeholder: { en: "IVANOVA MARIA", ru: "IVANOVA MARIA" },
           layout: "half",
+          script: "latin",
         },
       ],
     },

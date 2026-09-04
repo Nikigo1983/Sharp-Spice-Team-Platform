@@ -253,6 +253,20 @@
   color: var(--gray-300, #cbd5e1);
 }
 
+.inputInvalid,
+.textarea.inputInvalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+}
+
+.fieldHint {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.82rem;
+  font-family: Inter, sans-serif;
+  line-height: 1.35;
+}
+
 .info {
   margin: 0;
   padding: 0.75rem 0.9rem;

@@ -10,6 +10,7 @@ import type {
   SectionDefinition,
 } from "@/lib/client-portal/questionnaire-types";
 import {
+  containsCyrillic,
   isFileAnswer,
   isQuestionVisible,
   pickLabel,
@@ -21,6 +22,12 @@ type LoadPayload = {
   questionnaire: QuestionnaireRecord;
   progress: number;
 };
+
+function scriptError(question: QuestionDefinition, value: unknown): string | null {
+  if (question.script !== "latin") return null;
+  if (!containsCyrillic(value)) return null;
+  return "Пожалуйста, заполните латиницей";
+}
 
 function LabelWithLink({ question }: { question: QuestionDefinition }) {
   const text = pickLabel(question.label);
@@ -496,6 +503,8 @@ export function ClientQuestionnaireForm({
             }
 
             if (question.type === "textarea") {
+              const value = record.answers[question.id];
+              const latinHint = scriptError(question, value);
               return (
                 <div key={question.id} className={fieldClass}>
                   <label className={styles.label}>
@@ -503,15 +512,25 @@ export function ClientQuestionnaireForm({
                     {question.required ? " *" : ""}
                   </label>
                   <textarea
-                    className={styles.textarea}
+                    className={
+                      latinHint
+                        ? `${styles.textarea} ${styles.inputInvalid}`
+                        : styles.textarea
+                    }
                     rows={4}
                     placeholder={placeholder}
-                    value={String(record.answers[question.id] ?? "")}
+                    value={String(value ?? "")}
                     disabled={readOnly || question.readOnly}
                     onChange={(event) =>
                       updateAnswer(question.id, event.target.value)
                     }
+                    aria-invalid={Boolean(latinHint)}
                   />
+                  {latinHint ? (
+                    <p className={styles.fieldHint} role="alert">
+                      {latinHint}
+                    </p>
+                  ) : null}
                 </div>
               );
             }
@@ -525,6 +544,9 @@ export function ClientQuestionnaireForm({
                     ? "tel"
                     : "text";
 
+            const value = record.answers[question.id];
+            const latinHint = scriptError(question, value);
+
             return (
               <div key={question.id} className={fieldClass}>
                 <label className={styles.label}>
@@ -532,15 +554,25 @@ export function ClientQuestionnaireForm({
                   {question.required ? " *" : ""}
                 </label>
                 <input
-                  className={styles.input}
+                  className={
+                    latinHint
+                      ? `${styles.input} ${styles.inputInvalid}`
+                      : styles.input
+                  }
                   type={inputType}
                   placeholder={placeholder}
-                  value={String(record.answers[question.id] ?? "")}
+                  value={String(value ?? "")}
                   disabled={readOnly || question.readOnly}
                   onChange={(event) =>
                     updateAnswer(question.id, event.target.value)
                   }
+                  aria-invalid={Boolean(latinHint)}
                 />
+                {latinHint ? (
+                  <p className={styles.fieldHint} role="alert">
+                    {latinHint}
+                  </p>
+                ) : null}
               </div>
             );
           })}

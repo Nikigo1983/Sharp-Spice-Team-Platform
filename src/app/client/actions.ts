@@ -118,7 +118,7 @@ export async function clientResetPasswordAction(
     return { error: "Ссылка сброса недействительна или устарела." };
   }
 
-  redirect("/client/login");
+  return { ok: true };
 }
 
 export async function clientSignOutAction(): Promise<void> {

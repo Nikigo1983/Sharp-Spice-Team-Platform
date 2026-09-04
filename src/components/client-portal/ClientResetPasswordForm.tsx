@@ -36,6 +36,32 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
     );
   }
 
+  if (state.ok) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logoWrap}>
+            <Logo size="auth" />
+          </div>
+          <h1 className={styles.title}>Пароль изменён</h1>
+          <div className={styles.statusOk} role="status">
+            <p className={styles.statusOkHint}>
+              Ваш пароль успешно изменён. Теперь можно войти в клиентский
+              портал с новым паролем.
+            </p>
+          </div>
+          <a
+            className={styles.linkButton}
+            href="/client/login"
+            style={{ marginTop: "1.25rem" }}
+          >
+            Войти в портал
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.card}>

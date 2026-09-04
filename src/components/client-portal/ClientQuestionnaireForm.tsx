@@ -518,14 +518,14 @@ export function ClientQuestionnaireForm({
                       if (typeof nextProgress === "number") {
                         setProgress(nextProgress);
                       }
-                      setStatus("Файл загружен");
+                      setStatus(null);
                     }}
                     onRemoved={(questionnaire, nextProgress) => {
                       setRecordSync(questionnaire);
                       if (typeof nextProgress === "number") {
                         setProgress(nextProgress);
                       }
-                      setStatus("Файл удалён");
+                      setStatus(null);
                     }}
                   />
                 </div>

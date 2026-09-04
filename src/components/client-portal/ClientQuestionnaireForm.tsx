@@ -663,7 +663,19 @@ export function ClientQuestionnaireForm({
             {error}
           </p>
         ) : null}
-        {status ? <p className={styles.status}>{status}</p> : null}
+        {submitted ? (
+          <div className={styles.status} role="status">
+            <p>Спасибо!</p>
+            <p>Ваша анкета успешно отправлена.</p>
+            <p>
+              После рассмотрения менеджером ожидайте изменения статуса вашего
+              процесса.
+            </p>
+            <p>Вы можете его отслеживать в личном кабинете.</p>
+          </div>
+        ) : status ? (
+          <p className={styles.status}>{status}</p>
+        ) : null}
 
         <div className={styles.actions}>
           <button

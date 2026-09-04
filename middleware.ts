@@ -1,12 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { canAccessPath } from "@/lib/auth/permissions";
 import { getSessionFromToken } from "@/lib/auth/session";
+import { getClientSessionFromToken } from "@/lib/client-portal/session";
 
-const PUBLIC_PATHS = ["/login", "/join", "/api/webhooks"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/join",
+  "/api/webhooks",
+  "/client/login",
+  "/client/invite",
+];
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
   "/clients",
+  "/client-invitations",
   "/new-formgrid-clients",
   "/crm",
   "/ai-workspace",
@@ -34,15 +42,57 @@ function isProtectedPath(pathname: string) {
   );
 }
 
+function isClientPortalPath(pathname: string) {
+  return pathname === "/client" || pathname.startsWith("/client/");
+}
+
+function isClientPublicPath(pathname: string) {
+  return (
+    pathname === "/client/login" ||
+    pathname.startsWith("/client/login/") ||
+    pathname.startsWith("/client/invite/")
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get("ss_session")?.value;
-  const session = await getSessionFromToken(token);
+  const employeeToken = request.cookies.get("ss_session")?.value;
+  const clientToken = request.cookies.get("ss_client_session")?.value;
+  const session = await getSessionFromToken(employeeToken);
+  const clientSession = await getClientSessionFromToken(clientToken);
 
   if (pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = session ? "/dashboard" : "/login";
     return NextResponse.redirect(url);
+  }
+
+  // Client portal: separate auth plane from employees.
+  if (isClientPortalPath(pathname)) {
+    if (isClientPublicPath(pathname)) {
+      if (clientSession && pathname.startsWith("/client/login")) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/client";
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.next();
+    }
+
+    // Staff sessions must not enter the client portal shell.
+    if (session && !clientSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    if (!clientSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/client/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    return NextResponse.next();
   }
 
   if (isPublicPath(pathname)) {
@@ -78,6 +128,10 @@ export const config = {
     "/login",
     "/join",
     "/join/:path*",
+    "/client",
+    "/client/:path*",
+    "/client-invitations",
+    "/client-invitations/:path*",
     "/dashboard",
     "/dashboard/:path*",
     "/clients",

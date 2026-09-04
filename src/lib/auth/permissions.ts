@@ -26,6 +26,18 @@ const NAV_NEW_FORMGRID_CLIENTS: NavItem = {
   icon: "fa-solid fa-user-plus",
 };
 
+const NAV_CLIENT_INVITATIONS: NavItem = {
+  href: "/client-invitations",
+  label: "Приглашения клиентов",
+  icon: "fa-solid fa-envelope-open-text",
+};
+
+const NAV_CLIENT_INTAKE: NavItem = {
+  href: "/clients/intake",
+  label: "Заявки портала",
+  icon: "fa-solid fa-clipboard-list",
+};
+
 const NAV_AI: NavItem = {
   href: "/ai-workspace",
   label: "AI Workspace",
@@ -104,6 +116,8 @@ const MANAGER_NAV: NavItem[] = [
   NAV_CLIENTS,
   NAV_CRM_LEADS,
   NAV_NEW_FORMGRID_CLIENTS,
+  NAV_CLIENT_INVITATIONS,
+  NAV_CLIENT_INTAKE,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,
@@ -121,6 +135,8 @@ const OWNER_NAV: NavItem[] = [
   NAV_CLIENTS,
   NAV_CRM_LEADS,
   NAV_NEW_FORMGRID_CLIENTS,
+  NAV_CLIENT_INVITATIONS,
+  NAV_CLIENT_INTAKE,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,

@@ -2,9 +2,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border-radius: 10px;
-  background: #fff;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
 }
 
 .link {

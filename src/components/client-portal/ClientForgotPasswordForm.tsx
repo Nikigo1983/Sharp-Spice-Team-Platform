@@ -5,8 +5,8 @@ import {
   clientForgotPasswordAction,
   type ClientAuthState,
 } from "@/app/client/actions";
-import { Logo } from "@/components/ui/Logo";
-import { BRAND_NAME } from "@/lib/brand";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
@@ -22,7 +22,7 @@ export function ClientForgotPasswordForm() {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="auth" />
+            <EmigrantLogo size="auth" priority />
           </div>
           <h1 className={styles.title}>Письмо отправлено</h1>
           <div className={styles.statusOk} role="status">
@@ -45,11 +45,11 @@ export function ClientForgotPasswordForm() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="auth" />
+          <EmigrantLogo size="auth" priority />
         </div>
         <h1 className={styles.title}>Забыли пароль?</h1>
         <p className={styles.subtitle}>
-          Укажите email аккаунта клиентского портала {BRAND_NAME}. Если он есть
+          Укажите email аккаунта клиентского портала {CLIENT_PORTAL_BRAND_NAME}. Если он есть
           в системе, мы отправим ссылку для сброса пароля.
         </p>
         {state.error ? (

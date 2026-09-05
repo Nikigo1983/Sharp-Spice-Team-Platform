@@ -5,8 +5,8 @@ import {
   clientSignInAction,
   type ClientAuthState,
 } from "@/app/client/actions";
-import { Logo } from "@/components/ui/Logo";
-import { BRAND_NAME } from "@/lib/brand";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
@@ -21,11 +21,11 @@ export function ClientPortalLoginForm() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="auth" />
+          <EmigrantLogo size="auth" priority />
         </div>
         <h1 className={styles.title}>Клиентский портал</h1>
         <p className={styles.subtitle}>
-          Вход для клиентов {BRAND_NAME}.
+          Вход для клиентов {CLIENT_PORTAL_BRAND_NAME}.
         </p>
         {state.error ? (
           <p className={styles.error} role="alert">

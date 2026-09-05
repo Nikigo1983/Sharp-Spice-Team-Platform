@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { clientSignOutAction } from "@/app/client/actions";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import styles from "@/components/client-portal/ClientPortal.module.css";
-import { BRAND_NAME } from "@/lib/brand";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
@@ -23,11 +24,14 @@ export default async function ClientPortalHomePage() {
     <div className={styles.portalPage}>
       <header className={styles.portalHeader}>
         <div className={styles.portalHeaderText}>
+          <div style={{ marginBottom: "1rem" }}>
+            <EmigrantLogo size="md" href="/client" />
+          </div>
           <h1 className={styles.portalTitle}>
             Здравствуйте, {session.firstName}
           </h1>
           <p className={styles.portalLead}>
-            Вас приветствует Клиентский портал {BRAND_NAME}.
+            Вас приветствует Клиентский портал {CLIENT_PORTAL_BRAND_NAME}.
             <br />
             Это ваш личный кабинет.
           </p>

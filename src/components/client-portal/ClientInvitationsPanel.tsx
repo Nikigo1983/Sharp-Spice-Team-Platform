@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createClientInvitationAction } from "@/app/(app)/client-invitations/actions";
-import { BRAND_NAME } from "@/lib/brand";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientInvitationsPanel.module.css";
 
 export type InvitationRow = {
@@ -83,7 +83,7 @@ export function ClientInvitationsPanel({
         <div>
           <h1 className={styles.title}>Приглашения в клиентский портал</h1>
           <p className={styles.lead}>
-            Создайте приглашение — {BRAND_NAME} отправит ссылку и временный
+            Создайте приглашение — {CLIENT_PORTAL_BRAND_NAME} отправит ссылку и временный
             пароль на email клиента.
           </p>
           <p className={styles.lead}>

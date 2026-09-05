@@ -4,17 +4,19 @@
   justify-content: center;
   min-height: 100vh;
   padding: 1.5rem;
-  background: var(--gradient-hero);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(36, 0, 255, 0.14), transparent 55%),
+    linear-gradient(180deg, #f4f6fb 0%, #eef1f8 100%);
 }
 
 .card {
   width: 100%;
   max-width: 440px;
   padding: 2rem;
-  background: var(--gray-800);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
   text-align: center;
 }
 
@@ -33,24 +35,24 @@
   font-family: Sora, sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--white);
+  color: #0f172a;
 }
 
 .subtitle {
   margin: 0.5rem 0 1.5rem;
   font-family: Inter, sans-serif;
   font-size: 0.9375rem;
-  color: var(--gray-300);
+  color: #64748b;
   line-height: 1.5;
 }
 
 .error {
   margin: 0 0 1rem;
   padding: 0.625rem 0.75rem;
-  border-radius: var(--radius-sm);
-  background: rgba(145, 13, 13, 0.2);
-  border: 1px solid var(--border-burgundy);
-  color: #fca5a5;
+  border-radius: 8px;
+  background: rgba(36, 0, 255, 0.06);
+  border: 1px solid rgba(36, 0, 255, 0.28);
+  color: #3b1cff;
   font-family: Inter, sans-serif;
   font-size: 0.875rem;
   text-align: left;
@@ -59,14 +61,14 @@
 .statusOk {
   margin: 1.5rem 0 0.25rem;
   padding: 1rem 1.1rem;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   background: linear-gradient(
     160deg,
-    rgba(34, 197, 94, 0.16),
-    rgba(34, 197, 94, 0.06)
+    rgba(36, 0, 255, 0.1),
+    rgba(36, 0, 255, 0.04)
   );
-  border: 1px solid rgba(134, 239, 172, 0.35);
-  color: #d1fae5;
+  border: 1px solid rgba(36, 0, 255, 0.22);
+  color: #1e1b4b;
   font-family: Inter, sans-serif;
   text-align: left;
   line-height: 1.5;
@@ -74,14 +76,14 @@
 
 .statusOkLead {
   margin: 0;
-  color: #bbf7d0;
+  color: #2400ff;
   font-size: 0.95rem;
   font-weight: 600;
 }
 
 .statusOkHint {
   margin: 0;
-  color: rgba(209, 250, 229, 0.9);
+  color: #334155;
   font-size: 0.9375rem;
   line-height: 1.55;
 }
@@ -100,22 +102,23 @@
   font-family: Inter, sans-serif;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--gray-300);
+  color: #475569;
 }
 
 .input {
   padding: 0.625rem 0.875rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: rgba(15, 20, 28, 0.6);
-  color: var(--white);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
   font-family: Inter, sans-serif;
   font-size: 0.9375rem;
   outline: none;
 }
 
 .input:focus {
-  border-color: rgba(232, 41, 22, 0.55);
+  border-color: rgba(36, 0, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 0, 255, 0.12);
 }
 
 .submit,
@@ -123,8 +126,8 @@
   margin-top: 0.35rem;
   padding: 0.75rem 1rem;
   border: none;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand, linear-gradient(135deg, #910d0d, #c43c2c));
+  border-radius: 8px;
+  background: #2400ff;
   color: #fff;
   font-family: Inter, sans-serif;
   font-size: 0.9375rem;
@@ -136,6 +139,11 @@
   justify-content: center;
 }
 
+.submit:hover,
+.linkButton:hover {
+  background: #1d00d6;
+}
+
 .submit:disabled {
   opacity: 0.7;
   cursor: wait;
@@ -145,12 +153,12 @@
   margin: 1rem 0 0;
   font-family: Inter, sans-serif;
   font-size: 0.8125rem;
-  color: var(--gray-400);
+  color: #64748b;
   line-height: 1.45;
 }
 
 .forgotLink {
-  color: #ffb74a;
+  color: #2400ff;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -179,12 +187,12 @@
   margin: 0;
   font-family: Sora, sans-serif;
   font-size: 1.5rem;
-  color: var(--white);
+  color: #0f172a;
 }
 
 .portalLead {
   margin: 0.45rem 0 0;
-  color: var(--gray-300);
+  color: #64748b;
   font-family: Inter, sans-serif;
   line-height: 1.55;
 }
@@ -196,20 +204,21 @@
 
 .portalCard {
   padding: 1.25rem 1.35rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  background: rgba(26, 26, 26, 0.72);
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .portalCard h2 {
   margin: 0 0 0.5rem;
   font-size: 1.05rem;
-  color: var(--white);
+  color: #0f172a;
 }
 
 .portalCard p {
   margin: 0;
-  color: var(--gray-300);
+  color: #64748b;
   line-height: 1.5;
   font-size: 0.95rem;
 }
@@ -220,13 +229,18 @@
 
 .signOut {
   padding: 0.55rem 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--gray-200);
+  border: none;
+  border-radius: 8px;
+  background: #2400ff;
+  color: #fff;
   font-family: Inter, sans-serif;
   font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
+}
+
+.signOut:hover {
+  background: #1d00d6;
 }
 
 .comingSoon {
@@ -234,8 +248,8 @@
   margin-top: 0.65rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(244, 152, 26, 0.16);
-  color: #ffb74a;
+  background: rgba(36, 0, 255, 0.1);
+  color: #2400ff;
   font-size: 0.75rem;
   font-weight: 600;
 }

@@ -4,14 +4,14 @@ import {
   findClientPortalUserByEmail,
   findInvitationByToken,
 } from "@/lib/client-portal/local-store";
-import { BRAND_NAME } from "@/lib/brand";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "@/components/client-portal/ClientPortal.module.css";
-import { Logo } from "@/components/ui/Logo";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 
 type Props = { params: Promise<{ token: string }> };
 
 export const metadata: Metadata = {
-  title: `${BRAND_NAME} — приглашение клиента`,
+  title: `${CLIENT_PORTAL_BRAND_NAME} — приглашение клиента`,
   robots: { index: false, follow: false },
 };
 
@@ -42,7 +42,7 @@ export default async function ClientInvitePage({ params }: Props) {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="auth" />
+            <EmigrantLogo size="auth" priority />
           </div>
           <h1 className={styles.title}>Аккаунт уже создан</h1>
           <p className={styles.subtitle}>

@@ -5,8 +5,8 @@ import {
   clientAcceptInviteAction,
   type ClientAuthState,
 } from "@/app/client/actions";
-import { Logo } from "@/components/ui/Logo";
-import { BRAND_NAME } from "@/lib/brand";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
@@ -34,12 +34,12 @@ export function ClientInviteAcceptForm({
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="auth" />
+            <EmigrantLogo size="auth" priority />
           </div>
           <h1 className={styles.title}>Приглашение недоступно</h1>
           <p className={styles.subtitle}>
             Ссылка недействительна или уже использована. Запросите новое
-            приглашение у менеджера {BRAND_NAME}.
+            приглашение у менеджера {CLIENT_PORTAL_BRAND_NAME}.
           </p>
           <a className={styles.linkButton} href="/client/login">
             Перейти ко входу
@@ -53,11 +53,11 @@ export function ClientInviteAcceptForm({
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="auth" />
+          <EmigrantLogo size="auth" priority />
         </div>
         <h1 className={styles.title}>Добро пожаловать, {firstName}</h1>
         <p className={styles.subtitle}>
-          Создайте пароль для клиентского портала {BRAND_NAME}. Email:{" "}
+          Создайте пароль для клиентского портала {CLIENT_PORTAL_BRAND_NAME}. Email:{" "}
           <strong>{email}</strong>
         </p>
         {state.error ? (

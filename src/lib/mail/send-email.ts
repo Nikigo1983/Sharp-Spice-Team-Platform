@@ -7,6 +7,8 @@ export type SendEmailInput = {
   subject: string;
   text: string;
   html?: string;
+  /** Overrides MAIL_FROM_NAME for this send (e.g. Emigrant client emails). */
+  fromName?: string;
 };
 
 export type SendEmailResult =
@@ -38,7 +40,7 @@ export async function sendEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${config.fromName} <${config.fromEmail}>`,
+        from: `${input.fromName?.trim() || config.fromName} <${config.fromEmail}>`,
         to: [to],
         subject: input.subject.trim(),
         text: input.text,

@@ -4,7 +4,7 @@
   padding: 1.5rem 1.25rem 3rem;
   display: grid;
   gap: 1.25rem;
-  color: var(--white, #fff);
+  color: #0f172a;
 }
 
 .header {
@@ -21,11 +21,12 @@
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
 .lead {
   margin: 0.35rem 0 0;
-  color: var(--gray-300, #cbd5e1);
+  color: #64748b;
   font-family: Inter, sans-serif;
   font-size: 0.95rem;
   line-height: 1.45;
@@ -36,7 +37,7 @@
   display: grid;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: var(--gray-400, #94a3b8);
+  color: #64748b;
   text-align: right;
   font-family: Inter, sans-serif;
 }
@@ -44,13 +45,13 @@
 .progressTrack {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: #e2e8f0;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  background: linear-gradient(135deg, #910d0d, #c43c2c);
+  background: #2400ff;
   border-radius: 999px;
   transition: width 0.2s ease;
 }
@@ -63,9 +64,9 @@
 
 .tab,
 .tabActive {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(26, 26, 26, 0.72);
-  color: var(--gray-300, #cbd5e1);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
   border-radius: 8px;
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
@@ -74,17 +75,18 @@
 }
 
 .tabActive {
-  border-color: rgba(232, 41, 22, 0.55);
-  background: rgba(145, 13, 13, 0.22);
-  color: #fff;
+  border-color: rgba(36, 0, 255, 0.4);
+  background: rgba(36, 0, 255, 0.1);
+  color: #2400ff;
   font-weight: 600;
 }
 
 .card {
-  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.12));
-  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 1.35rem 1.35rem 1.5rem;
-  background: rgba(26, 26, 26, 0.72);
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
   display: grid;
   gap: 1.15rem;
   overflow: hidden;
@@ -94,6 +96,7 @@
   margin: 0;
   font-family: Sora, sans-serif;
   font-size: 1.15rem;
+  color: #0f172a;
 }
 
 .fields {
@@ -133,7 +136,7 @@
   font-size: 0.9rem;
   font-weight: 550;
   line-height: 1.35;
-  color: var(--gray-200, #e2e8f0);
+  color: #334155;
   font-family: Inter, sans-serif;
 }
 
@@ -143,19 +146,26 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 0.65rem 0.8rem;
   font: inherit;
   font-family: Inter, sans-serif;
-  background: rgba(15, 20, 28, 0.6);
-  color: #fff;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .input::placeholder,
 .textarea::placeholder {
-  color: rgba(148, 163, 184, 0.75);
+  color: #94a3b8;
   opacity: 1;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: rgba(36, 0, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 0, 255, 0.12);
 }
 
 .textarea {
@@ -170,7 +180,7 @@
   justify-content: flex-end;
   padding-top: 0.85rem;
   margin-top: 0.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #e2e8f0;
 }
 
 .yesNo {
@@ -188,15 +198,15 @@
   font: inherit;
   font-family: Inter, sans-serif;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(15, 20, 28, 0.55);
-  color: var(--gray-200, #e2e8f0);
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
 }
 
 .yesNoActive {
-  border-color: rgba(232, 41, 22, 0.55);
-  background: rgba(145, 13, 13, 0.35);
-  color: #fff;
+  border-color: rgba(36, 0, 255, 0.45);
+  background: rgba(36, 0, 255, 0.1);
+  color: #2400ff;
   font-weight: 600;
 }
 
@@ -216,12 +226,12 @@
   gap: 0.25rem;
   place-items: center;
   padding: 1.1rem 1rem;
-  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border: 1px dashed rgba(36, 0, 255, 0.35);
   border-radius: 10px;
-  background: rgba(15, 20, 28, 0.45);
+  background: rgba(36, 0, 255, 0.04);
   cursor: pointer;
   text-align: center;
-  color: var(--gray-200, #e2e8f0);
+  color: #334155;
   font-family: Inter, sans-serif;
   font-size: 0.92rem;
 }
@@ -231,7 +241,7 @@
 }
 
 .fileHint {
-  color: var(--gray-400, #94a3b8);
+  color: #94a3b8;
   font-size: 0.8rem;
 }
 
@@ -243,12 +253,12 @@
   justify-content: space-between;
   padding: 0.75rem 0.9rem;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 20, 28, 0.45);
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .inlineLink {
-  color: #ffb74a;
+  color: #2400ff;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -256,7 +266,7 @@
 .input:disabled,
 .textarea:disabled {
   opacity: 0.75;
-  color: var(--gray-300, #cbd5e1);
+  color: #64748b;
 }
 
 .inputInvalid,
@@ -267,7 +277,7 @@
 
 .fieldHint {
   margin: 0;
-  color: #fca5a5;
+  color: #dc2626;
   font-size: 0.82rem;
   font-family: Inter, sans-serif;
   line-height: 1.35;
@@ -277,8 +287,8 @@
   margin: 0;
   padding: 0.75rem 0.9rem;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--gray-300, #cbd5e1);
+  background: #f1f5f9;
+  color: #475569;
   font-size: 0.9rem;
   line-height: 1.45;
   font-family: Inter, sans-serif;
@@ -291,7 +301,7 @@
   font-size: 0.92rem;
   line-height: 1.4;
   font-family: Inter, sans-serif;
-  color: var(--gray-200, #e2e8f0);
+  color: #334155;
 }
 
 .primary,
@@ -311,15 +321,19 @@
 
 .primary {
   border: none;
-  background: var(--gradient-brand, linear-gradient(135deg, #910d0d, #c43c2c));
+  background: #2400ff;
   color: #fff;
   font-weight: 600;
 }
 
+.primary:hover {
+  background: #1d00d6;
+}
+
 .secondary {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: transparent;
-  color: var(--gray-200, #e2e8f0);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
 }
 
 .primary:disabled,
@@ -330,14 +344,14 @@
 
 .error {
   margin: 0;
-  color: #fca5a5;
+  color: #dc2626;
   font-size: 0.9rem;
   font-family: Inter, sans-serif;
 }
 
 .status {
   margin: 0;
-  color: #86efac;
+  color: #2400ff;
   font-size: 0.9rem;
   font-family: Inter, sans-serif;
   line-height: 1.45;
@@ -353,7 +367,7 @@
 
 .muted {
   margin: 0;
-  color: var(--gray-400, #94a3b8);
+  color: #64748b;
   font-size: 0.92rem;
   font-family: Inter, sans-serif;
 }

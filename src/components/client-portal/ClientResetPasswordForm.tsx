@@ -5,8 +5,8 @@ import {
   clientResetPasswordAction,
   type ClientAuthState,
 } from "@/app/client/actions";
-import { Logo } from "@/components/ui/Logo";
-import { BRAND_NAME } from "@/lib/brand";
+import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
+import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
@@ -22,7 +22,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="auth" />
+            <EmigrantLogo size="auth" priority />
           </div>
           <h1 className={styles.title}>Ссылка недействительна</h1>
           <p className={styles.subtitle}>
@@ -41,7 +41,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logoWrap}>
-            <Logo size="auth" />
+            <EmigrantLogo size="auth" priority />
           </div>
           <h1 className={styles.title}>Пароль изменён</h1>
           <div className={styles.statusOk} role="status">
@@ -66,11 +66,11 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logoWrap}>
-          <Logo size="auth" />
+          <EmigrantLogo size="auth" priority />
         </div>
         <h1 className={styles.title}>Новый пароль</h1>
         <p className={styles.subtitle}>
-          Задайте новый пароль для клиентского портала {BRAND_NAME}.
+          Задайте новый пароль для клиентского портала {CLIENT_PORTAL_BRAND_NAME}.
         </p>
         {state.error ? (
           <p className={styles.error} role="alert">

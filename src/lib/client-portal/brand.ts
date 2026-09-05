@@ -1,8 +1,8 @@
 /** Client-facing Emigrant portal brand (separate from Sharp & Spice staff UI). */
 export const CLIENT_PORTAL_BRAND_NAME = "Emigrant";
 
-/** PNG for UI + email clients (SVG often blocked in mail). */
-export const CLIENT_PORTAL_LOGO_PATH = "/emigrant-logo.png";
+/** PNG for UI + email clients (SVG often blocked in mail). Transparent bg for portal UI. */
+export const CLIENT_PORTAL_LOGO_PATH = "/emigrant-logo-v2.png";
 
 export const CLIENT_PORTAL_COLORS = {
   blue: "#2400FF",

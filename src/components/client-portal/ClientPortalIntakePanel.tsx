@@ -362,20 +362,26 @@ export function ClientPortalIntakePanel() {
               </div>
               <div className={styles.value}>
                 {row.fileId && selectedId ? (
-                  <div className={styles.fileActions}>
+                  <div className={styles.fileBlock}>
                     <span className={styles.fileName}>
                       {row.value || "Файл"}
                     </span>
-                    <a
-                      href={caseFileUrl(row.fileId, selectedId, "open")}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Открыть
-                    </a>
-                    <a href={caseFileUrl(row.fileId, selectedId, "download")}>
-                      Скачать
-                    </a>
+                    <div className={styles.fileActions}>
+                      <a
+                        className={styles.fileBtn}
+                        href={caseFileUrl(row.fileId, selectedId, "open")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Открыть
+                      </a>
+                      <a
+                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                        href={caseFileUrl(row.fileId, selectedId, "download")}
+                      >
+                        Скачать
+                      </a>
+                    </div>
                   </div>
                 ) : (
                   row.value || "—"
@@ -401,9 +407,13 @@ export function ClientPortalIntakePanel() {
                 <li key={doc.id} className={styles.docItem}>
                   <div className={styles.docMeta}>
                     <span className={styles.fileName}>{doc.fileName}</span>
+                    <span className={styles.docSub}>
+                      {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
+                      {formatSubmittedAt(doc.createdAt)}
+                    </span>
                     <div className={styles.fileActions}>
                       <a
-                        className={styles.docLink}
+                        className={styles.fileBtn}
                         href={caseFileUrl(doc.id, selectedId, "open")}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -411,30 +421,26 @@ export function ClientPortalIntakePanel() {
                         Открыть
                       </a>
                       <a
-                        className={styles.docLink}
+                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
                         href={caseFileUrl(doc.id, selectedId, "download")}
                       >
                         Скачать
                       </a>
+                      <button
+                        type="button"
+                        className={styles.docDelete}
+                        disabled={deletingDocId === doc.id}
+                        onClick={() => void removeDocument(doc.id)}
+                      >
+                        {deletingDocId === doc.id ? "…" : "Удалить"}
+                      </button>
                     </div>
-                    <span className={styles.docSub}>
-                      {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
-                      {formatSubmittedAt(doc.createdAt)}
-                    </span>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.docDelete}
-                    disabled={deletingDocId === doc.id}
-                    onClick={() => void removeDocument(doc.id)}
-                  >
-                    {deletingDocId === doc.id ? "…" : "Удалить"}
-                  </button>
                 </li>
               ))}
             </ul>
           )}
-          <label className={styles.uploadBtn}>
+          <label className={styles.primaryAction}>
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
@@ -482,7 +488,7 @@ export function ClientPortalIntakePanel() {
           />
           <button
             type="button"
-            className={styles.saveBtn}
+            className={styles.primaryAction}
             disabled={savingNote || !noteDraft.trim()}
             onClick={() => void submitNote()}
           >

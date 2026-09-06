@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import {
   EMPTY_STAFF_FIELDS,
@@ -34,11 +35,41 @@ function formatSubmittedAt(value: string | null): string {
   return new Date(value).toLocaleString("ru-RU");
 }
 
+function clientName(item: ListItem): string {
+  return (
+    item.displayName ||
+    [item.firstName, item.lastName].filter(Boolean).join(" ") ||
+    item.email
+  );
+}
+
+function rowMatchesQuery(
+  item: ListItem,
+  draft: QuestionnaireStaffFields,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    clientName(item),
+    item.email,
+    item.firstName,
+    item.lastName,
+    item.serviceType,
+    formatSubmittedAt(item.submittedAt),
+    ...STAFF_FIELD_COLUMNS.map((col) => draft[col.key]),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
 export function ClientPortalIntakePanel() {
   const [items, setItems] = useState<ListItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, QuestionnaireStaffFields>>(
     {},
   );
+  const [query, setQuery] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [review, setReview] = useState<ReviewRow[]>([]);
@@ -76,6 +107,14 @@ export function ClientPortalIntakePanel() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  const filteredItems = useMemo(
+    () =>
+      items.filter((item) =>
+        rowMatchesQuery(item, drafts[item.id] ?? EMPTY_STAFF_FIELDS, query),
+      ),
+    [items, drafts, query],
+  );
 
   function updateDraft(
     id: string,
@@ -128,11 +167,7 @@ export function ClientPortalIntakePanel() {
 
   async function openCase(item: ListItem) {
     setSelectedId(item.id);
-    setClientLabel(
-      item.displayName ||
-        [item.firstName, item.lastName].filter(Boolean).join(" ") ||
-        item.email,
-    );
+    setClientLabel(clientName(item));
     setError(null);
     const res = await fetch(`/api/client-cases?id=${encodeURIComponent(item.id)}`, {
       cache: "no-store",
@@ -157,17 +192,22 @@ export function ClientPortalIntakePanel() {
   if (selectedId) {
     return (
       <div className={styles.wrap}>
-        <button
-          type="button"
-          className={styles.back}
-          onClick={() => {
-            setSelectedId(null);
-            setReview([]);
-            setClientLabel("");
-          }}
-        >
-          ← К списку
-        </button>
+        <div className={styles.topActions}>
+          <button
+            type="button"
+            className={styles.back}
+            onClick={() => {
+              setSelectedId(null);
+              setReview([]);
+              setClientLabel("");
+            }}
+          >
+            ← К списку
+          </button>
+          <Link href="/dashboard" className={styles.homeLink}>
+            Вернуться на главную
+          </Link>
+        </div>
         <h1 className={styles.title}>{schemaTitle || "Анкета клиента"}</h1>
         {clientLabel ? <p className={styles.lead}>{clientLabel}</p> : null}
         {error ? <p className={styles.error}>{error}</p> : null}
@@ -211,14 +251,30 @@ export function ClientPortalIntakePanel() {
             «Сохранить». Имя открывает полные ответы анкеты.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.refresh}
-          onClick={() => void loadList()}
-        >
-          Обновить
-        </button>
+        <div className={styles.headerActions}>
+          <Link href="/dashboard" className={styles.homeLink}>
+            Вернуться на главную
+          </Link>
+          <button
+            type="button"
+            className={styles.refresh}
+            onClick={() => void loadList()}
+          >
+            Обновить
+          </button>
+        </div>
       </header>
+
+      <div className={styles.searchRow}>
+        <input
+          className={styles.searchInput}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Поиск по имени, email, куратору, партнёру и другим колонкам…"
+          aria-label="Поиск по таблице заявок"
+        />
+      </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}
       {status ? <p className={styles.statusOk}>{status}</p> : null}
@@ -228,7 +284,11 @@ export function ClientPortalIntakePanel() {
         <p className={styles.muted}>Пока нет отправленных анкет.</p>
       ) : null}
 
-      {!loading && items.length > 0 ? (
+      {!loading && items.length > 0 && filteredItems.length === 0 ? (
+        <p className={styles.muted}>Ничего не найдено по запросу.</p>
+      ) : null}
+
+      {!loading && filteredItems.length > 0 ? (
         <div className={styles.tableScroll}>
           <table className={styles.table}>
             <thead>
@@ -243,11 +303,8 @@ export function ClientPortalIntakePanel() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item, index) => {
-                const name =
-                  item.displayName ||
-                  [item.firstName, item.lastName].filter(Boolean).join(" ") ||
-                  item.email;
+              {filteredItems.map((item, index) => {
+                const name = clientName(item);
                 const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
                 return (
                   <tr key={item.id}>

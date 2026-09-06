@@ -312,6 +312,18 @@
   color: #a5b4fc;
 }
 
+.fileActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.85rem;
+}
+
+.fileName {
+  color: rgba(255, 255, 255, 0.9);
+  word-break: break-word;
+}
+
 .error {
   color: #fca5a5;
 }

@@ -54,6 +54,18 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+function caseFileUrl(
+  fileId: string,
+  questionnaireId: string,
+  mode: "open" | "download",
+): string {
+  const params = new URLSearchParams({
+    questionnaireId,
+    disposition: mode === "download" ? "attachment" : "inline",
+  });
+  return `/api/client-cases/files/${encodeURIComponent(fileId)}?${params.toString()}`;
+}
+
 function formatSubmittedAt(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString("ru-RU");
@@ -350,11 +362,21 @@ export function ClientPortalIntakePanel() {
               </div>
               <div className={styles.value}>
                 {row.fileId && selectedId ? (
-                  <a
-                    href={`/api/client-cases/files/${encodeURIComponent(row.fileId)}?questionnaireId=${encodeURIComponent(selectedId)}`}
-                  >
-                    {row.value || "Скачать файл"}
-                  </a>
+                  <div className={styles.fileActions}>
+                    <span className={styles.fileName}>
+                      {row.value || "Файл"}
+                    </span>
+                    <a
+                      href={caseFileUrl(row.fileId, selectedId, "open")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Открыть
+                    </a>
+                    <a href={caseFileUrl(row.fileId, selectedId, "download")}>
+                      Скачать
+                    </a>
+                  </div>
                 ) : (
                   row.value || "—"
                 )}
@@ -378,12 +400,23 @@ export function ClientPortalIntakePanel() {
               {documents.map((doc) => (
                 <li key={doc.id} className={styles.docItem}>
                   <div className={styles.docMeta}>
-                    <a
-                      className={styles.docLink}
-                      href={`/api/client-cases/files/${encodeURIComponent(doc.id)}?questionnaireId=${encodeURIComponent(selectedId)}`}
-                    >
-                      {doc.fileName}
-                    </a>
+                    <span className={styles.fileName}>{doc.fileName}</span>
+                    <div className={styles.fileActions}>
+                      <a
+                        className={styles.docLink}
+                        href={caseFileUrl(doc.id, selectedId, "open")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Открыть
+                      </a>
+                      <a
+                        className={styles.docLink}
+                        href={caseFileUrl(doc.id, selectedId, "download")}
+                      >
+                        Скачать
+                      </a>
+                    </div>
                     <span className={styles.docSub}>
                       {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
                       {formatSubmittedAt(doc.createdAt)}

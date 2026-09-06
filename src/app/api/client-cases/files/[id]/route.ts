@@ -12,6 +12,14 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+function resolveDisposition(requestUrl: URL): "inline" | "attachment" {
+  const raw = (
+    requestUrl.searchParams.get("disposition") ||
+    (requestUrl.searchParams.get("download") === "1" ? "attachment" : "inline")
+  ).toLowerCase();
+  return raw === "attachment" ? "attachment" : "inline";
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const session = await getSession();
   if (!session) {
@@ -19,9 +27,8 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const questionnaireId = new URL(request.url).searchParams.get(
-    "questionnaireId",
-  );
+  const requestUrl = new URL(request.url);
+  const questionnaireId = requestUrl.searchParams.get("questionnaireId");
   if (!questionnaireId) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
@@ -49,11 +56,12 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
 
+  const disposition = resolveDisposition(requestUrl);
   return new Response(new Uint8Array(file.data), {
     status: 200,
     headers: {
       "Content-Type": file.contentType,
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`,
+      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`,
       "Cache-Control": "no-store",
     },
   });

@@ -27,6 +27,7 @@ import {
 import {
   deleteQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
+import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields";
 
 export {
   calculateProgress,
@@ -251,6 +252,21 @@ export async function markQuestionnaireOpenedByStaff(
     ...record,
     staffOpenedAt: now,
     updatedAt: now,
+  });
+}
+
+export async function updateSubmittedStaffFields(
+  id: string,
+  fields: Partial<QuestionnaireStaffFields>,
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const now = new Date().toISOString();
+  return upsertQuestionnaire({
+    ...current,
+    answers: writeStaffFields(current.answers, fields),
+    updatedAt: now,
+    revision: current.revision + 1,
   });
 }
 

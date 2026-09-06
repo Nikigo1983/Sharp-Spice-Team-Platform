@@ -5,7 +5,6 @@ export type QuestionnaireStaffFields = {
   company: string;
   curator: string;
   expectedApproval: string;
-  referentName: string;
   bookingAddress: string;
   bookingDate: string;
   trpApprovalDate: string;
@@ -19,7 +18,6 @@ export const EMPTY_STAFF_FIELDS: QuestionnaireStaffFields = {
   company: "",
   curator: "",
   expectedApproval: "",
-  referentName: "",
   bookingAddress: "",
   bookingDate: "",
   trpApprovalDate: "",
@@ -36,7 +34,6 @@ export const STAFF_FIELD_COLUMNS: Array<{
   { key: "company", label: "Компания" },
   { key: "curator", label: "Куратор" },
   { key: "expectedApproval", label: "Предполагаемое одобрение" },
-  { key: "referentName", label: "Имя референта" },
   { key: "bookingAddress", label: "Адрес букинга" },
   { key: "bookingDate", label: "Дата букинга" },
   { key: "trpApprovalDate", label: "Дата одобрения ВНЖ" },

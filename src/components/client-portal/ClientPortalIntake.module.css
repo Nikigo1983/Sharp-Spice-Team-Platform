@@ -52,6 +52,10 @@
   white-space: nowrap;
 }
 
+.back {
+  margin-bottom: 1.25rem;
+}
+
 .saveBtn {
   background: #2400ff;
   border-color: #2400ff;

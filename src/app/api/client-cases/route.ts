@@ -6,6 +6,7 @@ import {
   getSubmittedForStaff,
   listSubmittedForStaff,
   markQuestionnaireOpenedByStaff,
+  readProcessStatus,
   readStaffDocuments,
   readStaffNotes,
   updateSubmittedStaffFields,
@@ -16,6 +17,7 @@ import {
   type QuestionnaireStaffFields,
 } from "@/lib/client-portal/staff-fields";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
+import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
 
 function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
   const displayName =
@@ -41,6 +43,7 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     submittedAt: item.submittedAt,
     isNew: !item.staffOpenedAt,
     staffFields: readStaffFields(item.answers),
+    processStatus: readProcessStatus(item.answers, item.status),
   };
 }
 
@@ -65,6 +68,8 @@ export async function GET(request: Request) {
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),
       documents: readStaffDocuments(record.answers),
+      processStatus: readProcessStatus(record.answers, record.status),
+      processStatusOptions: PROCESS_STATUS_OPTIONS,
       review: buildReviewRows(record.answers, "ru"),
     });
   }

@@ -86,3 +86,41 @@ export async function sendClientPasswordResetEmail(input: {
     fromName: FROM_NAME,
   });
 }
+
+export async function sendProcessStatusChangedEmail(input: {
+  to: string;
+  firstName: string;
+  status: string;
+  portalUrl: string;
+}): Promise<SendEmailResult> {
+  const subject = `${CLIENT_PORTAL_BRAND_NAME}: обновлён статус вашего дела`;
+  const text = [
+    `Здравствуйте, ${input.firstName}!`,
+    "",
+    `Статус вашего дела в портале ${CLIENT_PORTAL_BRAND_NAME} обновлён:`,
+    input.status,
+    "",
+    `Открыть портал: ${input.portalUrl}`,
+    "",
+    `— Команда ${CLIENT_PORTAL_BRAND_NAME}`,
+  ].join("\n");
+
+  const html = buildClientPortalEmailHtml({
+    title: "Статус дела обновлён",
+    greeting: `Здравствуйте, ${input.firstName}!`,
+    paragraphs: [
+      `Статус вашего дела в портале ${CLIENT_PORTAL_BRAND_NAME} обновлён:`,
+      input.status,
+    ],
+    ctaLabel: "Открыть портал",
+    ctaUrl: input.portalUrl,
+  });
+
+  return sendEmail({
+    to: input.to,
+    subject,
+    text,
+    html,
+    fromName: FROM_NAME,
+  });
+}

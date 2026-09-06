@@ -48,6 +48,13 @@ type StaffDocument = {
   createdAt: string;
 };
 
+type ProcessStatusState = {
+  value: string;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+  updatedByName: string | null;
+};
+
 function formatBytes(size: number): string {
   if (size < 1024) return `${size} Б`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
@@ -111,6 +118,14 @@ export function ClientPortalIntakePanel() {
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [notes, setNotes] = useState<StaffNote[]>([]);
   const [documents, setDocuments] = useState<StaffDocument[]>([]);
+  const [processStatus, setProcessStatus] = useState<ProcessStatusState | null>(
+    null,
+  );
+  const [processStatusDraft, setProcessStatusDraft] = useState("");
+  const [processStatusOptions, setProcessStatusOptions] = useState<string[]>(
+    [],
+  );
+  const [savingProcessStatus, setSavingProcessStatus] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -225,16 +240,59 @@ export function ClientPortalIntakePanel() {
       review: ReviewRow[];
       notes?: StaffNote[];
       documents?: StaffDocument[];
+      processStatus?: ProcessStatusState | null;
+      processStatusOptions?: string[];
     };
     setSchemaTitle(data.schemaTitle);
     setReview(data.review ?? []);
     setNotes(data.notes ?? []);
     setDocuments(data.documents ?? []);
+    setProcessStatus(data.processStatus ?? null);
+    setProcessStatusDraft(data.processStatus?.value ?? "");
+    setProcessStatusOptions(data.processStatusOptions ?? []);
     setItems((prev) =>
       prev.map((row) =>
         row.id === item.id ? { ...row, isNew: false } : row,
       ),
     );
+  }
+
+  async function saveProcessStatus() {
+    if (!selectedId || !processStatusDraft.trim()) return;
+    setSavingProcessStatus(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases/process-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId: selectedId,
+          status: processStatusDraft,
+        }),
+      });
+      const data = (await res.json()) as {
+        processStatus?: ProcessStatusState;
+        emailSent?: boolean;
+        unchanged?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.processStatus) {
+        setError("Не удалось обновить статус.");
+        return;
+      }
+      setProcessStatus(data.processStatus);
+      setProcessStatusDraft(data.processStatus.value);
+      if (data.unchanged) {
+        setStatus("Статус без изменений");
+      } else if (data.emailSent) {
+        setStatus("Статус обновлён, клиенту отправлено письмо");
+      } else {
+        setStatus("Статус обновлён (письмо не удалось отправить)");
+      }
+    } finally {
+      setSavingProcessStatus(false);
+    }
   }
 
   async function submitNote() {
@@ -338,6 +396,9 @@ export function ClientPortalIntakePanel() {
               setReview([]);
               setNotes([]);
               setDocuments([]);
+              setProcessStatus(null);
+              setProcessStatusDraft("");
+              setProcessStatusOptions([]);
               setNoteDraft("");
               setClientLabel("");
               setStatus(null);
@@ -353,6 +414,55 @@ export function ClientPortalIntakePanel() {
         {clientLabel ? <p className={styles.lead}>{clientLabel}</p> : null}
         {error ? <p className={styles.error}>{error}</p> : null}
         {status ? <p className={styles.statusOk}>{status}</p> : null}
+
+        <section className={styles.staffBlock}>
+          <div className={styles.staffBlockHead}>
+            <span className={styles.section}>Статус процесса</span>
+            <h2 className={styles.staffBlockTitle}>Статус клиента</h2>
+            <p className={styles.staffBlockHint}>
+              Изменение статуса сразу отобразится на портале клиента и отправит
+              ему письмо.
+            </p>
+          </div>
+          {processStatus ? (
+            <p className={styles.currentStatus}>
+              Сейчас: <strong>{processStatus.value}</strong>
+              {processStatus.updatedAt
+                ? ` · ${formatSubmittedAt(processStatus.updatedAt)}`
+                : null}
+              {processStatus.updatedByName
+                ? ` · ${processStatus.updatedByName}`
+                : null}
+            </p>
+          ) : null}
+          <div className={styles.statusControls}>
+            <select
+              className={styles.statusSelect}
+              value={processStatusDraft}
+              onChange={(event) => setProcessStatusDraft(event.target.value)}
+              aria-label="Статус процесса клиента"
+            >
+              {processStatusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={styles.primaryAction}
+              disabled={
+                savingProcessStatus ||
+                !processStatusDraft ||
+                processStatusDraft === processStatus?.value
+              }
+              onClick={() => void saveProcessStatus()}
+            >
+              {savingProcessStatus ? "Сохранение…" : "Обновить статус"}
+            </button>
+          </div>
+        </section>
+
         <div className={styles.review}>
           {review.map((row, index) => (
             <div key={`${row.label}-${index}`} className={styles.row}>

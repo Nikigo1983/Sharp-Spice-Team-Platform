@@ -7,6 +7,7 @@ import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
+  readProcessStatus,
 } from "@/lib/client-portal/questionnaire-service";
 import { getClientSession } from "@/lib/client-portal/session";
 
@@ -19,6 +20,9 @@ export default async function ClientPortalHomePage() {
   const questionnaire = await getOrCreateQuestionnaire(session);
   const progress = calculateProgress(questionnaire.answers);
   const submitted = questionnaire.status === "submitted";
+  const processStatus = submitted
+    ? readProcessStatus(questionnaire.answers, questionnaire.status)
+    : null;
 
   return (
     <div className={styles.portalPage}>
@@ -58,6 +62,20 @@ export default async function ClientPortalHomePage() {
           {submitted ? "Открыть анкету" : "Продолжить анкету"}
         </Link>
       </section>
+
+      {processStatus ? (
+        <section className={styles.portalCard}>
+          <h2>Статус процесса</h2>
+          <p className={styles.statusLabel}>Текущий статус вашего дела</p>
+          <p className={styles.statusValue}>{processStatus.value}</p>
+          {processStatus.updatedAt ? (
+            <p className={styles.statusUpdated}>
+              Обновлено:{" "}
+              {new Date(processStatus.updatedAt).toLocaleString("ru-RU")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className={styles.portalCard}>
         <h2>Договор и подпись</h2>

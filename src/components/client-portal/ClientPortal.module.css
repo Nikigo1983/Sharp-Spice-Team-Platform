@@ -257,3 +257,27 @@
 .portalCard .linkButton {
   margin-top: 0.85rem;
 }
+
+.statusLabel {
+  margin: 0 0 0.45rem !important;
+  font-size: 0.85rem !important;
+  color: #64748b !important;
+}
+
+.statusValue {
+  margin: 0 !important;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(36, 0, 255, 0.08);
+  border: 1px solid rgba(36, 0, 255, 0.18);
+  color: #1a2b48 !important;
+  font-size: 1.05rem !important;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.statusUpdated {
+  margin: 0.65rem 0 0 !important;
+  font-size: 0.82rem !important;
+  color: #94a3b8 !important;
+}

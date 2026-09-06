@@ -41,6 +41,15 @@ import {
   type StaffCaseDocument,
   type StaffCaseNote,
 } from "./staff-case-meta";
+import {
+  INITIAL_PROCESS_STATUS,
+  isProcessStatusValue,
+  readProcessStatus,
+  writeProcessStatus,
+  type ProcessStatusState,
+  type ProcessStatusValue,
+} from "./process-status";
+import { sendProcessStatusChangedEmail } from "./portal-emails";
 
 export {
   calculateProgress,
@@ -162,6 +171,7 @@ function applyAnswerPatch(
 ): QuestionnaireAnswers {
   const next: QuestionnaireAnswers = { ...current };
   for (const [key, value] of Object.entries(patch)) {
+    if (key.startsWith("__staff")) continue;
     if (value === null) {
       delete next[key];
     } else {
@@ -237,6 +247,12 @@ export async function submitQuestionnaire(
     submittedAt: now,
     updatedAt: now,
     revision: current.revision + 1,
+    answers: writeProcessStatus(current.answers, {
+      value: INITIAL_PROCESS_STATUS,
+      updatedAt: now,
+      updatedByUserId: null,
+      updatedByName: null,
+    }),
   };
   await upsertQuestionnaire(next);
   return next;
@@ -386,7 +402,69 @@ export async function deleteStaffCaseDocument(
   });
 }
 
+export async function updateSubmittedProcessStatus(
+  id: string,
+  input: {
+    status: string;
+    updatedByUserId: string;
+    updatedByName: string;
+    portalOrigin: string;
+  },
+): Promise<{
+  record: QuestionnaireRecord;
+  processStatus: ProcessStatusState;
+  emailSent: boolean;
+  unchanged: boolean;
+}> {
+  if (!isProcessStatusValue(input.status)) {
+    throw new Error("INVALID_STATUS");
+  }
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+
+  const previous = readProcessStatus(current.answers, current.status);
+  if (previous?.value === input.status) {
+    return {
+      record: current,
+      processStatus: previous,
+      emailSent: false,
+      unchanged: true,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const processStatus: ProcessStatusState = {
+    value: input.status as ProcessStatusValue,
+    updatedAt: now,
+    updatedByUserId: input.updatedByUserId,
+    updatedByName: input.updatedByName,
+  };
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: writeProcessStatus(current.answers, processStatus),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+
+  const portalUrl = `${input.portalOrigin.replace(/\/$/, "")}/client`;
+  const mailed = await sendProcessStatusChangedEmail({
+    to: current.email,
+    firstName: current.firstName || "клиент",
+    status: processStatus.value,
+    portalUrl,
+  });
+
+  return {
+    record,
+    processStatus,
+    emailSent: mailed.ok,
+    unchanged: false,
+  };
+}
+
 export { readStaffNotes, readStaffDocuments, findStaffDocument, staffDocumentsOwnerKey };
+export { readProcessStatus, INITIAL_PROCESS_STATUS };
+export type { ProcessStatusState, ProcessStatusValue };
 
 export function buildReviewRows(
   answers: QuestionnaireAnswers,

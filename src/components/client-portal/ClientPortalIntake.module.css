@@ -393,6 +393,49 @@
   gap: 0.9rem;
 }
 
+.currentStatus {
+  margin: 0;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.45;
+}
+
+.currentStatus strong {
+  color: #fff;
+  font-weight: 650;
+}
+
+.statusControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.statusSelect {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.62rem 0.8rem;
+}
+
+.statusSelect:focus {
+  outline: 1px solid rgba(36, 0, 255, 0.55);
+  border-color: rgba(115, 100, 255, 0.55);
+}
+
+.statusSelect option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
 .staffBlockHead {
   display: grid;
   gap: 0.25rem;

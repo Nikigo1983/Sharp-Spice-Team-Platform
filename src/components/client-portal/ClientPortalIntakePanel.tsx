@@ -30,6 +30,30 @@ type ReviewRow = {
   fileId?: string;
 };
 
+type StaffNote = {
+  id: string;
+  text: string;
+  authorName: string;
+  authorUserId: string;
+  createdAt: string;
+};
+
+type StaffDocument = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedByName: string;
+  uploadedByUserId: string;
+  createdAt: string;
+};
+
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
 function formatSubmittedAt(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString("ru-RU");
@@ -73,6 +97,12 @@ export function ClientPortalIntakePanel() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [review, setReview] = useState<ReviewRow[]>([]);
+  const [notes, setNotes] = useState<StaffNote[]>([]);
+  const [documents, setDocuments] = useState<StaffDocument[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +199,8 @@ export function ClientPortalIntakePanel() {
     setSelectedId(item.id);
     setClientLabel(clientName(item));
     setError(null);
+    setStatus(null);
+    setNoteDraft("");
     const res = await fetch(`/api/client-cases?id=${encodeURIComponent(item.id)}`, {
       cache: "no-store",
     });
@@ -179,14 +211,107 @@ export function ClientPortalIntakePanel() {
     const data = (await res.json()) as {
       schemaTitle: string;
       review: ReviewRow[];
+      notes?: StaffNote[];
+      documents?: StaffDocument[];
     };
     setSchemaTitle(data.schemaTitle);
     setReview(data.review ?? []);
+    setNotes(data.notes ?? []);
+    setDocuments(data.documents ?? []);
     setItems((prev) =>
       prev.map((row) =>
         row.id === item.id ? { ...row, isNew: false } : row,
       ),
     );
+  }
+
+  async function submitNote() {
+    if (!selectedId || !noteDraft.trim()) return;
+    setSavingNote(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId: selectedId,
+          text: noteDraft,
+        }),
+      });
+      const data = (await res.json()) as {
+        notes?: StaffNote[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError("Не удалось сохранить комментарий.");
+        return;
+      }
+      setNotes(data.notes ?? []);
+      setNoteDraft("");
+      setStatus("Комментарий добавлен");
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function uploadDocument(file: File | null) {
+    if (!selectedId || !file) return;
+    setUploadingDoc(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const form = new FormData();
+      form.set("questionnaireId", selectedId);
+      form.set("file", file);
+      const res = await fetch("/api/client-cases/documents", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json()) as {
+        documents?: StaffDocument[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(
+          data.error === "FILE_TOO_LARGE"
+            ? "Файл слишком большой (макс. 10 МБ)."
+            : data.error === "UNSUPPORTED_FILE_TYPE"
+              ? "Допустимы PDF и изображения (JPG, PNG, WEBP)."
+              : "Не удалось загрузить документ.",
+        );
+        return;
+      }
+      setDocuments(data.documents ?? []);
+      setStatus("Документ загружен");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  async function removeDocument(documentId: string) {
+    if (!selectedId) return;
+    setDeletingDocId(documentId);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch(
+        `/api/client-cases/documents?questionnaireId=${encodeURIComponent(selectedId)}&id=${encodeURIComponent(documentId)}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json()) as {
+        documents?: StaffDocument[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError("Не удалось удалить документ.");
+        return;
+      }
+      setDocuments(data.documents ?? []);
+      setStatus("Документ удалён");
+    } finally {
+      setDeletingDocId(null);
+    }
   }
 
   if (selectedId) {
@@ -199,7 +324,11 @@ export function ClientPortalIntakePanel() {
             onClick={() => {
               setSelectedId(null);
               setReview([]);
+              setNotes([]);
+              setDocuments([]);
+              setNoteDraft("");
               setClientLabel("");
+              setStatus(null);
             }}
           >
             ← К списку
@@ -211,6 +340,7 @@ export function ClientPortalIntakePanel() {
         <h1 className={styles.title}>{schemaTitle || "Анкета клиента"}</h1>
         {clientLabel ? <p className={styles.lead}>{clientLabel}</p> : null}
         {error ? <p className={styles.error}>{error}</p> : null}
+        {status ? <p className={styles.statusOk}>{status}</p> : null}
         <div className={styles.review}>
           {review.map((row, index) => (
             <div key={`${row.label}-${index}`} className={styles.row}>
@@ -232,6 +362,100 @@ export function ClientPortalIntakePanel() {
             </div>
           ))}
         </div>
+
+        <section className={styles.staffBlock}>
+          <div className={styles.staffBlockHead}>
+            <span className={styles.section}>Документы сотрудника</span>
+            <h2 className={styles.staffBlockTitle}>Документы клиента</h2>
+            <p className={styles.staffBlockHint}>
+              PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
+            </p>
+          </div>
+          {documents.length === 0 ? (
+            <p className={styles.muted}>Пока нет загруженных документов.</p>
+          ) : (
+            <ul className={styles.docList}>
+              {documents.map((doc) => (
+                <li key={doc.id} className={styles.docItem}>
+                  <div className={styles.docMeta}>
+                    <a
+                      className={styles.docLink}
+                      href={`/api/client-cases/files/${encodeURIComponent(doc.id)}?questionnaireId=${encodeURIComponent(selectedId)}`}
+                    >
+                      {doc.fileName}
+                    </a>
+                    <span className={styles.docSub}>
+                      {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
+                      {formatSubmittedAt(doc.createdAt)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.docDelete}
+                    disabled={deletingDocId === doc.id}
+                    onClick={() => void removeDocument(doc.id)}
+                  >
+                    {deletingDocId === doc.id ? "…" : "Удалить"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className={styles.uploadBtn}>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              disabled={uploadingDoc}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.target.value = "";
+                void uploadDocument(file);
+              }}
+            />
+            {uploadingDoc ? "Загрузка…" : "Добавить документ"}
+          </label>
+        </section>
+
+        <section className={styles.staffBlock}>
+          <div className={styles.staffBlockHead}>
+            <span className={styles.section}>Комментарии</span>
+            <h2 className={styles.staffBlockTitle}>Заметки по клиенту</h2>
+            <p className={styles.staffBlockHint}>
+              Внутренние комментарии сотрудников по этой анкете.
+            </p>
+          </div>
+          {notes.length === 0 ? (
+            <p className={styles.muted}>Комментариев пока нет.</p>
+          ) : (
+            <ul className={styles.noteList}>
+              {notes.map((note) => (
+                <li key={note.id} className={styles.noteItem}>
+                  <div className={styles.noteMeta}>
+                    <strong>{note.authorName}</strong>
+                    <span>{formatSubmittedAt(note.createdAt)}</span>
+                  </div>
+                  <p className={styles.noteText}>{note.text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <textarea
+            className={styles.noteInput}
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            rows={4}
+            placeholder="Напишите комментарий…"
+            aria-label="Новый комментарий"
+          />
+          <button
+            type="button"
+            className={styles.saveBtn}
+            disabled={savingNote || !noteDraft.trim()}
+            onClick={() => void submitNote()}
+          >
+            {savingNote ? "Сохранение…" : "Добавить комментарий"}
+          </button>
+        </section>
       </div>
     );
   }

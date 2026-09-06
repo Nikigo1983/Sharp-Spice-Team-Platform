@@ -4,6 +4,8 @@ import { readQuestionnaireAttachmentFile } from "@/lib/client-portal/questionnai
 import {
   findFileAnswerInRecord,
   getSubmittedForStaff,
+  isStaffUploadedDocument,
+  staffDocumentsOwnerKey,
 } from "@/lib/client-portal/questionnaire-service";
 
 export const runtime = "nodejs";
@@ -34,8 +36,12 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
 
+  const ownerKey = isStaffUploadedDocument(record, id)
+    ? staffDocumentsOwnerKey(record.id)
+    : record.clientPortalUserId;
+
   const file = await readQuestionnaireAttachmentFile(
-    record.clientPortalUserId,
+    ownerKey,
     owned.id,
     owned.fileName,
   );

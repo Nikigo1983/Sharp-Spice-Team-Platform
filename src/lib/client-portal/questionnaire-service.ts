@@ -26,8 +26,21 @@ import {
 } from "./questionnaire-store";
 import {
   deleteQuestionnaireAttachmentFile,
+  saveQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
+import { isAllowedAttachment } from "./questionnaire-attachment-formats";
 import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields";
+import {
+  appendStaffDocument,
+  appendStaffNote,
+  findStaffDocument,
+  readStaffDocuments,
+  readStaffNotes,
+  removeStaffDocument,
+  staffDocumentsOwnerKey,
+  type StaffCaseDocument,
+  type StaffCaseNote,
+} from "./staff-case-meta";
 
 export {
   calculateProgress,
@@ -270,6 +283,111 @@ export async function updateSubmittedStaffFields(
   });
 }
 
+export async function addStaffCaseNote(
+  id: string,
+  input: { text: string; authorUserId: string; authorName: string },
+): Promise<{ record: QuestionnaireRecord; note: StaffCaseNote }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const text = input.text.trim();
+  if (!text) throw new Error("EMPTY_NOTE");
+  const note: StaffCaseNote = {
+    id: randomUUID(),
+    text,
+    authorName: input.authorName,
+    authorUserId: input.authorUserId,
+    createdAt: new Date().toISOString(),
+  };
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: appendStaffNote(current.answers, note),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, note };
+}
+
+export async function addStaffCaseDocument(
+  id: string,
+  input: {
+    fileName: string;
+    contentType: string;
+    data: Buffer;
+    uploadedByUserId: string;
+    uploadedByName: string;
+  },
+): Promise<{ record: QuestionnaireRecord; document: StaffCaseDocument }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+
+  const allowed = isAllowedAttachment({
+    fileName: input.fileName,
+    contentType: input.contentType,
+    sizeBytes: input.data.length,
+    accept: ".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp",
+    maxSizeMb: 10,
+  });
+  if (!allowed.ok) {
+    throw new Error(
+      allowed.reason === "too_large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FILE_TYPE",
+    );
+  }
+
+  const documentId = randomUUID();
+  const fileName = input.fileName.slice(0, 255);
+  await saveQuestionnaireAttachmentFile(
+    staffDocumentsOwnerKey(current.id),
+    documentId,
+    fileName,
+    input.data,
+    allowed.mimeType,
+  );
+
+  const document: StaffCaseDocument = {
+    id: documentId,
+    fileName,
+    mimeType: allowed.mimeType,
+    sizeBytes: input.data.length,
+    uploadedByName: input.uploadedByName,
+    uploadedByUserId: input.uploadedByUserId,
+    createdAt: new Date().toISOString(),
+  };
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: appendStaffDocument(current.answers, document),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, document };
+}
+
+export async function deleteStaffCaseDocument(
+  id: string,
+  documentId: string,
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const existing = findStaffDocument(current.answers, documentId);
+  if (!existing) throw new Error("NOT_FOUND");
+
+  await deleteQuestionnaireAttachmentFile(
+    staffDocumentsOwnerKey(current.id),
+    existing.id,
+    existing.fileName,
+  );
+  const now = new Date().toISOString();
+  return upsertQuestionnaire({
+    ...current,
+    answers: removeStaffDocument(current.answers, documentId),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+}
+
+export { readStaffNotes, readStaffDocuments, findStaffDocument, staffDocumentsOwnerKey };
+
 export function buildReviewRows(
   answers: QuestionnaireAnswers,
   locale: "ru" | "en" = "ru",
@@ -346,5 +464,21 @@ export function findFileAnswerInRecord(
       return value;
     }
   }
+  const staffDoc = findStaffDocument(record.answers, attachmentId);
+  if (staffDoc) {
+    return {
+      id: staffDoc.id,
+      fileName: staffDoc.fileName,
+      mimeType: staffDoc.mimeType,
+      sizeBytes: staffDoc.sizeBytes,
+    };
+  }
   return null;
+}
+
+export function isStaffUploadedDocument(
+  record: QuestionnaireRecord,
+  attachmentId: string,
+): boolean {
+  return Boolean(findStaffDocument(record.answers, attachmentId));
 }

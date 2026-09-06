@@ -319,3 +319,154 @@
 .muted {
   color: rgba(255, 255, 255, 0.62);
 }
+
+.staffBlock {
+  margin-top: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem 1.05rem 1.15rem;
+  background: rgba(26, 26, 26, 0.55);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.staffBlockHead {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.staffBlockTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.staffBlockHint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.docList,
+.noteList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.docItem,
+.noteItem {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  background: rgba(0, 0, 0, 0.22);
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.noteItem {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.docMeta {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.docLink {
+  color: #a5b4fc;
+  word-break: break-word;
+}
+
+.docSub,
+.noteMeta {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.noteMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+}
+
+.noteMeta strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+
+.noteText {
+  margin: 0;
+  white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.docDelete {
+  flex-shrink: 0;
+  border: 1px solid rgba(252, 165, 165, 0.35);
+  background: transparent;
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.docDelete:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.uploadBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.uploadBtn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.uploadBtn:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.noteInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  color: inherit;
+  font: inherit;
+  padding: 0.7rem 0.8rem;
+  resize: vertical;
+  min-height: 5.5rem;
+}
+
+.noteInput:focus {
+  outline: 1px solid rgba(165, 180, 252, 0.55);
+  border-color: rgba(165, 180, 252, 0.45);
+}

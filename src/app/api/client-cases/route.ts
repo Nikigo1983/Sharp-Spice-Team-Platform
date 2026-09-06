@@ -6,6 +6,8 @@ import {
   getSubmittedForStaff,
   listSubmittedForStaff,
   markQuestionnaireOpenedByStaff,
+  readStaffDocuments,
+  readStaffNotes,
   updateSubmittedStaffFields,
 } from "@/lib/client-portal/questionnaire-service";
 import {
@@ -61,6 +63,8 @@ export async function GET(request: Request) {
       schemaTitle: pickLabel(getPublishedSchema().title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
+      notes: readStaffNotes(record.answers),
+      documents: readStaffDocuments(record.answers),
       review: buildReviewRows(record.answers, "ru"),
     });
   }

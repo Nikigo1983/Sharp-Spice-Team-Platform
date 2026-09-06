@@ -44,7 +44,7 @@ export default async function ClientPortalHomePage() {
       </header>
 
       <section className={styles.portalCard}>
-        <h2>Заявки клиентского портала</h2>
+        <h2>Анкета</h2>
         <p>
           {submitted
             ? "Анкета отправлена. Вы можете просмотреть ответы."

@@ -34,7 +34,7 @@ const NAV_CLIENT_INVITATIONS: NavItem = {
 
 const NAV_CLIENT_INTAKE: NavItem = {
   href: "/clients/intake",
-  label: "Заявки портала",
+  label: "Заявки с портала Emigrant",
   icon: "fa-solid fa-clipboard-list",
 };
 

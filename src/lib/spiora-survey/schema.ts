@@ -46,7 +46,7 @@ export const SPIORA_SURVEY_INTRO = {
 } as const;
 
 export const SPIORA_SURVEY_THANKS =
-  "Спасибо! Ваши ответы помогут нам создавать SPIORA на основе реальных бизнес-задач, а не предположений.";
+  "Спасибо! Ваши ответы приняты. Это поможет нам предложить вам эффективное решение на основе ваших реальных бизнес-задач.";
 
 export const Q7_NO_PROBLEMS_ID = "no_major_problems";
 export const Q12_NEVER_TRIED_ID = "never_tried";

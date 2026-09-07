@@ -504,7 +504,7 @@ export function ClientPortalIntakePanel() {
         <section className={styles.staffBlock}>
           <div className={styles.staffBlockHead}>
             <span className={styles.section}>Документы сотрудника</span>
-            <h2 className={styles.staffBlockTitle}>Документы клиента</h2>
+            <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
             <p className={styles.staffBlockHint}>
               PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
             </p>

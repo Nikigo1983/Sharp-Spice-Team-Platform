@@ -101,3 +101,59 @@
   opacity: 0.75;
   flex-shrink: 0;
 }
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.groupRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.groupLink {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.groupLinkActive {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.groupToggle {
+  flex-shrink: 0;
+  width: 2.1rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gray-300);
+  cursor: pointer;
+}
+
+.groupToggle:hover {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.subList {
+  list-style: none;
+  margin: 0 0 0.25rem;
+  padding: 0 0 0 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.navLinkNested {
+  padding: 0.55rem 0.75rem 0.55rem 0.95rem;
+  font-size: 0.8125rem;
+}

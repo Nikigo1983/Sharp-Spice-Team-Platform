@@ -1,4 +1,4 @@
-import type { NavItem } from "@/components/layout/Sidebar";
+import type { NavEntry, NavGroup, NavItem } from "@/components/layout/Sidebar";
 import { MARKETING_SITE_URL } from "@/lib/brand";
 import type { SessionUser, UserRole } from "./types";
 
@@ -123,43 +123,48 @@ const NAV_WEBSITE: NavItem = {
   external: true,
 };
 
-const MANAGER_NAV: NavItem[] = [
-  NAV_DASHBOARD,
+/** Emigrant product sections grouped in the sidebar. */
+export const EMIGRANT_NAV_CHILDREN: NavItem[] = [
   NAV_CLIENTS,
   NAV_CRM_LEADS,
   NAV_NEW_FORMGRID_CLIENTS,
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,
   NAV_FINANCE,
-  NAV_SPIORA,
   NAV_AI,
   NAV_KB,
+  NAV_RELOCATION,
+];
+
+const NAV_EMIGRANT: NavGroup = {
+  id: "emigrant",
+  label: "Emigrant",
+  icon: "fa-solid fa-passport",
+  href: "/emigrant",
+  children: EMIGRANT_NAV_CHILDREN,
+};
+
+const MANAGER_NAV: NavEntry[] = [
+  NAV_DASHBOARD,
+  NAV_EMIGRANT,
+  NAV_SPIORA,
   NAV_TASKS,
   NAV_CALENDAR,
   NAV_MEETING_RECORDINGS,
   NAV_TEAM_CHAT,
-  NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,
   NAV_TEAM,
   NAV_WEBSITE,
 ];
 
-const OWNER_NAV: NavItem[] = [
+const OWNER_NAV: NavEntry[] = [
   NAV_DASHBOARD,
-  NAV_CLIENTS,
-  NAV_CRM_LEADS,
-  NAV_NEW_FORMGRID_CLIENTS,
-  NAV_CLIENT_INVITATIONS,
-  NAV_CLIENT_INTAKE,
-  NAV_FINANCE,
+  NAV_EMIGRANT,
   NAV_SPIORA,
-  NAV_AI,
-  NAV_KB,
   NAV_TASKS,
   NAV_CALENDAR,
   NAV_MEETING_RECORDINGS,
   NAV_TEAM_CHAT,
-  NAV_RELOCATION,
   NAV_CHECKUPS_EREVAN,
   NAV_ANALYTICS,
   NAV_TEAM,
@@ -169,7 +174,30 @@ const OWNER_NAV: NavItem[] = [
 
 const OWNER_ONLY_PREFIXES = ["/analytics", "/settings"];
 
-export function getNavItemsForRole(role: UserRole): NavItem[] {
+export function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return "children" in entry && Array.isArray(entry.children);
+}
+
+export function flattenNavItems(entries: NavEntry[]): NavItem[] {
+  const items: NavItem[] = [];
+  for (const entry of entries) {
+    if (isNavGroup(entry)) {
+      if (entry.href) {
+        items.push({
+          href: entry.href,
+          label: entry.label,
+          icon: entry.icon,
+        });
+      }
+      items.push(...entry.children);
+    } else {
+      items.push(entry);
+    }
+  }
+  return items;
+}
+
+export function getNavItemsForRole(role: UserRole): NavEntry[] {
   return role === "owner" ? OWNER_NAV : MANAGER_NAV;
 }
 
@@ -186,9 +214,10 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     return false;
   }
 
-  const allowedPrefixes = MANAGER_NAV.filter((item) => !item.external).map(
-    (item) => item.href,
-  );
+  const allowedPrefixes = flattenNavItems(MANAGER_NAV)
+    .filter((item) => !item.external)
+    .map((item) => item.href);
+
   return allowedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

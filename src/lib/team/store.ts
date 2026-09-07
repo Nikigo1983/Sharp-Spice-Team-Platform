@@ -72,6 +72,10 @@ export async function isUserDeleted(userId: string): Promise<boolean> {
   return ids.includes(userId);
 }
 
+export async function findTeamUserById(id: string) {
+  return listTeamUsers().find((user) => user.id === id);
+}
+
 export async function listTeamMembers(): Promise<TeamMember[]> {
   const deleted = new Set(await getDeletedUserIds());
   return listTeamUsers()

@@ -4,6 +4,7 @@ import {
   AI_REQUEST_STATS_DAYS,
   countAiUserMessagesByUserId,
 } from "@/lib/dashboard/ai-request-stats";
+import { getDailyActivityMap } from "@/lib/presence/daily-activity";
 import { getPresenceMap } from "@/lib/presence/store";
 import { canDeleteTeamMembers } from "@/lib/team/permissions";
 import { listTeamMembers } from "@/lib/team/store";
@@ -16,9 +17,10 @@ export async function GET() {
 
   const members = await listTeamMembers();
   const memberIds = members.map((member) => member.id);
-  const [presence, aiCounts] = await Promise.all([
+  const [presence, aiCounts, activity] = await Promise.all([
     getPresenceMap(memberIds),
     countAiUserMessagesByUserId(AI_REQUEST_STATS_DAYS, memberIds),
+    getDailyActivityMap(memberIds),
   ]);
 
   const enrichedMembers = members.map((member) => ({
@@ -26,6 +28,7 @@ export async function GET() {
     isOnline: presence[member.id]?.isOnline ?? false,
     lastActiveAt: presence[member.id]?.lastActiveAt || null,
     aiRequestsThisMonth: aiCounts[member.id] ?? 0,
+    activityToday: activity[member.id],
   }));
   const onlineCount = enrichedMembers.filter((member) => member.isOnline).length;
 

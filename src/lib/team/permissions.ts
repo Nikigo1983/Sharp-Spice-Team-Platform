@@ -15,3 +15,12 @@ export function canDeleteTeamMember(
   if (targetId === "veronika" && actor.id !== "veronika") return false;
   return true;
 }
+
+export function canViewTeamMemberActivity(
+  actor: SessionUser,
+  target: { id: string; role: string },
+): boolean {
+  if (actor.id === target.id) return false;
+  if (actor.role === "owner") return true;
+  return canDeleteTeamMembers(actor) && target.role !== "owner";
+}

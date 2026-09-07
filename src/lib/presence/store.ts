@@ -58,12 +58,21 @@ export async function touchUserPresence(userId: string): Promise<string> {
 
   if (isSupabaseConfigured()) {
     await sbPresence.sbUpsertUserPresence(userId, lastActiveAt);
-    return lastActiveAt;
+  } else {
+    const store = await readStore();
+    store.users[userId] = { lastActiveAt };
+    await writeStore(store);
   }
 
-  const store = await readStore();
-  store.users[userId] = { lastActiveAt };
-  await writeStore(store);
+  try {
+    const { recordDailyPresenceHeartbeat } = await import(
+      "@/lib/presence/daily-activity"
+    );
+    await recordDailyPresenceHeartbeat(userId, lastActiveAt);
+  } catch (error) {
+    console.error("[presence] daily activity", error);
+  }
+
   return lastActiveAt;
 }
 

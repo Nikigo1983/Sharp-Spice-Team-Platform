@@ -1,0 +1,269 @@
+.shell {
+  --spiora-ink: #14110f;
+  --spiora-muted: #5c534c;
+  --spiora-line: rgba(20, 17, 15, 0.12);
+  --spiora-accent: #c45c26;
+  --spiora-accent-soft: rgba(196, 92, 38, 0.12);
+  --spiora-paper: #f7f1e8;
+  --spiora-card: #fffdf9;
+
+  min-height: 100vh;
+  padding: 2rem 1.25rem 4rem;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(196, 92, 38, 0.18), transparent 55%),
+    linear-gradient(180deg, #efe6da 0%, var(--spiora-paper) 40%, #e8dfd3 100%);
+  color: var(--spiora-ink);
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.brand {
+  max-width: 44rem;
+  margin: 0 auto 1.5rem;
+}
+
+.brandName {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.brandSlogan {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--spiora-accent);
+  font-weight: 650;
+}
+
+.hero {
+  max-width: 44rem;
+  margin: 0 auto 1.25rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.35rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.subtitle {
+  margin: 0.75rem 0 0;
+  max-width: 40ch;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--spiora-muted);
+}
+
+.intro {
+  max-width: 44rem;
+  margin: 0 auto 1.5rem;
+  padding: 1.15rem 1.2rem;
+  background: var(--spiora-card);
+  border: 1px solid var(--spiora-line);
+  border-radius: 14px;
+}
+
+.introGreeting,
+.introLead,
+.introBody,
+.introDuration {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.introGreeting {
+  font-weight: 650;
+}
+
+.introLead {
+  margin-top: 0.45rem;
+}
+
+.introBody,
+.introDuration {
+  margin-top: 0.7rem;
+  color: var(--spiora-muted);
+}
+
+.form {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.section {
+  margin: 1.1rem 0 0.15rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--spiora-accent);
+  font-weight: 700;
+}
+
+.fieldset {
+  margin: 0 0 0.85rem;
+  padding: 1rem 1.05rem 1.05rem;
+  border: 1px solid var(--spiora-line);
+  border-radius: 14px;
+  background: var(--spiora-card);
+}
+
+.legend {
+  padding: 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.hint {
+  margin: 0 0 0.7rem;
+  font-size: 0.86rem;
+  color: var(--spiora-muted);
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.label {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--spiora-line);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  background: #fff;
+  color: var(--spiora-ink);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.checkRow,
+.optionRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.checkRow input,
+.optionRow input {
+  margin-top: 0.2rem;
+  accent-color: var(--spiora-accent);
+}
+
+.scale {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.scaleLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--spiora-muted);
+}
+
+.scaleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.scaleBtn {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  border: 1px solid var(--spiora-line);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.scaleActive {
+  background: var(--spiora-accent);
+  border-color: var(--spiora-accent);
+  color: #fff;
+}
+
+.contactGrid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.error {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(180, 40, 30, 0.1);
+  color: #8a241c;
+  font-size: 0.92rem;
+}
+
+.submit {
+  margin-top: 0.5rem;
+  border: none;
+  border-radius: 12px;
+  padding: 0.95rem 1.2rem;
+  background: var(--spiora-ink);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.thanksCard {
+  max-width: 36rem;
+  margin: 3rem auto 0;
+  padding: 2rem 1.4rem;
+  text-align: center;
+  background: var(--spiora-card);
+  border: 1px solid var(--spiora-line);
+  border-radius: 16px;
+}
+
+.thanksTitle {
+  margin: 0;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+}
+
+.thanksText {
+  margin: 0.85rem 0 0;
+  line-height: 1.55;
+  color: var(--spiora-muted);
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 1.35rem 0.9rem 3rem;
+  }
+
+  .scaleLabels {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}

@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/join",
   "/api/webhooks",
+  "/s/spiora-research",
   "/client/login",
   "/client/invite",
   "/client/forgot-password",
@@ -30,6 +31,9 @@ const PROTECTED_PREFIXES = [
   "/analytics",
   "/team",
   "/settings",
+  "/spiora",
+  "/emigrant",
+  "/finance",
 ];
 
 function isPublicPath(pathname: string) {
@@ -134,6 +138,8 @@ export const config = {
     "/login",
     "/join",
     "/join/:path*",
+    "/s/spiora-research",
+    "/s/spiora-research/:path*",
     "/client",
     "/client/:path*",
     "/client-invitations",
@@ -168,5 +174,11 @@ export const config = {
     "/team/:path*",
     "/settings",
     "/settings/:path*",
+    "/spiora",
+    "/spiora/:path*",
+    "/emigrant",
+    "/emigrant/:path*",
+    "/finance",
+    "/finance/:path*",
   ],
 };

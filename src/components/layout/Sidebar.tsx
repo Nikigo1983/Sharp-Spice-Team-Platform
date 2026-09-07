@@ -66,8 +66,7 @@ export function Sidebar({ role }: { role: UserRole }) {
     for (const entry of navItems) {
       if (!isNavGroup(entry)) continue;
       if (
-        (entry.href &&
-          (pathname === entry.href || pathname.startsWith(`${entry.href}/`))) ||
+        (entry.href && pathname === entry.href) ||
         groupHasActiveChild(pathname, entry.children)
       ) {
         ids.push(entry.id);
@@ -196,10 +195,7 @@ export function Sidebar({ role }: { role: UserRole }) {
               const childHrefs = entry.children.map((child) => child.href);
               const open =
                 openGroups[entry.id] ?? activeGroupIds.includes(entry.id);
-              const onHub =
-                Boolean(entry.href) &&
-                (pathname === entry.href ||
-                  pathname.startsWith(`${entry.href}/`));
+              const onHub = Boolean(entry.href) && pathname === entry.href;
               const childActive = groupHasActiveChild(
                 pathname,
                 entry.children,

@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { SPIORA_NAV_CHILDREN } from "@/lib/auth/permissions";
 import {
   getSpioraDemoUrl,
   SPIORA_DESCRIPTION,
-  SPIORA_HIGHLIGHTS,
   SPIORA_PRODUCT_NAME,
   SPIORA_SLOGAN,
 } from "@/lib/spiora/brand";
@@ -33,12 +34,12 @@ export function SpioraView() {
       />
 
       <Card className={styles.hero}>
-        <p className={styles.eyebrow}>Product demo</p>
+        <p className={styles.eyebrow}>Product research</p>
         <h2 className={styles.heroTitle}>{SPIORA_PRODUCT_NAME}</h2>
         <p className={styles.slogan}>{SPIORA_SLOGAN}</p>
         <p className={styles.heroLead}>
-          Раздел для команды Sharp & Spice: быстрый доступ к демо-платформе
-          Spiora и напоминание, чем она отличается от рабочего контура.
+          Анкета для потенциальных клиентов и таблица ответов — чтобы строить
+          SPIORA на реальных бизнес-задачах.
         </p>
         {demoUrl ? (
           <a
@@ -49,21 +50,20 @@ export function SpioraView() {
           >
             Перейти в демо Spiora →
           </a>
-        ) : (
-          <p className={styles.envHint}>
-            Чтобы появилась кнопка перехода, задайте{" "}
-            <code>NEXT_PUBLIC_SPIORA_URL</code> в окружении Vercel.
-          </p>
-        )}
+        ) : null}
       </Card>
 
       <ul className={styles.grid}>
-        {SPIORA_HIGHLIGHTS.map((item) => (
-          <li key={item.title}>
-            <Card className={styles.card}>
-              <h3 className={styles.cardTitle}>{item.title}</h3>
-              <p className={styles.cardText}>{item.text}</p>
-            </Card>
+        {SPIORA_NAV_CHILDREN.map((item) => (
+          <li key={item.href}>
+            <Link href={item.href} className={styles.navCardLink}>
+              <Card className={styles.card}>
+                <h3 className={styles.cardTitle}>
+                  <i className={item.icon} aria-hidden /> {item.label}
+                </h3>
+                <p className={styles.cardText}>Открыть раздел →</p>
+              </Card>
+            </Link>
           </li>
         ))}
       </ul>

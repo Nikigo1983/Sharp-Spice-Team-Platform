@@ -44,11 +44,32 @@ const NAV_FINANCE: NavItem = {
   icon: "fa-solid fa-euro-sign",
 };
 
-const NAV_SPIORA: NavItem = {
-  href: "/spiora",
-  label: "Spiora",
-  icon: "fa-solid fa-layer-group",
+const NAV_SPIORA_SURVEY: NavItem = {
+  href: "/spiora/survey",
+  label: "Анкета для потенциального клиента SPIORA",
+  icon: "fa-solid fa-file-lines",
 };
+
+const NAV_SPIORA_RESPONSES: NavItem = {
+  href: "/spiora/survey-responses",
+  label: "Ответы по анкете SPIORA",
+  icon: "fa-solid fa-table-list",
+};
+
+export const SPIORA_NAV_CHILDREN: NavItem[] = [
+  NAV_SPIORA_SURVEY,
+  NAV_SPIORA_RESPONSES,
+];
+
+function buildSpioraNav(): NavGroup {
+  return {
+    id: "spiora",
+    label: "Spiora",
+    icon: "fa-solid fa-layer-group",
+    href: "/spiora",
+    children: SPIORA_NAV_CHILDREN,
+  };
+}
 
 const NAV_AI: NavItem = {
   href: "/ai-workspace",
@@ -156,7 +177,7 @@ function buildEmigrantNav(role: UserRole): NavGroup {
 const MANAGER_NAV: NavEntry[] = [
   NAV_DASHBOARD,
   buildEmigrantNav("manager"),
-  NAV_SPIORA,
+  buildSpioraNav(),
   NAV_CHECKUPS_EREVAN,
   NAV_TASKS,
   NAV_CALENDAR,
@@ -169,7 +190,7 @@ const MANAGER_NAV: NavEntry[] = [
 const OWNER_NAV: NavEntry[] = [
   NAV_DASHBOARD,
   buildEmigrantNav("owner"),
-  NAV_SPIORA,
+  buildSpioraNav(),
   NAV_CHECKUPS_EREVAN,
   NAV_TASKS,
   NAV_CALENDAR,

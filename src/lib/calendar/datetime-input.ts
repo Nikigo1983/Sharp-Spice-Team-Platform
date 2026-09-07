@@ -58,6 +58,41 @@ export function formatDateKeyRu(value: string): string {
   return `${String(parts.day).padStart(2, "0")}.${String(parts.month).padStart(2, "0")}.${parts.year}`;
 }
 
+/** Accept ISO `YYYY-MM-DD` or day-first `DD.MM.YYYY` / `DD/MM/YYYY`. */
+export function parseFlexibleDateKey(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const iso = parseDateKey(trimmed);
+  if (iso) {
+    return buildDateKey(iso);
+  }
+
+  const dmy = /^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/.exec(trimmed);
+  if (!dmy) {
+    return null;
+  }
+
+  const day = Number(dmy[1]);
+  const month = Number(dmy[2]);
+  const yearRaw = dmy[3];
+  const year = Number(yearRaw.length === 2 ? `20${yearRaw}` : yearRaw);
+  if (
+    !Number.isInteger(year) ||
+    year < 2000 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth(year, month)
+  ) {
+    return null;
+  }
+
+  return buildDateKey({ year, month, day });
+}
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }

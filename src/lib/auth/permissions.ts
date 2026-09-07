@@ -38,6 +38,12 @@ const NAV_CLIENT_INTAKE: NavItem = {
   icon: "fa-solid fa-clipboard-list",
 };
 
+const NAV_FINANCE: NavItem = {
+  href: "/finance",
+  label: "Финансы",
+  icon: "fa-solid fa-euro-sign",
+};
+
 const NAV_AI: NavItem = {
   href: "/ai-workspace",
   label: "AI Workspace",
@@ -118,6 +124,7 @@ const MANAGER_NAV: NavItem[] = [
   NAV_NEW_FORMGRID_CLIENTS,
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,
+  NAV_FINANCE,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,
@@ -137,6 +144,7 @@ const OWNER_NAV: NavItem[] = [
   NAV_NEW_FORMGRID_CLIENTS,
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,
+  NAV_FINANCE,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
+import { CaseFinancePanel } from "@/components/finance/CaseFinancePanel";
 import {
   EMPTY_STAFF_FIELDS,
   STAFF_FIELD_COLUMNS,
@@ -107,7 +108,11 @@ function rowMatchesQuery(
   return haystack.includes(q);
 }
 
-export function ClientPortalIntakePanel() {
+type Props = {
+  initialCaseId?: string | null;
+};
+
+export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [items, setItems] = useState<ListItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, QuestionnaireStaffFields>>(
     {},
@@ -115,6 +120,7 @@ export function ClientPortalIntakePanel() {
   const [query, setQuery] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const deepLinkHandled = useRef(false);
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [notes, setNotes] = useState<StaffNote[]>([]);
   const [documents, setDocuments] = useState<StaffDocument[]>([]);
@@ -256,6 +262,14 @@ export function ClientPortalIntakePanel() {
       ),
     );
   }
+
+  useEffect(() => {
+    if (deepLinkHandled.current || loading || !initialCaseId) return;
+    const item = items.find((row) => row.id === initialCaseId);
+    if (!item) return;
+    deepLinkHandled.current = true;
+    void openCase(item);
+  }, [initialCaseId, items, loading]);
 
   async function saveProcessStatus() {
     if (!selectedId || !processStatusDraft.trim()) return;
@@ -461,6 +475,10 @@ export function ClientPortalIntakePanel() {
               {savingProcessStatus ? "Сохранение…" : "Обновить статус"}
             </button>
           </div>
+        </section>
+
+        <section className={styles.staffBlock}>
+          <CaseFinancePanel caseId={selectedId} />
         </section>
 
         <div className={styles.review}>

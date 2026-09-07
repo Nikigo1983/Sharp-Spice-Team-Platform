@@ -35,8 +35,8 @@ function BrandHeader() {
           src={SPIORA_LOGO_PATH}
           alt={SPIORA_PRODUCT_NAME}
           className={styles.logo}
-          width={200}
-          height={46}
+          width={260}
+          height={55}
         />
       </div>
       <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
@@ -190,8 +190,8 @@ export function SpioraSurveyPublicForm() {
       </div>
 
       <form className={styles.form} onSubmit={onSubmit}>
-        <fieldset className={styles.fieldset}>
-          <legend className={styles.legend}>О компании</legend>
+        <section className={styles.fieldset}>
+          <h2 className={styles.questionTitle}>О компании</h2>
           <label className={styles.checkRow}>
             <input
               type="checkbox"
@@ -215,7 +215,7 @@ export function SpioraSurveyPublicForm() {
               />
             </label>
           ) : null}
-        </fieldset>
+        </section>
 
         {sections.map((group) => (
           <div key={group.section ?? "default"} className={styles.sectionBlock}>
@@ -223,13 +223,13 @@ export function SpioraSurveyPublicForm() {
               <h2 className={styles.section}>{group.section}</h2>
             ) : null}
             {group.questions.map((question) => (
-              <fieldset key={question.id} className={styles.fieldset}>
-                <legend className={styles.legend}>
+              <section key={question.id} className={styles.fieldset}>
+                <h3 className={styles.questionTitle}>
                   {question.number ? (
                     <span className={styles.qNum}>{question.number}</span>
                   ) : null}
-                  {question.title}
-                </legend>
+                  <span className={styles.questionText}>{question.title}</span>
+                </h3>
                 {question.hint ? (
                   <p className={styles.hint}>{question.hint}</p>
                 ) : null}
@@ -362,7 +362,7 @@ export function SpioraSurveyPublicForm() {
                     placeholder="Уточните «Другое»"
                   />
                 ) : null}
-              </fieldset>
+              </section>
             ))}
           </div>
         ))}

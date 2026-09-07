@@ -44,6 +44,12 @@ const NAV_FINANCE: NavItem = {
   icon: "fa-solid fa-euro-sign",
 };
 
+const NAV_SPIORA: NavItem = {
+  href: "/spiora",
+  label: "Spiora",
+  icon: "fa-solid fa-layer-group",
+};
+
 const NAV_AI: NavItem = {
   href: "/ai-workspace",
   label: "AI Workspace",
@@ -125,6 +131,7 @@ const MANAGER_NAV: NavItem[] = [
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,
   NAV_FINANCE,
+  NAV_SPIORA,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,
@@ -145,6 +152,7 @@ const OWNER_NAV: NavItem[] = [
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,
   NAV_FINANCE,
+  NAV_SPIORA,
   NAV_AI,
   NAV_KB,
   NAV_TASKS,

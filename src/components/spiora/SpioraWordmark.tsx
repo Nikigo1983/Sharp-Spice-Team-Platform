@@ -1,77 +1,89 @@
-/** Inline SPIORA wordmark for dark surfaces (survey, etc.). */
+/** Official SPIORA wordmark + tagline for dark transparent surfaces. */
 export function SpioraWordmark({
   className,
   title = "SPIORA",
+  showTagline = true,
 }: {
   className?: string;
   title?: string;
+  showTagline?: boolean;
 }) {
-  const gradId = "spioraWordmarkGrad";
+  const height = showTagline ? 132 : 96;
 
   return (
     <svg
       className={className}
-      viewBox="0 0 520 96"
+      viewBox={`0 0 560 ${height}`}
       role="img"
       aria-label={title}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#F4981A" />
-          <stop offset="100%" stopColor="#E82916" />
-        </linearGradient>
-      </defs>
-
+      {/* Transparent background — adapts to page */}
       <g
         fill="#FFFFFF"
         fontFamily="Inter, Arial, Helvetica, sans-serif"
-        fontSize="68"
+        fontSize="72"
         fontWeight="700"
       >
-        <text x="0" y="72">
+        <text x="0" y="74">
           S
         </text>
-        <text x="72" y="72">
+        <text x="78" y="74">
           P
         </text>
-        <text x="148" y="72">
+        <text x="158" y="74">
           I
         </text>
-        <text x="292" y="72">
+        <text x="312" y="74">
           R
         </text>
       </g>
 
-      {/* Power-button O between I and R */}
-      <g transform="translate(196 10)">
+      {/* Power-button O — brand orange */}
+      <g transform="translate(210 8)">
         <path
-          d="M16 22 A28 28 0 1 0 48 22"
+          d="M18 24 A30 30 0 1 0 54 24"
           fill="none"
-          stroke={`url(#${gradId})`}
-          strokeWidth="9.5"
+          stroke="#F4981A"
+          strokeWidth="10"
           strokeLinecap="round"
         />
         <line
-          x1="32"
+          x1="36"
           y1="4"
-          x2="32"
-          y2="38"
-          stroke={`url(#${gradId})`}
-          strokeWidth="9.5"
+          x2="36"
+          y2="40"
+          stroke="#F4981A"
+          strokeWidth="10"
           strokeLinecap="round"
         />
       </g>
 
       {/* Chevron A */}
       <path
-        d="M372 80 L412 16 L452 80"
+        d="M398 86 L442 14 L486 86"
         fill="none"
-        stroke={`url(#${gradId})`}
-        strokeWidth="11"
+        stroke="#F4981A"
+        strokeWidth="12"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+
+      {showTagline ? (
+        <g
+          fontFamily="Raleway, Inter, Arial, sans-serif"
+          fontSize="13"
+          fontWeight="500"
+          letterSpacing="0.28em"
+        >
+          <text x="0" y="118" fill="#FFFFFF">
+            ONE PLATFORM.
+          </text>
+          <text x="228" y="118" fill="#F4981A">
+            INFINITE SOLUTIONS.
+          </text>
+        </g>
+      ) : null}
     </svg>
   );
 }

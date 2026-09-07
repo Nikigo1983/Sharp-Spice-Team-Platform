@@ -49,26 +49,15 @@
   align-items: center;
   width: fit-content;
   max-width: 100%;
+  background: transparent;
 }
 
 .logo {
   display: block;
-  width: min(260px, 100%);
+  width: min(340px, 100%);
   height: auto;
-  aspect-ratio: 520 / 96;
-}
-
-.brandSlogan {
-  margin: 0;
-  max-width: 100%;
-  font-family: Raleway, Inter, sans-serif;
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--spiora-white);
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  background: transparent;
+  object-fit: contain;
 }
 
 .hero {
@@ -107,13 +96,13 @@
 }
 
 .subtitle {
-  margin: 0.8rem 0 0;
+  margin: 0;
   max-width: 42ch;
   width: 100%;
-  font-size: 1.02rem;
-  font-weight: 400;
-  line-height: 1.55;
-  color: var(--spiora-gray-400);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--spiora-gray-100);
   overflow-wrap: break-word;
 }
 

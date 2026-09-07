@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   SPIORA_SURVEY_CLIENT_SUBTITLE,
-  SPIORA_SURVEY_CLIENT_TITLE,
   SPIORA_SURVEY_INTRO,
   SPIORA_SURVEY_THANKS,
   type SpioraQuestion,
@@ -15,10 +14,9 @@ import {
 } from "@/lib/spiora-survey/validation";
 import type { SpioraSurveyAnswers } from "@/lib/spiora-survey/types";
 import {
+  SPIORA_LOGO_PATH,
   SPIORA_PRODUCT_NAME,
-  SPIORA_SLOGAN,
 } from "@/lib/spiora/brand";
-import { SpioraWordmark } from "@/components/spiora/SpioraWordmark";
 import styles from "./SpioraSurveyPublicForm.module.css";
 
 function asStringArray(value: unknown): string[] {
@@ -30,9 +28,15 @@ function BrandHeader() {
   return (
     <header className={styles.brand}>
       <div className={styles.logoChip}>
-        <SpioraWordmark className={styles.logo} title={SPIORA_PRODUCT_NAME} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={SPIORA_LOGO_PATH}
+          alt={SPIORA_PRODUCT_NAME}
+          className={styles.logo}
+          width={360}
+          height={120}
+        />
       </div>
-      <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
     </header>
   );
 }
@@ -171,7 +175,6 @@ export function SpioraSurveyPublicForm() {
 
       <div className={styles.hero}>
         <p className={styles.eyebrow}>Исследование процессов</p>
-        <h1 className={styles.title}>{SPIORA_SURVEY_CLIENT_TITLE}</h1>
         <p className={styles.subtitle}>{SPIORA_SURVEY_CLIENT_SUBTITLE}</p>
       </div>
 

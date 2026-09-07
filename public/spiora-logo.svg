@@ -1,40 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 96" role="img" aria-label="SPIORA">
-  <defs>
-    <linearGradient id="spioraBrand" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#F4981A"/>
-      <stop offset="100%" stop-color="#E82916"/>
-    </linearGradient>
-  </defs>
-
-  <g fill="#FFFFFF" font-family="Inter, Arial, Helvetica, sans-serif" font-size="68" font-weight="700">
-    <text x="0" y="72">S</text>
-    <text x="72" y="72">P</text>
-    <text x="148" y="72">I</text>
-    <text x="292" y="72">R</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 132" role="img" aria-label="SPIORA">
+  <g fill="#FFFFFF" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="700">
+    <text x="0" y="74">S</text>
+    <text x="78" y="74">P</text>
+    <text x="158" y="74">I</text>
+    <text x="312" y="74">R</text>
   </g>
 
-  <g transform="translate(196 10)">
+  <g transform="translate(210 8)">
     <path
-      d="M16 22 A28 28 0 1 0 48 22"
+      d="M18 24 A30 30 0 1 0 54 24"
       fill="none"
-      stroke="url(#spioraBrand)"
-      stroke-width="9.5"
+      stroke="#F4981A"
+      stroke-width="10"
       stroke-linecap="round"
     />
     <line
-      x1="32" y1="4" x2="32" y2="38"
-      stroke="url(#spioraBrand)"
-      stroke-width="9.5"
+      x1="36" y1="4" x2="36" y2="40"
+      stroke="#F4981A"
+      stroke-width="10"
       stroke-linecap="round"
     />
   </g>
 
   <path
-    d="M372 80 L412 16 L452 80"
+    d="M398 86 L442 14 L486 86"
     fill="none"
-    stroke="url(#spioraBrand)"
-    stroke-width="11"
+    stroke="#F4981A"
+    stroke-width="12"
     stroke-linecap="round"
     stroke-linejoin="round"
   />
+
+  <g font-family="Raleway, Inter, Arial, sans-serif" font-size="13" font-weight="500" letter-spacing="0.28em">
+    <text x="0" y="118" fill="#FFFFFF">ONE PLATFORM.</text>
+    <text x="228" y="118" fill="#F4981A">INFINITE SOLUTIONS.</text>
+  </g>
 </svg>

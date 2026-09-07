@@ -8,8 +8,8 @@ export const SPIORA_SLOGAN = "ONE PLATFORM. INFINITE SOLUTIONS.";
 export const SPIORA_DESCRIPTION =
   "AI-операционная система для бизнеса — демонстрационная корпоративная платформа для показа клиентам.";
 
-/** Brand mark for dark Spiora surfaces (white letters + gradient O/A). */
-export const SPIORA_LOGO_PATH = "/spiora-logo.svg";
+/** Brand mark for dark Spiora surfaces (transparent PNG). */
+export const SPIORA_LOGO_PATH = "/spiora-logo.png";
 
 /** Primary Spiora accent. */
 export const SPIORA_ACCENT = SPIORA_COLORS.red;

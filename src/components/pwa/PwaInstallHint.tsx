@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./PwaInstallHint.module.css";
 
 type BeforeInstallPromptEvent = Event & {
@@ -8,13 +9,21 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+function isPublicClientSurveyPath(pathname: string | null) {
+  if (!pathname) return false;
+  return pathname === "/s" || pathname.startsWith("/s/");
+}
+
 export function PwaInstallHint() {
+  const pathname = usePathname();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
+    if (isPublicClientSurveyPath(pathname)) return;
+
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       ("standalone" in window.navigator &&
@@ -42,7 +51,11 @@ export function PwaInstallHint() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, []);
+  }, [pathname]);
+
+  if (isPublicClientSurveyPath(pathname)) {
+    return null;
+  }
 
   if (installed || dismissed || !deferredPrompt) {
     return null;

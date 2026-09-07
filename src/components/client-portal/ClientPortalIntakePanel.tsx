@@ -112,7 +112,13 @@ type Props = {
   initialCaseId?: string | null;
 };
 
-type CaseView = "menu" | "questionnaire" | "status" | "finance";
+type CaseView =
+  | "menu"
+  | "questionnaire"
+  | "status"
+  | "finance"
+  | "documents"
+  | "notes";
 
 export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [items, setItems] = useState<ListItem[]>([]);
@@ -452,7 +458,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               ? schemaTitle || "Анкета клиента"
               : caseView === "status"
                 ? "Статус процесса клиента"
-                : "Финансы"}
+                : caseView === "finance"
+                  ? "Финансы"
+                  : caseView === "documents"
+                    ? "Документы по клиенту"
+                    : "Комментарии"}
         </h1>
         {clientLabel && caseView !== "menu" ? (
           <p className={styles.lead}>{clientLabel}</p>
@@ -473,7 +483,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <span className={styles.caseMenuEyebrow}>Анкета</span>
               <span className={styles.caseMenuTitle}>Анкета</span>
               <span className={styles.caseMenuHint}>
-                Ответы клиента, документы и внутренние заметки
+                Ответы клиента из заполненной анкеты
               </span>
             </button>
             <button
@@ -498,6 +508,28 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <span className={styles.caseMenuTitle}>Финансы</span>
               <span className={styles.caseMenuHint}>
                 Договор, платежи и задолженность по клиенту
+              </span>
+            </button>
+            <button
+              type="button"
+              className={styles.caseMenuCard}
+              onClick={() => setCaseView("documents")}
+            >
+              <span className={styles.caseMenuEyebrow}>Файлы</span>
+              <span className={styles.caseMenuTitle}>Документы по клиенту</span>
+              <span className={styles.caseMenuHint}>
+                Внутренние файлы сотрудников по этому клиенту
+              </span>
+            </button>
+            <button
+              type="button"
+              className={styles.caseMenuCard}
+              onClick={() => setCaseView("notes")}
+            >
+              <span className={styles.caseMenuEyebrow}>Заметки</span>
+              <span className={styles.caseMenuTitle}>Комментарии</span>
+              <span className={styles.caseMenuHint}>
+                Внутренние комментарии сотрудников по клиенту
               </span>
             </button>
           </div>
@@ -560,154 +592,156 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         ) : null}
 
         {caseView === "questionnaire" ? (
-          <>
-            <div className={styles.review}>
-              {review.map((row, index) => (
-                <div key={`${row.label}-${index}`} className={styles.row}>
-                  <div className={styles.rowMeta}>
-                    <span className={styles.section}>{row.section}</span>
-                    <span className={styles.label}>{row.label}</span>
-                  </div>
-                  <div className={styles.value}>
-                    {row.fileId && selectedId ? (
-                      <div className={styles.fileBlock}>
-                        <span className={styles.fileName}>
-                          {row.value || "Файл"}
-                        </span>
-                        <div className={styles.fileActions}>
-                          <a
-                            className={styles.fileBtn}
-                            href={caseFileUrl(row.fileId, selectedId, "open")}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Открыть
-                          </a>
-                          <a
-                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                            href={caseFileUrl(
-                              row.fileId,
-                              selectedId,
-                              "download",
-                            )}
-                          >
-                            Скачать
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      row.value || "—"
-                    )}
-                  </div>
+          <div className={styles.review}>
+            {review.map((row, index) => (
+              <div key={`${row.label}-${index}`} className={styles.row}>
+                <div className={styles.rowMeta}>
+                  <span className={styles.section}>{row.section}</span>
+                  <span className={styles.label}>{row.label}</span>
                 </div>
-              ))}
+                <div className={styles.value}>
+                  {row.fileId && selectedId ? (
+                    <div className={styles.fileBlock}>
+                      <span className={styles.fileName}>
+                        {row.value || "Файл"}
+                      </span>
+                      <div className={styles.fileActions}>
+                        <a
+                          className={styles.fileBtn}
+                          href={caseFileUrl(row.fileId, selectedId, "open")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Открыть
+                        </a>
+                        <a
+                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                          href={caseFileUrl(
+                            row.fileId,
+                            selectedId,
+                            "download",
+                          )}
+                        >
+                          Скачать
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    row.value || "—"
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {caseView === "documents" ? (
+          <section className={styles.staffBlock}>
+            <div className={styles.staffBlockHead}>
+              <span className={styles.section}>Документы сотрудника</span>
+              <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
+              <p className={styles.staffBlockHint}>
+                PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
+              </p>
             </div>
-
-            <section className={styles.staffBlock}>
-              <div className={styles.staffBlockHead}>
-                <span className={styles.section}>Документы сотрудника</span>
-                <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
-                <p className={styles.staffBlockHint}>
-                  PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
-                </p>
-              </div>
-              {documents.length === 0 ? (
-                <p className={styles.muted}>Пока нет загруженных документов.</p>
-              ) : (
-                <ul className={styles.docList}>
-                  {documents.map((doc) => (
-                    <li key={doc.id} className={styles.docItem}>
-                      <div className={styles.docMeta}>
-                        <span className={styles.fileName}>{doc.fileName}</span>
-                        <span className={styles.docSub}>
-                          {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
-                          {formatSubmittedAt(doc.createdAt)}
-                        </span>
-                        <div className={styles.fileActions}>
-                          <a
-                            className={styles.fileBtn}
-                            href={caseFileUrl(doc.id, selectedId, "open")}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Открыть
-                          </a>
-                          <a
-                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                            href={caseFileUrl(doc.id, selectedId, "download")}
-                          >
-                            Скачать
-                          </a>
-                          <button
-                            type="button"
-                            className={styles.docDelete}
-                            disabled={deletingDocId === doc.id}
-                            onClick={() => void removeDocument(doc.id)}
-                          >
-                            {deletingDocId === doc.id ? "…" : "Удалить"}
-                          </button>
-                        </div>
+            {documents.length === 0 ? (
+              <p className={styles.muted}>Пока нет загруженных документов.</p>
+            ) : (
+              <ul className={styles.docList}>
+                {documents.map((doc) => (
+                  <li key={doc.id} className={styles.docItem}>
+                    <div className={styles.docMeta}>
+                      <span className={styles.fileName}>{doc.fileName}</span>
+                      <span className={styles.docSub}>
+                        {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
+                        {formatSubmittedAt(doc.createdAt)}
+                      </span>
+                      <div className={styles.fileActions}>
+                        <a
+                          className={styles.fileBtn}
+                          href={caseFileUrl(doc.id, selectedId, "open")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Открыть
+                        </a>
+                        <a
+                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                          href={caseFileUrl(doc.id, selectedId, "download")}
+                        >
+                          Скачать
+                        </a>
+                        <button
+                          type="button"
+                          className={styles.docDelete}
+                          disabled={deletingDocId === doc.id}
+                          onClick={() => void removeDocument(doc.id)}
+                        >
+                          {deletingDocId === doc.id ? "…" : "Удалить"}
+                        </button>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <label className={styles.primaryAction}>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                  disabled={uploadingDoc}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    event.target.value = "";
-                    void uploadDocument(file);
-                  }}
-                />
-                {uploadingDoc ? "Загрузка…" : "Добавить документ"}
-              </label>
-            </section>
-
-            <section className={styles.staffBlock}>
-              <div className={styles.staffBlockHead}>
-                <span className={styles.section}>Комментарии</span>
-                <h2 className={styles.staffBlockTitle}>Заметки по клиенту</h2>
-                <p className={styles.staffBlockHint}>
-                  Внутренние комментарии сотрудников по этой анкете.
-                </p>
-              </div>
-              {notes.length === 0 ? (
-                <p className={styles.muted}>Комментариев пока нет.</p>
-              ) : (
-                <ul className={styles.noteList}>
-                  {notes.map((note) => (
-                    <li key={note.id} className={styles.noteItem}>
-                      <div className={styles.noteMeta}>
-                        <strong>{note.authorName}</strong>
-                        <span>{formatSubmittedAt(note.createdAt)}</span>
-                      </div>
-                      <p className={styles.noteText}>{note.text}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <textarea
-                className={styles.noteInput}
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                rows={4}
-                placeholder="Напишите комментарий…"
-                aria-label="Новый комментарий"
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <label className={styles.primaryAction}>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                disabled={uploadingDoc}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  void uploadDocument(file);
+                }}
               />
-              <button
-                type="button"
-                className={styles.primaryAction}
-                disabled={savingNote || !noteDraft.trim()}
-                onClick={() => void submitNote()}
-              >
-                {savingNote ? "Сохранение…" : "Добавить комментарий"}
-              </button>
-            </section>
-          </>
+              {uploadingDoc ? "Загрузка…" : "Добавить документ"}
+            </label>
+          </section>
+        ) : null}
+
+        {caseView === "notes" ? (
+          <section className={styles.staffBlock}>
+            <div className={styles.staffBlockHead}>
+              <span className={styles.section}>Комментарии</span>
+              <h2 className={styles.staffBlockTitle}>Заметки по клиенту</h2>
+              <p className={styles.staffBlockHint}>
+                Внутренние комментарии сотрудников по этой анкете.
+              </p>
+            </div>
+            {notes.length === 0 ? (
+              <p className={styles.muted}>Комментариев пока нет.</p>
+            ) : (
+              <ul className={styles.noteList}>
+                {notes.map((note) => (
+                  <li key={note.id} className={styles.noteItem}>
+                    <div className={styles.noteMeta}>
+                      <strong>{note.authorName}</strong>
+                      <span>{formatSubmittedAt(note.createdAt)}</span>
+                    </div>
+                    <p className={styles.noteText}>{note.text}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <textarea
+              className={styles.noteInput}
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              rows={4}
+              placeholder="Напишите комментарий…"
+              aria-label="Новый комментарий"
+            />
+            <button
+              type="button"
+              className={styles.primaryAction}
+              disabled={savingNote || !noteDraft.trim()}
+              onClick={() => void submitNote()}
+            >
+              {savingNote ? "Сохранение…" : "Добавить комментарий"}
+            </button>
+          </section>
         ) : null}
       </div>
     );
@@ -725,7 +759,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           </h1>
           <p className={styles.lead}>
             Анкеты клиентов. Редактируйте колонки в таблице и нажмите
-            «Сохранить». Имя открывает разделы: анкета, статус и финансы.
+            «Сохранить». Имя открывает разделы карточки клиента.
           </p>
         </div>
         <div className={styles.headerActions}>

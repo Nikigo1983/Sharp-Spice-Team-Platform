@@ -15,10 +15,10 @@ import {
 } from "@/lib/spiora-survey/validation";
 import type { SpioraSurveyAnswers } from "@/lib/spiora-survey/types";
 import {
-  SPIORA_LOGO_PATH,
   SPIORA_PRODUCT_NAME,
   SPIORA_SLOGAN,
 } from "@/lib/spiora/brand";
+import { SpioraWordmark } from "@/components/spiora/SpioraWordmark";
 import styles from "./SpioraSurveyPublicForm.module.css";
 
 function asStringArray(value: unknown): string[] {
@@ -30,14 +30,7 @@ function BrandHeader() {
   return (
     <header className={styles.brand}>
       <div className={styles.logoChip}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={SPIORA_LOGO_PATH}
-          alt={SPIORA_PRODUCT_NAME}
-          className={styles.logo}
-          width={260}
-          height={55}
-        />
+        <SpioraWordmark className={styles.logo} title={SPIORA_PRODUCT_NAME} />
       </div>
       <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
     </header>
@@ -190,38 +183,49 @@ export function SpioraSurveyPublicForm() {
       </div>
 
       <form className={styles.form} onSubmit={onSubmit}>
-        <section className={styles.fieldset}>
-          <h2 className={styles.questionTitle}>О компании</h2>
-          <label className={styles.checkRow}>
-            <input
-              type="checkbox"
-              checked={anonymous}
-              onChange={(e) => {
-                setAnonymous(e.target.checked);
-                setError(null);
-              }}
-            />
-            <span>Предпочитаю проходить опрос анонимно</span>
-          </label>
-          {!anonymous ? (
-            <label className={styles.field}>
-              <span className={styles.label}>Наименование компании</span>
-              <input
-                className={styles.input}
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Например, Acme Relocate"
-                autoComplete="organization"
-              />
-            </label>
-          ) : null}
-        </section>
-
         {sections.map((group) => (
           <div key={group.section ?? "default"} className={styles.sectionBlock}>
             {group.section ? (
               <h2 className={styles.section}>{group.section}</h2>
             ) : null}
+
+            {group.section === "О компании" ? (
+              <section className={styles.fieldset}>
+                <h3 className={styles.questionTitle}>
+                  <span className={styles.qNum}>1</span>
+                  <span className={styles.questionText}>
+                    Наименование компании
+                  </span>
+                </h3>
+                <p className={styles.hint}>
+                  Укажите название или пройдите опрос анонимно
+                </p>
+                <label className={styles.checkRow}>
+                  <input
+                    type="checkbox"
+                    checked={anonymous}
+                    onChange={(e) => {
+                      setAnonymous(e.target.checked);
+                      setError(null);
+                    }}
+                  />
+                  <span>Предпочитаю проходить опрос анонимно</span>
+                </label>
+                {!anonymous ? (
+                  <label className={styles.field}>
+                    <span className={styles.label}>Наименование компании</span>
+                    <input
+                      className={styles.input}
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Например, Acme Relocate"
+                      autoComplete="organization"
+                    />
+                  </label>
+                ) : null}
+              </section>
+            ) : null}
+
             {group.questions.map((question) => (
               <section key={question.id} className={styles.fieldset}>
                 <h3 className={styles.questionTitle}>

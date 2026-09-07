@@ -52,22 +52,21 @@
 }
 
 .logo {
-  width: auto;
-  max-width: 100%;
-  height: 48px;
   display: block;
-  object-fit: contain;
+  width: min(260px, 100%);
+  height: auto;
+  aspect-ratio: 520 / 96;
 }
 
 .brandSlogan {
   margin: 0;
   max-width: 100%;
   font-family: Raleway, Inter, sans-serif;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 500;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  color: var(--spiora-gray-400);
+  color: var(--spiora-white);
   overflow-wrap: anywhere;
   word-break: break-word;
 }

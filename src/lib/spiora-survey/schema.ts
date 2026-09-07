@@ -41,7 +41,7 @@ export type SpioraQuestion = {
 export const SPIORA_SURVEY_INTRO = {
   greeting: "Добрый день!",
   lead: "Помогите нам лучше понять, как сегодня устроены рабочие процессы в вашей компании.",
-  body: "Мы изучаем, как компании работают с клиентами, документами, задачами, оплатами и командой — и где в этих процессах возникает больше всего ручной работы и сложностей.",
+  body: "Мы хотим увидеть, где команда теряет время на рутину — в работе с клиентами, документами, задачами и оплатами. Эти ответы нужны, чтобы предложить вам решение, которое закрывает именно ваши задачи.",
   duration: "Опрос займёт около 5–7 минут.",
 } as const;
 
@@ -55,7 +55,7 @@ export const Q18_NO_ID = "no";
 export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   {
     id: "q1_industry",
-    number: 1,
+    number: 2,
     type: "single",
     section: "О компании",
     title: "Чем занимается ваша компания?",
@@ -74,7 +74,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q2_team_size",
-    number: 2,
+    number: 3,
     type: "single",
     section: "О компании",
     title: "Сколько человек работает в вашей компании?",
@@ -91,7 +91,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q3_active_clients",
-    number: 3,
+    number: 4,
     type: "single",
     section: "О компании",
     title:
@@ -110,7 +110,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q4_client_info",
-    number: 4,
+    number: 5,
     type: "multi",
     section: "Как вы работаете сейчас",
     title: "Где вы сейчас ведёте информацию о клиентах?",
@@ -137,7 +137,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q5_tools",
-    number: 5,
+    number: 6,
     type: "multi",
     section: "Как вы работаете сейчас",
     title: "Какие инструменты или программы вы используете?",
@@ -159,16 +159,16 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q6_client_journey",
-    number: 6,
+    number: 7,
     type: "text",
     section: "Как вы работаете сейчас",
     title: "Как обычно выглядит работа с новым клиентом?",
-    hint: "Необязательно. Коротко опишите путь от первого обращения до завершения работы — 2–3 предложения достаточно.",
+    hint: "Коротко опишите путь от первого обращения до завершения работы — 2–3 предложения достаточно.",
     required: false,
   },
   {
     id: "q7_problems",
-    number: 7,
+    number: 8,
     type: "multi",
     section: "Где возникают проблемы",
     title: "С какими ситуациями вы сталкиваетесь в работе?",
@@ -228,7 +228,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q8_top_problems",
-    number: 8,
+    number: 9,
     type: "multi",
     section: "Где возникают проблемы",
     title: "Какие три проблемы из отмеченных выше создают больше всего сложностей?",
@@ -238,7 +238,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q9_frequency",
-    number: 9,
+    number: 10,
     type: "single",
     section: "Где возникают проблемы",
     title: "Как часто эти проблемы реально возникают?",
@@ -254,7 +254,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q10_consequences",
-    number: 10,
+    number: 11,
     type: "multi",
     section: "Где возникают проблемы",
     title: "К чему эти проблемы обычно приводят?",
@@ -286,7 +286,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q11_pain_score",
-    number: 11,
+    number: 12,
     type: "scale",
     section: "Где возникают проблемы",
     title:
@@ -299,7 +299,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q12_tried_crm",
-    number: 12,
+    number: 13,
     type: "single",
     section: "Что уже пробовали",
     title:
@@ -316,7 +316,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q13_crm_issues",
-    number: 13,
+    number: 14,
     type: "multi",
     section: "Что уже пробовали",
     title:
@@ -349,7 +349,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q14_priority",
-    number: 14,
+    number: 15,
     type: "single",
     section: "Насколько решение важно сейчас",
     title:
@@ -372,7 +372,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q15_paid_ready",
-    number: 15,
+    number: 16,
     type: "single",
     section: "Готовность платить",
     title:
@@ -389,7 +389,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q16_budget",
-    number: 16,
+    number: 17,
     type: "single",
     section: "Готовность платить",
     title:
@@ -409,7 +409,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q17_one_problem",
-    number: 17,
+    number: 18,
     type: "text",
     section: "Главный приоритет",
     title:
@@ -419,7 +419,7 @@ export const SPIORA_QUESTIONS: SpioraQuestion[] = [
   },
   {
     id: "q18_contact_ok",
-    number: 18,
+    number: 19,
     type: "single",
     section: "Финальный вопрос",
     title: "Можно ли связаться с вами для короткого разговора на 15–20 минут?",

@@ -36,8 +36,9 @@ export function formatResponseAnswers(
   const rows: SpioraAnswerDisplay[] = [
     {
       questionId: "company",
-      title: "Компания",
-      section: "Вступление",
+      number: 1,
+      title: "Наименование компании",
+      section: "О компании",
       value: response.anonymous
         ? "Анонимно"
         : response.companyName?.trim() || "—",

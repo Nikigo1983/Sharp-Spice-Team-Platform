@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 88" role="img" aria-label="Spiora">
+  <g transform="translate(4 6)">
+    <path
+      fill="#E82916"
+      d="M42 2C21 2 4 14 4 32c0 13 8 21 23 26l15 4c8 2 13 5 13 11 0 8-8 13-20 13-10 0-19-3-27-9v16c9 5 19 9 30 9 24 0 40-12 40-31 0-13-8-21-23-26L40 41c-8-2-13-5-13-11 0-8 7-11 18-11 9 0 17 3 24 8V2C62 4 52 2 42 2z"
+    />
+  </g>
+  <text
+    x="92"
+    y="58"
+    fill="#111111"
+    font-family="Sora, Inter, Arial, Helvetica, sans-serif"
+    font-size="44"
+    font-weight="700"
+    letter-spacing="-0.035em"
+  >Spiora</text>
+</svg>

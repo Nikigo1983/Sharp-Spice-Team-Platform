@@ -14,12 +14,34 @@ import {
   validateSurveyPayload,
 } from "@/lib/spiora-survey/validation";
 import type { SpioraSurveyAnswers } from "@/lib/spiora-survey/types";
-import { SPIORA_PRODUCT_NAME, SPIORA_SLOGAN } from "@/lib/spiora/brand";
+import {
+  SPIORA_LOGO_PATH,
+  SPIORA_PRODUCT_NAME,
+  SPIORA_SLOGAN,
+} from "@/lib/spiora/brand";
 import styles from "./SpioraSurveyPublicForm.module.css";
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is string => typeof v === "string");
+}
+
+function BrandHeader() {
+  return (
+    <header className={styles.brand}>
+      <div className={styles.logoChip}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={SPIORA_LOGO_PATH}
+          alt={SPIORA_PRODUCT_NAME}
+          className={styles.logo}
+          width={200}
+          height={46}
+        />
+      </div>
+      <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
+    </header>
+  );
 }
 
 export function SpioraSurveyPublicForm() {
@@ -63,9 +85,6 @@ export function SpioraSurveyPublicForm() {
       if (id === "q12_tried_crm" && value === "never_tried") {
         delete next.q13_crm_issues;
         delete next.q13_crm_issues_other;
-      }
-      if (id === "q18_contact_ok" && value === "no") {
-        // contact cleared on submit
       }
       return next;
     });
@@ -143,11 +162,9 @@ export function SpioraSurveyPublicForm() {
   if (done) {
     return (
       <div className={styles.shell}>
-        <header className={styles.brand}>
-          <p className={styles.brandName}>{SPIORA_PRODUCT_NAME}</p>
-          <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
-        </header>
+        <BrandHeader />
         <div className={styles.thanksCard}>
+          <p className={styles.eyebrow}>SPIORA</p>
           <h1 className={styles.thanksTitle}>Готово</h1>
           <p className={styles.thanksText}>{SPIORA_SURVEY_THANKS}</p>
         </div>
@@ -157,12 +174,10 @@ export function SpioraSurveyPublicForm() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.brand}>
-        <p className={styles.brandName}>{SPIORA_PRODUCT_NAME}</p>
-        <p className={styles.brandSlogan}>{SPIORA_SLOGAN}</p>
-      </header>
+      <BrandHeader />
 
       <div className={styles.hero}>
+        <p className={styles.eyebrow}>Исследование процессов</p>
         <h1 className={styles.title}>{SPIORA_SURVEY_CLIENT_TITLE}</h1>
         <p className={styles.subtitle}>{SPIORA_SURVEY_CLIENT_SUBTITLE}</p>
       </div>
@@ -203,14 +218,16 @@ export function SpioraSurveyPublicForm() {
         </fieldset>
 
         {sections.map((group) => (
-          <div key={group.section ?? "default"}>
+          <div key={group.section ?? "default"} className={styles.sectionBlock}>
             {group.section ? (
               <h2 className={styles.section}>{group.section}</h2>
             ) : null}
             {group.questions.map((question) => (
               <fieldset key={question.id} className={styles.fieldset}>
                 <legend className={styles.legend}>
-                  {question.number ? `${question.number}. ` : null}
+                  {question.number ? (
+                    <span className={styles.qNum}>{question.number}</span>
+                  ) : null}
                   {question.title}
                 </legend>
                 {question.hint ? (

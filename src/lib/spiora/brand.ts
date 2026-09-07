@@ -6,6 +6,12 @@ export const SPIORA_SLOGAN = "ONE PLATFORM. INFINITE SOLUTIONS.";
 export const SPIORA_DESCRIPTION =
   "AI-операционная система для бизнеса — демонстрационная корпоративная платформа для показа клиентам.";
 
+/** Brand mark for public Spiora surfaces. */
+export const SPIORA_LOGO_PATH = "/spiora-logo.svg";
+
+/** Primary Spiora accent (matches product hub). */
+export const SPIORA_ACCENT = "#E82916";
+
 /** Public demo URL. Override with NEXT_PUBLIC_SPIORA_URL. */
 export function getSpioraDemoUrl(): string | null {
   const fromEnv = process.env.NEXT_PUBLIC_SPIORA_URL?.trim();

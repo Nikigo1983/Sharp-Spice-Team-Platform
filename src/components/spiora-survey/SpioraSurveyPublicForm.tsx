@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  SPIORA_SURVEY_CLIENT_SUBTITLE,
   SPIORA_SURVEY_INTRO,
   SPIORA_SURVEY_THANKS,
   type SpioraQuestion,
@@ -172,11 +171,6 @@ export function SpioraSurveyPublicForm() {
   return (
     <div className={styles.shell}>
       <BrandHeader />
-
-      <div className={styles.hero}>
-        <p className={styles.eyebrow}>Исследование процессов</p>
-        <p className={styles.subtitle}>{SPIORA_SURVEY_CLIENT_SUBTITLE}</p>
-      </div>
 
       <div className={styles.intro}>
         <p className={styles.introGreeting}>{SPIORA_SURVEY_INTRO.greeting}</p>

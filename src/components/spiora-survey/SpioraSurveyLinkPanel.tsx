@@ -33,7 +33,7 @@ export function SpioraSurveyLinkPanel() {
     <div className={styles.wrap}>
       <SectionHeader
         title={SPIORA_SURVEY_STAFF_TITLE}
-        subtitle="Отправьте клиенту ссылку на исследование процессов. Ответы появятся в разделе «Ответы по анкете потенциальных клиентов»."
+        subtitle="Отправьте клиенту ссылку на исследование процессов."
       />
 
       <Card className={styles.card}>
@@ -45,8 +45,7 @@ export function SpioraSurveyLinkPanel() {
           </Button>
         </div>
         <p className={styles.hint}>
-          Клиент заполняет анкету без входа в платформу. Ответы от клиентов
-          отобразятся в разделе «Ответы по анкете потенциальных клиентов».
+          Клиент заполняет анкету без входа в платформу.
         </p>
       </Card>
     </div>

@@ -38,8 +38,7 @@ export function SpioraView() {
         <h2 className={styles.heroTitle}>{SPIORA_PRODUCT_NAME}</h2>
         <p className={styles.slogan}>{SPIORA_SLOGAN}</p>
         <p className={styles.heroLead}>
-          Анкета для потенциальных клиентов и таблица ответов — чтобы строить
-          SPIORA на реальных бизнес-задачах.
+          Анкеты, ответы и клиенты SPIORA — в одном разделе для команды.
         </p>
         {demoUrl ? (
           <a

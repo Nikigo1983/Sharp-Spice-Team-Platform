@@ -56,9 +56,23 @@ const NAV_SPIORA_RESPONSES: NavItem = {
   icon: "fa-solid fa-table-list",
 };
 
+const NAV_SPIORA_ONBOARDING_SURVEY: NavItem = {
+  href: "/spiora/onboarding-survey",
+  label: "Анкета для нового клиента SPIORA по внедрению платформы",
+  icon: "fa-solid fa-clipboard-check",
+};
+
+const NAV_SPIORA_CLIENTS: NavItem = {
+  href: "/spiora/clients",
+  label: "Клиенты SPIORA",
+  icon: "fa-solid fa-building-user",
+};
+
 export const SPIORA_NAV_CHILDREN: NavItem[] = [
   NAV_SPIORA_SURVEY,
   NAV_SPIORA_RESPONSES,
+  NAV_SPIORA_ONBOARDING_SURVEY,
+  NAV_SPIORA_CLIENTS,
 ];
 
 function buildSpioraNav(): NavGroup {

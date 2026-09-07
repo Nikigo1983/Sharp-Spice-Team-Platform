@@ -21,6 +21,15 @@ import {
   playNotificationSound,
   unlockNotificationAudio,
 } from "@/lib/notifications/play-sound";
+import { setNotificationsUnreadForBadge } from "@/lib/notifications/app-badge";
+import {
+  buildSystemNotifyFromItem,
+  ensureBrowserNotificationPermission,
+  getBrowserNotificationPermission,
+  isAppInBackground,
+  showSystemNotification,
+} from "@/lib/notifications/system-notify";
+import { subscribeToWebPush } from "@/lib/notifications/web-push-client";
 import {
   NotificationContext,
   type NotificationItem,
@@ -138,7 +147,45 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback(
     (notification: NotificationItem) => {
       if (!shouldShowNotificationToast(notification.type)) return;
-      if (isOnNotificationSection(pathname, notification.type)) return;
+
+      const href = getNotificationHref(
+        notification.type,
+        notification.message,
+      );
+      const onSection = isOnNotificationSection(
+        pathname,
+        notification.type,
+        notification.message,
+      );
+
+      const inBackground = isAppInBackground();
+      const preferDesktop = inBackground || !onSection;
+
+      if (preferDesktop) {
+        void (async () => {
+          const permission = await ensureBrowserNotificationPermission();
+          let shown = false;
+          if (permission === "granted") {
+            shown = await showSystemNotification(
+              buildSystemNotifyFromItem(notification, href),
+            );
+          }
+          if (!shown && isNotificationSoundEnabled()) {
+            playNotificationSound({
+              allowHidden:
+                inBackground || document.visibilityState === "hidden",
+            });
+          }
+        })();
+        if (inBackground || onSection) return;
+        if (getBrowserNotificationPermission() === "granted") {
+          return;
+        }
+      }
+
+      if (onSection) {
+        return;
+      }
 
       let added = false;
       setToasts((prev) => {
@@ -182,6 +229,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         );
       });
       setUnread(unreadCount);
+      void setNotificationsUnreadForBadge(unreadCount);
 
       if (!initializedRef.current) {
         for (const item of items) {
@@ -254,7 +302,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((item) => (item.id === id ? data.notification : item)),
     );
-    setUnread((prev) => Math.max(0, prev - 1));
+    setUnread((prev) => {
+      const next = Math.max(0, prev - 1);
+      void setNotificationsUnreadForBadge(next);
+      return next;
+    });
   }, []);
 
   markReadRef.current = markRead;
@@ -267,6 +319,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       prev.map((item) => ({ ...item, is_read: true })),
     );
     setUnread(0);
+    void setNotificationsUnreadForBadge(0);
   }, []);
 
   const removeNotification = useCallback(async (id: string) => {
@@ -289,6 +342,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unlock = () => {
       void unlockNotificationAudio();
+      void (async () => {
+        const permission = await ensureBrowserNotificationPermission();
+        if (permission === "granted") {
+          void subscribeToWebPush();
+        }
+      })();
     };
     window.addEventListener("pointerdown", unlock, { passive: true });
     window.addEventListener("keydown", unlock);
@@ -297,6 +356,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  useEffect(() => {
+    if (getBrowserNotificationPermission() !== "granted") return;
+    void subscribeToWebPush();
+  }, []);
+
+  useEffect(() => {
+    void setNotificationsUnreadForBadge(unread);
+    if (unread > 0) {
+      void ensureBrowserNotificationPermission();
+    }
+  }, [unread]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void setNotificationsUnreadForBadge(unread);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [unread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,20 +394,52 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [fetchNotifications]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    let timer: number | null = null;
+
+    const poll = () => {
       if (!pollSinceRef.current) return;
       void fetchNotifications({ since: pollSinceRef.current });
-    }, 5000);
+    };
 
-    return () => clearInterval(timer);
-  }, [fetchNotifications]);
+    const schedule = () => {
+      if (timer != null) window.clearInterval(timer);
+      const ms =
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+          ? 2500
+          : 4000;
+      timer = window.setInterval(poll, ms);
+    };
+
+    schedule();
+    poll();
+
+    const onWake = () => {
+      void setNotificationsUnreadForBadge(unread);
+      schedule();
+      poll();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    window.addEventListener("blur", poll);
+
+    return () => {
+      if (timer != null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("blur", poll);
+    };
+  }, [fetchNotifications, unread]);
 
   useEffect(() => {
     const idsToMark: string[] = [];
 
     setToasts((prev) =>
       prev.filter((toast) => {
-        const section = getNotificationSection(toast.notification.type);
+        const section = getNotificationSection(
+          toast.notification.type,
+          toast.notification.message,
+        );
         if (
           section &&
           pathnameMatchesNotificationSection(pathname, section)

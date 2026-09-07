@@ -454,6 +454,18 @@ export async function updateSubmittedProcessStatus(
     portalUrl,
   });
 
+  void import("@/lib/notifications/emit")
+    .then(({ notifyClientCaseStatusChanged }) =>
+      notifyClientCaseStatusChanged({
+        portalUserId: current.clientPortalUserId,
+        statusLabel: processStatus.value,
+        actorName: input.updatedByName,
+      }),
+    )
+    .catch((error) => {
+      console.error("[client-case] notify status failed", error);
+    });
+
   return {
     record,
     processStatus,

@@ -81,10 +81,15 @@ function playTone(
 }
 
 /** Короткий звук для in-app уведомлений (Web Audio API). */
-export function playNotificationSound(): void {
+export function playNotificationSound(options?: { allowHidden?: boolean }): void {
   if (typeof window === "undefined") return;
   if (!isNotificationSoundEnabled()) return;
-  if (document.visibilityState !== "visible") return;
+  if (
+    document.visibilityState !== "visible" &&
+    !options?.allowHidden
+  ) {
+    return;
+  }
 
   const now = Date.now();
   if (now - lastSoundAt < SOUND_DEBOUNCE_MS) return;
@@ -100,9 +105,9 @@ export function playNotificationSound(): void {
       }
       if (ctx.state !== "running") return;
 
-      playTone(ctx, 523.25, 0, 0.1);
-      playTone(ctx, 659.25, 0.11, 0.12);
-      playTone(ctx, 783.99, 0.24, 0.16, 0.12);
+      // Two-tone “messenger” ping (similar cadence to chat apps).
+      playTone(ctx, 880, 0, 0.09, 0.16);
+      playTone(ctx, 1174.66, 0.1, 0.14, 0.14);
     } catch {
       // Браузер заблокировал звук — игнорируем.
     }

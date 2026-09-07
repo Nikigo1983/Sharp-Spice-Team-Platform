@@ -72,14 +72,21 @@ export function buildCalendarReminderNotificationContent(
   };
 }
 
-export function buildVideoMeetingInviteNotificationContent(
+export function buildCalendarEventCreatedNotificationContent(
   event: CalendarEvent,
 ): { title: string; message: string } {
   const displayMessage = formatCalendarReminderDisplayMessage(event);
+  const video = isVideoMeeting(event);
   return {
-    title: "Приглашение на видеовстречу",
+    title: video ? "Приглашение на видеовстречу" : "Новое событие в календаре",
     message: encodeCalendarReminderMessage(displayMessage, event.id, {
-      isVideoMeeting: true,
+      isVideoMeeting: video,
     }),
   };
+}
+
+export function buildVideoMeetingInviteNotificationContent(
+  event: CalendarEvent,
+): { title: string; message: string } {
+  return buildCalendarEventCreatedNotificationContent(event);
 }

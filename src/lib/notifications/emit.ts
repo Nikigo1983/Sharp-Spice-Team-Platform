@@ -1,7 +1,7 @@
 import "server-only";
 
 import { listTeamUsers } from "@/lib/auth/users";
-import { resolveVideoMeetingReminderRecipientIds } from "@/lib/calendar/participants";
+import { resolveReminderRecipientIds } from "@/lib/calendar/reminders";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { isVideoMeeting } from "@/lib/calendar/meeting";
 import type { ReminderOffsetMinutes } from "@/lib/calendar/constants";
@@ -9,10 +9,21 @@ import { getDeletedUserIds } from "@/lib/team/store";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/tasks/types";
 import {
   buildCalendarReminderNotificationContent,
-  buildVideoMeetingInviteNotificationContent,
+  buildCalendarEventCreatedNotificationContent,
 } from "./calendar-reminder-copy";
-import { createNotificationForUser, createNotificationsForTeam } from "./store";
+import {
+  createNotificationForUser,
+  createNotificationsForTeam,
+  createNotificationsForUserIds,
+} from "./store";
 import type { Notification } from "./types";
+
+async function listActiveCalendarUserIds(): Promise<string[]> {
+  const deleted = new Set(await getDeletedUserIds());
+  return listTeamUsers()
+    .filter((user) => !deleted.has(user.id))
+    .map((user) => user.id);
+}
 
 export async function notifyTeamChatMessage(params: {
   senderId: string;
@@ -74,7 +85,15 @@ export async function notifyTaskStatusChanged(params: {
   actorName: string;
   taskTitle: string;
   status: TaskStatus;
+  assigneeIds?: string[];
+  creatorUserId?: string;
 }) {
+  const recipientIds = [
+    ...(params.assigneeIds ?? []),
+    ...(params.creatorUserId ? [params.creatorUserId] : []),
+  ].filter((id) => id && id !== params.actorId);
+  const uniqueRecipients = [...new Set(recipientIds)];
+
   await createNotificationsForTeam(
     {
       type: "task_status",
@@ -82,7 +101,12 @@ export async function notifyTaskStatusChanged(params: {
       author_name: params.actorName,
       message: `${params.taskTitle} — ${TASK_STATUS_LABELS[params.status]}`,
     },
-    { excludeUserId: params.actorId },
+    uniqueRecipients.length
+      ? {
+          excludeUserId: params.actorId,
+          onlyUserIds: uniqueRecipients,
+        }
+      : { excludeUserId: params.actorId },
   );
 }
 
@@ -237,6 +261,8 @@ export async function notifyTaskStatusUpdate(params: {
     actorName: params.actorName,
     taskTitle: params.taskTitle,
     status: params.newStatus,
+    assigneeIds: params.assigneeIds,
+    creatorUserId: params.creatorUserId,
   });
 }
 
@@ -304,21 +330,25 @@ export async function notifyCalendarReminder(params: {
   });
 }
 
-export async function notifyVideoMeetingInvite(params: {
+export function buildCalendarEventCreatedRecipientIds(
+  event: CalendarEvent,
+  activeUserIds: string[],
+): string[] {
+  const recipientIds = new Set(resolveReminderRecipientIds(event, activeUserIds));
+  recipientIds.add(event.createdByUserId);
+  if (event.ownerUserId) {
+    recipientIds.add(event.ownerUserId);
+  }
+  return [...recipientIds];
+}
+
+export async function notifyCalendarEventCreated(params: {
   actorId: string;
   actorName: string;
   event: CalendarEvent;
 }): Promise<void> {
-  if (!isVideoMeeting(params.event)) {
-    return;
-  }
-
-  const deleted = new Set(await getDeletedUserIds());
-  const activeUserIds = listTeamUsers()
-    .filter((user) => !deleted.has(user.id))
-    .map((user) => user.id);
-
-  const recipientIds = resolveVideoMeetingReminderRecipientIds(
+  const activeUserIds = await listActiveCalendarUserIds();
+  const recipientIds = buildCalendarEventCreatedRecipientIds(
     params.event,
     activeUserIds,
   );
@@ -327,18 +357,37 @@ export async function notifyVideoMeetingInvite(params: {
     return;
   }
 
-  const content = buildVideoMeetingInviteNotificationContent(params.event);
+  const content = buildCalendarEventCreatedNotificationContent(params.event);
 
-  await createNotificationsForTeam(
-    {
-      type: "calendar_video_invite",
-      title: content.title,
-      message: content.message,
-      author_name: params.actorName,
-    },
-    {
-      excludeUserId: params.actorId,
-      onlyUserIds: recipientIds,
-    },
-  );
+  await createNotificationsForUserIds(recipientIds, {
+    type: isVideoMeeting(params.event)
+      ? "calendar_video_invite"
+      : "calendar_reminder",
+    title: content.title,
+    message: content.message,
+    author_name: params.actorName,
+  });
+}
+
+export async function notifyVideoMeetingInvite(params: {
+  actorId: string;
+  actorName: string;
+  event: CalendarEvent;
+}): Promise<void> {
+  await notifyCalendarEventCreated(params);
+}
+
+export async function notifyClientCaseStatusChanged(params: {
+  portalUserId: string;
+  statusLabel: string;
+  actorName?: string | null;
+}): Promise<void> {
+  if (!params.portalUserId) return;
+
+  await createNotificationForUser(params.portalUserId, {
+    type: "client_case_status",
+    title: "Статус заявки обновлён",
+    message: `Новый статус: ${params.statusLabel}`,
+    author_name: params.actorName ?? null,
+  });
 }

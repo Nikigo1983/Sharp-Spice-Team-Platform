@@ -8,12 +8,23 @@ import {
   formatNotificationTime,
   isSuccessNotification,
 } from "./constants";
-import { getNotificationDisplayMessage, getNotificationActionLabel, getNotificationHref } from "@/lib/notifications/navigation";
+import {
+  getNotificationDisplayMessage,
+  getNotificationActionLabel,
+  getNotificationHref,
+} from "@/lib/notifications/navigation";
 import {
   isNotificationSoundEnabled,
+  playNotificationSound,
   setNotificationSoundEnabled,
   unlockNotificationAudio,
 } from "@/lib/notifications/play-sound";
+import { subscribeToWebPush } from "@/lib/notifications/web-push-client";
+import {
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+  showSystemNotification,
+} from "@/lib/notifications/system-notify";
 import { useNotificationsOptional } from "./notification-context";
 import styles from "./NotificationBell.module.css";
 
@@ -23,12 +34,24 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [desktopPermission, setDesktopPermission] = useState<
+    NotificationPermission | "unsupported"
+  >("default");
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
     setSoundEnabled(isNotificationSoundEnabled());
+    setDesktopPermission(getBrowserNotificationPermission());
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setDesktopPermission(getBrowserNotificationPermission());
+  }, [open]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -135,6 +158,109 @@ export function NotificationBell() {
             </div>
           </header>
 
+          {mounted ? (
+            <div className={styles.desktopCallout}>
+              {desktopPermission !== "granted" &&
+              desktopPermission !== "unsupported" ? (
+                <>
+                  <p className={styles.desktopCalloutText}>
+                    {desktopPermission === "denied"
+                      ? "Уведомления заблокированы. В настройках Chrome/Edge для сайта Sharp & Spice включите «Уведомления»."
+                      : "Чтобы сообщения чата всплывали на рабочем столе со звуком (как в Telegram), разрешите уведомления Sharp & Spice."}
+                  </p>
+                  {desktopPermission !== "denied" ? (
+                    <div className={styles.desktopCalloutActions}>
+                      <button
+                        type="button"
+                        className={styles.desktopCalloutBtn}
+                        onClick={() => {
+                          void (async () => {
+                            void unlockNotificationAudio();
+                            const next =
+                              await requestBrowserNotificationPermission();
+                            setDesktopPermission(next);
+                            if (next === "granted") {
+                              void subscribeToWebPush();
+                            }
+                          })();
+                        }}
+                      >
+                        Разрешить
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              <button
+                type="button"
+                className={styles.helpToggle}
+                aria-expanded={helpOpen}
+                onClick={() => setHelpOpen((value) => !value)}
+              >
+                Что делать, если всплывающие уведомления не работают при
+                неактивном приложении?
+                <span className={styles.helpChevron} aria-hidden>
+                  {helpOpen ? "▴" : "▾"}
+                </span>
+              </button>
+
+              {helpOpen ? (
+                <div className={styles.helpBody}>
+                  <p className={styles.desktopCalloutHint}>
+                    Если всплывающее уведомление не появляется: Параметры
+                    Windows → Система → Уведомления — включите для Google Chrome
+                    (или Edge) и Sharp & Spice. В этом же разделе выключите «Не
+                    беспокоить» (или нажмите Win+A и отключите «Не беспокоить» в
+                    быстрых настройках). После проверки нажмите Win+N — сообщение
+                    может быть в центре уведомлений.
+                  </p>
+                  <div className={styles.desktopCalloutActions}>
+                    {desktopPermission === "granted" ? (
+                      <button
+                        type="button"
+                        className={styles.desktopCalloutBtn}
+                        disabled={testBusy}
+                        onClick={() => {
+                          void (async () => {
+                            setTestBusy(true);
+                            setTestResult(null);
+                            try {
+                              void unlockNotificationAudio();
+                              playNotificationSound({ allowHidden: true });
+                              const shown = await showSystemNotification({
+                                id: `test-${Date.now()}`,
+                                title: "Sharp & Spice",
+                                body: "Если вы это видите — всплывающие уведомления Sharp & Spice работают.",
+                                href: "/",
+                                tag: `ss-test-${Date.now()}`,
+                                autoCloseMs: 12_000,
+                                requireInteraction: true,
+                                force: true,
+                              });
+                              setTestResult(
+                                shown
+                                  ? "Отправлено. Если всплывающего уведомления нет — откройте центр уведомлений (Win+N) и проверьте настройки Windows выше."
+                                  : "Не удалось показать уведомление. Проверьте разрешение сайта и настройки Windows.",
+                              );
+                            } finally {
+                              setTestBusy(false);
+                            }
+                          })();
+                        }}
+                      >
+                        Проверить уведомление
+                      </button>
+                    ) : null}
+                  </div>
+                  {testResult ? (
+                    <p className={styles.desktopCalloutResult}>{testResult}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className={styles.list}>
             {loading && unreadNotifications.length === 0 ? (
               <p className={styles.empty}>Загрузка…</p>
@@ -148,86 +274,86 @@ export function NotificationBell() {
                   item.message,
                 );
                 return (
-                <div
-                  key={item.id}
-                  className={[
-                    styles.item,
-                    item.is_read ? styles.itemRead : styles.itemUnread,
-                    isSuccess ? styles.itemSuccess : "",
-                    isSuccess && !item.is_read ? styles.itemSuccessUnread : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <div className={styles.itemTop}>
-                    <button
-                      type="button"
-                      className={styles.itemTypeBtn}
-                      onClick={() =>
-                        void handleOpenItem(
-                          item.id,
-                          item.is_read,
-                          item.type,
-                          item.message,
-                        )
-                      }
-                    >
-                      <span
-                        className={[
-                          styles.itemType,
-                          isSuccess ? styles.itemTypeSuccess : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
-                        {NOTIFICATION_TYPE_LABELS[item.type]}
-                      </span>
-                    </button>
-                    <span className={styles.itemTime}>
-                      {formatNotificationTime(item.created_at)}
-                    </span>
-                    <button
-                      type="button"
-                      className={styles.closeBtn}
-                      aria-label="Закрыть уведомление"
-                      onClick={() => void ctx.removeNotification(item.id)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <p className={styles.itemTitle}>{item.title}</p>
-                  {item.author_name ? (
-                    <p className={styles.itemAuthor}>{item.author_name}</p>
-                  ) : null}
-                  <p
+                  <div
+                    key={item.id}
                     className={[
-                      styles.itemMessage,
-                      isSuccess ? styles.itemMessageSuccess : "",
+                      styles.item,
+                      item.is_read ? styles.itemRead : styles.itemUnread,
+                      isSuccess ? styles.itemSuccess : "",
+                      isSuccess && !item.is_read ? styles.itemSuccessUnread : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    {getNotificationDisplayMessage(item.type, item.message)}
-                  </p>
-                  {actionLabel ? (
-                    <button
-                      type="button"
-                      className={styles.joinButton}
-                      onClick={() =>
-                        void handleOpenItem(
-                          item.id,
-                          item.is_read,
-                          item.type,
-                          item.message,
-                        )
-                      }
+                    <div className={styles.itemTop}>
+                      <button
+                        type="button"
+                        className={styles.itemTypeBtn}
+                        onClick={() =>
+                          void handleOpenItem(
+                            item.id,
+                            item.is_read,
+                            item.type,
+                            item.message,
+                          )
+                        }
+                      >
+                        <span
+                          className={[
+                            styles.itemType,
+                            isSuccess ? styles.itemTypeSuccess : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
+                          {NOTIFICATION_TYPE_LABELS[item.type]}
+                        </span>
+                      </button>
+                      <span className={styles.itemTime}>
+                        {formatNotificationTime(item.created_at)}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.closeBtn}
+                        aria-label="Закрыть уведомление"
+                        onClick={() => void ctx.removeNotification(item.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className={styles.itemTitle}>{item.title}</p>
+                    {item.author_name ? (
+                      <p className={styles.itemAuthor}>{item.author_name}</p>
+                    ) : null}
+                    <p
+                      className={[
+                        styles.itemMessage,
+                        isSuccess ? styles.itemMessageSuccess : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                     >
-                      {actionLabel}
-                    </button>
-                  ) : null}
-                </div>
-              );
+                      {getNotificationDisplayMessage(item.type, item.message)}
+                    </p>
+                    {actionLabel ? (
+                      <button
+                        type="button"
+                        className={styles.joinButton}
+                        onClick={() =>
+                          void handleOpenItem(
+                            item.id,
+                            item.is_read,
+                            item.type,
+                            item.message,
+                          )
+                        }
+                      >
+                        {actionLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                );
               })
             )}
           </div>

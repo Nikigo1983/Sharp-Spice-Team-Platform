@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ClientNotificationHost } from "@/components/client-portal/ClientNotificationHost";
 
 export default function ClientPortalLayout({
   children,
@@ -14,6 +15,7 @@ export default function ClientPortalLayout({
         color: "#0f172a",
       }}
     >
+      <ClientNotificationHost />
       {children}
     </div>
   );

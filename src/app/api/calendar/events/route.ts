@@ -4,7 +4,8 @@ import {
   handleListCalendarEvents,
 } from "@/lib/calendar/handlers";
 import { getSession } from "@/lib/auth/session";
-import { notifyVideoMeetingInvite } from "@/lib/notifications/emit";
+import { notifyCalendarEventCreated } from "@/lib/notifications/emit";
+import { runCalendarReminderCron } from "@/lib/calendar/reminders-cron";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -40,10 +41,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  await notifyVideoMeetingInvite({
+  await notifyCalendarEventCreated({
     actorId: session.id,
     actorName: session.name,
     event: result.event,
+  });
+  void runCalendarReminderCron().catch((error) => {
+    console.error("[calendar] reminder pass after create failed", error);
   });
 
   return NextResponse.json({ event: result.event }, { status: 201 });

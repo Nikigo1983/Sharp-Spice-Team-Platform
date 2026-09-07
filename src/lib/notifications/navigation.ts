@@ -1,17 +1,29 @@
 import type { NotificationType } from "@/lib/notifications/types";
 import { decodeCalendarReminderMessage } from "./calendar-reminder-copy";
 
-export type NotificationSection = "team-chat" | "tasks" | "formgrid" | "calendar";
+export type NotificationSection =
+  | "team-chat"
+  | "tasks"
+  | "formgrid"
+  | "calendar"
+  | "meeting-recordings"
+  | "clients";
 
 const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
   "team_chat",
   "task_new",
   "task_status",
   "task_completed",
+  "task_pending_approval",
+  "task_revision",
   "client_new",
   "consultation_assigned",
   "calendar_reminder",
   "calendar_video_invite",
+  "meeting_recording_ready",
+  "client_case_status",
+  "client_agreement_update",
+  "system",
 ]);
 
 const CALENDAR_LINK_TYPES = new Set<NotificationType>([
@@ -39,6 +51,7 @@ export function getNotificationDisplayMessage(
 
 export function getNotificationSection(
   type: NotificationType,
+  _message?: string,
 ): NotificationSection | null {
   switch (type) {
     case "team_chat":
@@ -46,6 +59,8 @@ export function getNotificationSection(
     case "task_new":
     case "task_status":
     case "task_completed":
+    case "task_pending_approval":
+    case "task_revision":
       return "tasks";
     case "client_new":
     case "consultation_assigned":
@@ -53,6 +68,13 @@ export function getNotificationSection(
     case "calendar_reminder":
     case "calendar_video_invite":
       return "calendar";
+    case "meeting_recording_ready":
+      return "meeting-recordings";
+    case "client_case_status":
+    case "client_agreement_update":
+      return "clients";
+    case "system":
+      return null;
     default:
       return null;
   }
@@ -68,6 +90,8 @@ export function getNotificationHref(
     case "task_new":
     case "task_status":
     case "task_completed":
+    case "task_pending_approval":
+    case "task_revision":
       return "/tasks";
     case "client_new":
     case "consultation_assigned":
@@ -84,6 +108,11 @@ export function getNotificationHref(
         ? `/calendar?event=${encodeURIComponent(eventId)}`
         : "/calendar";
     }
+    case "meeting_recording_ready":
+      return "/meeting-recordings";
+    case "client_case_status":
+    case "client_agreement_update":
+      return "/client";
     default:
       return null;
   }
@@ -123,6 +152,13 @@ export function pathnameMatchesNotificationSection(
       );
     case "calendar":
       return pathname === "/calendar" || pathname.startsWith("/calendar/");
+    case "meeting-recordings":
+      return (
+        pathname === "/meeting-recordings" ||
+        pathname.startsWith("/meeting-recordings/")
+      );
+    case "clients":
+      return pathname === "/client" || pathname.startsWith("/client/");
     default:
       return false;
   }
@@ -131,8 +167,9 @@ export function pathnameMatchesNotificationSection(
 export function isOnNotificationSection(
   pathname: string,
   type: NotificationType,
+  message?: string,
 ): boolean {
-  const section = getNotificationSection(type);
+  const section = getNotificationSection(type, message);
   if (!section) return false;
   return pathnameMatchesNotificationSection(pathname, section);
 }

@@ -94,7 +94,13 @@ export async function createNotificationForUser(
 
   if (isSupabaseConfigured()) {
     try {
-      return await sbNotifications.sbInsertNotification(notification);
+      const created = await sbNotifications.sbInsertNotification(notification);
+      void import("./web-push-send")
+        .then(({ sendWebPushForNotification }) =>
+          sendWebPushForNotification(created),
+        )
+        .catch((error) => console.error("[web-push] notify", error));
+      return created;
     } catch (error) {
       console.error("[notifications] supabase create", error);
       throw error;
@@ -104,6 +110,11 @@ export async function createNotificationForUser(
   const store = await readStore();
   store.notifications.unshift(notification);
   await writeStore(store);
+  void import("./web-push-send")
+    .then(({ sendWebPushForNotification }) =>
+      sendWebPushForNotification(notification),
+    )
+    .catch((error) => console.error("[web-push] notify", error));
   return notification;
 }
 
@@ -112,16 +123,48 @@ export async function createNotificationsForTeam(
   opts?: { excludeUserId?: string; onlyUserIds?: string[] },
 ): Promise<Notification[]> {
   const deleted = new Set(await getDeletedUserIds());
-  const users = listTeamUsers().filter((user) => {
+  const { listTeamMembers } = await import("@/lib/team/store");
+  const members = await listTeamMembers();
+  const roster =
+    members.length > 0
+      ? members
+      : listTeamUsers().map((user) => ({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        }));
+
+  const users = roster.filter((user) => {
     if (deleted.has(user.id)) return false;
     if (opts?.excludeUserId && user.id === opts.excludeUserId) return false;
-    if (opts?.onlyUserIds && !opts.onlyUserIds.includes(user.id)) return false;
+    if (opts?.onlyUserIds && !opts.onlyUserIds.includes(user.id)) {
+      const demoIds = listTeamUsers()
+        .filter(
+          (demo) => demo.email.toLowerCase() === user.email.toLowerCase(),
+        )
+        .map((demo) => demo.id);
+      if (!opts.onlyUserIds.some((id) => demoIds.includes(id))) {
+        return false;
+      }
+    }
     return true;
   });
 
   const created: Notification[] = [];
   for (const user of users) {
     created.push(await createNotificationForUser(user.id, input));
+  }
+  return created;
+}
+
+export async function createNotificationsForUserIds(
+  userIds: string[],
+  input: CreateNotificationInput,
+): Promise<Notification[]> {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  const created: Notification[] = [];
+  for (const userId of uniqueIds) {
+    created.push(await createNotificationForUser(userId, input));
   }
   return created;
 }

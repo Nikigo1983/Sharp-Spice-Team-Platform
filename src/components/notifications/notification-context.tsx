@@ -1,22 +1,12 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { NotificationType } from "@/lib/notifications/types";
 
 export type NotificationItem = {
   id: string;
   user_id: string;
-  type:
-    | "team_chat"
-    | "task_new"
-    | "task_status"
-    | "task_completed"
-    | "task_pending_approval"
-    | "task_revision"
-    | "client_new"
-    | "consultation_assigned"
-    | "calendar_reminder"
-    | "calendar_video_invite"
-    | "system";
+  type: NotificationType;
   title: string;
   message: string;
   author_name: string | null;

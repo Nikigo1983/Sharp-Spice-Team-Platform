@@ -88,4 +88,29 @@ describe("notification navigation", () => {
       false,
     );
   });
+
+  it("routes task approval and revision types to tasks", () => {
+    assert.equal(getNotificationSection("task_pending_approval"), "tasks");
+    assert.equal(getNotificationSection("task_revision"), "tasks");
+    assert.equal(getNotificationHref("task_pending_approval"), "/tasks");
+    assert.equal(getNotificationHref("task_revision"), "/tasks");
+    assert.equal(shouldShowNotificationToast("task_pending_approval"), true);
+    assert.equal(shouldShowNotificationToast("task_revision"), true);
+    assert.equal(shouldShowNotificationToast("system"), true);
+  });
+
+  it("routes meeting recordings", () => {
+    assert.equal(
+      getNotificationSection("meeting_recording_ready"),
+      "meeting-recordings",
+    );
+    assert.equal(
+      getNotificationHref("meeting_recording_ready"),
+      "/meeting-recordings",
+    );
+    assert.equal(
+      shouldShowNotificationToast("meeting_recording_ready"),
+      true,
+    );
+  });
 });

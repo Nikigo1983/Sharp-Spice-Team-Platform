@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { SPIORA_COLORS, SPIORA_THEME } from "@/lib/spiora/branding";
-import { SPIORA_SURVEY_STAFF_TITLE } from "@/lib/spiora-survey/schema";
 
 export const metadata: Metadata = {
   title: `Исследование процессов · SPIORA`,

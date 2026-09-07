@@ -117,7 +117,7 @@ export function SpioraSurveyResponsesPanel() {
   return (
     <div className={styles.wrap}>
       <SectionHeader
-        title="Ответы по анкете SPIORA"
+        title="Ответы по анкете потенциальных клиентов"
         subtitle="Клиенты, которые заполнили исследование процессов."
         action={
           <Button type="button" variant="secondary" onClick={() => void loadList()}>

@@ -52,7 +52,7 @@ const NAV_SPIORA_SURVEY: NavItem = {
 
 const NAV_SPIORA_RESPONSES: NavItem = {
   href: "/spiora/survey-responses",
-  label: "Ответы по анкете SPIORA",
+  label: "Ответы по анкете потенциальных клиентов",
   icon: "fa-solid fa-table-list",
 };
 

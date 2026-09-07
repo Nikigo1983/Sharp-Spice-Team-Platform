@@ -3,7 +3,7 @@ import { SpioraSurveyResponsesPanel } from "@/components/spiora-survey/SpioraSur
 
 export default function SpioraSurveyResponsesPage() {
   return (
-    <AppShell sectionTitle="Ответы по анкете SPIORA">
+    <AppShell sectionTitle="Ответы по анкете потенциальных клиентов">
       <SpioraSurveyResponsesPanel />
     </AppShell>
   );

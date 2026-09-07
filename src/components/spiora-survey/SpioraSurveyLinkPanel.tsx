@@ -33,7 +33,7 @@ export function SpioraSurveyLinkPanel() {
     <div className={styles.wrap}>
       <SectionHeader
         title={SPIORA_SURVEY_STAFF_TITLE}
-        subtitle="Отправьте клиенту ссылку на исследование процессов. Ответы появятся в разделе «Ответы по анкете SPIORA»."
+        subtitle="Отправьте клиенту ссылку на исследование процессов. Ответы появятся в разделе «Ответы по анкете потенциальных клиентов»."
       />
 
       <Card className={styles.card}>

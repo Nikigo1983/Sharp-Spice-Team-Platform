@@ -112,6 +112,8 @@ type Props = {
   initialCaseId?: string | null;
 };
 
+type CaseView = "menu" | "questionnaire" | "status" | "finance";
+
 export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [items, setItems] = useState<ListItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, QuestionnaireStaffFields>>(
@@ -120,6 +122,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [query, setQuery] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [caseView, setCaseView] = useState<CaseView>("menu");
   const deepLinkHandled = useRef(false);
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [notes, setNotes] = useState<StaffNote[]>([]);
@@ -230,6 +233,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
 
   async function openCase(item: ListItem) {
     setSelectedId(item.id);
+    setCaseView("menu");
     setClientLabel(clientName(item));
     setError(null);
     setStatus(null);
@@ -238,7 +242,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       cache: "no-store",
     });
     if (!res.ok) {
-      setError("Не удалось открыть анкету.");
+      setError("Не удалось открыть карточку клиента.");
       return;
     }
     const data = (await res.json()) as {
@@ -261,6 +265,20 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         row.id === item.id ? { ...row, isNew: false } : row,
       ),
     );
+  }
+
+  function closeCase() {
+    setSelectedId(null);
+    setCaseView("menu");
+    setReview([]);
+    setNotes([]);
+    setDocuments([]);
+    setProcessStatus(null);
+    setProcessStatusDraft("");
+    setProcessStatusOptions([]);
+    setNoteDraft("");
+    setClientLabel("");
+    setStatus(null);
   }
 
   useEffect(() => {
@@ -399,230 +417,298 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   }
 
   if (selectedId) {
+    const backToMenu = (
+      <button
+        type="button"
+        className={styles.back}
+        onClick={() => {
+          setCaseView("menu");
+          setStatus(null);
+          setError(null);
+        }}
+      >
+        ← К разделам клиента
+      </button>
+    );
+
     return (
       <div className={styles.wrap}>
         <div className={styles.topActions}>
-          <button
-            type="button"
-            className={styles.back}
-            onClick={() => {
-              setSelectedId(null);
-              setReview([]);
-              setNotes([]);
-              setDocuments([]);
-              setProcessStatus(null);
-              setProcessStatusDraft("");
-              setProcessStatusOptions([]);
-              setNoteDraft("");
-              setClientLabel("");
-              setStatus(null);
-            }}
-          >
-            ← К списку
-          </button>
+          {caseView === "menu" ? (
+            <button type="button" className={styles.back} onClick={closeCase}>
+              ← К списку
+            </button>
+          ) : (
+            backToMenu
+          )}
           <Link href="/dashboard" className={styles.homeLink}>
             Вернуться на главную
           </Link>
         </div>
-        <h1 className={styles.title}>{schemaTitle || "Анкета клиента"}</h1>
-        {clientLabel ? <p className={styles.lead}>{clientLabel}</p> : null}
+        <h1 className={styles.title}>
+          {caseView === "menu"
+            ? clientLabel || "Клиент"
+            : caseView === "questionnaire"
+              ? schemaTitle || "Анкета клиента"
+              : caseView === "status"
+                ? "Статус процесса клиента"
+                : "Финансы"}
+        </h1>
+        {clientLabel && caseView !== "menu" ? (
+          <p className={styles.lead}>{clientLabel}</p>
+        ) : null}
+        {caseView === "menu" && schemaTitle ? (
+          <p className={styles.lead}>{schemaTitle}</p>
+        ) : null}
         {error ? <p className={styles.error}>{error}</p> : null}
         {status ? <p className={styles.statusOk}>{status}</p> : null}
 
-        <section className={styles.staffBlock}>
-          <div className={styles.staffBlockHead}>
-            <span className={styles.section}>Статус процесса</span>
-            <h2 className={styles.staffBlockTitle}>Статус клиента</h2>
-            <p className={styles.staffBlockHint}>
-              Изменение статуса сразу отобразится на портале клиента и отправит
-              ему письмо.
-            </p>
-          </div>
-          {processStatus ? (
-            <p className={styles.currentStatus}>
-              Сейчас: <strong>{processStatus.value}</strong>
-              {processStatus.updatedAt
-                ? ` · ${formatSubmittedAt(processStatus.updatedAt)}`
-                : null}
-              {processStatus.updatedByName
-                ? ` · ${processStatus.updatedByName}`
-                : null}
-            </p>
-          ) : null}
-          <div className={styles.statusControls}>
-            <select
-              className={styles.statusSelect}
-              value={processStatusDraft}
-              onChange={(event) => setProcessStatusDraft(event.target.value)}
-              aria-label="Статус процесса клиента"
-            >
-              {processStatusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+        {caseView === "menu" ? (
+          <div className={styles.caseMenu} role="navigation" aria-label="Разделы клиента">
             <button
               type="button"
-              className={styles.primaryAction}
-              disabled={
-                savingProcessStatus ||
-                !processStatusDraft ||
-                processStatusDraft === processStatus?.value
-              }
-              onClick={() => void saveProcessStatus()}
+              className={styles.caseMenuCard}
+              onClick={() => setCaseView("questionnaire")}
             >
-              {savingProcessStatus ? "Сохранение…" : "Обновить статус"}
+              <span className={styles.caseMenuEyebrow}>Анкета</span>
+              <span className={styles.caseMenuTitle}>Анкета</span>
+              <span className={styles.caseMenuHint}>
+                Ответы клиента, документы и внутренние заметки
+              </span>
+            </button>
+            <button
+              type="button"
+              className={styles.caseMenuCard}
+              onClick={() => setCaseView("status")}
+            >
+              <span className={styles.caseMenuEyebrow}>Процесс</span>
+              <span className={styles.caseMenuTitle}>
+                Статус процесса клиента
+              </span>
+              <span className={styles.caseMenuHint}>
+                Текущий этап дела и уведомление клиента по email
+              </span>
+            </button>
+            <button
+              type="button"
+              className={styles.caseMenuCard}
+              onClick={() => setCaseView("finance")}
+            >
+              <span className={styles.caseMenuEyebrow}>Оплата</span>
+              <span className={styles.caseMenuTitle}>Финансы</span>
+              <span className={styles.caseMenuHint}>
+                Договор, платежи и задолженность по клиенту
+              </span>
             </button>
           </div>
-        </section>
+        ) : null}
 
-        <section className={styles.staffBlock}>
-          <CaseFinancePanel caseId={selectedId} />
-        </section>
-
-        <div className={styles.review}>
-          {review.map((row, index) => (
-            <div key={`${row.label}-${index}`} className={styles.row}>
-              <div className={styles.rowMeta}>
-                <span className={styles.section}>{row.section}</span>
-                <span className={styles.label}>{row.label}</span>
-              </div>
-              <div className={styles.value}>
-                {row.fileId && selectedId ? (
-                  <div className={styles.fileBlock}>
-                    <span className={styles.fileName}>
-                      {row.value || "Файл"}
-                    </span>
-                    <div className={styles.fileActions}>
-                      <a
-                        className={styles.fileBtn}
-                        href={caseFileUrl(row.fileId, selectedId, "open")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Открыть
-                      </a>
-                      <a
-                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                        href={caseFileUrl(row.fileId, selectedId, "download")}
-                      >
-                        Скачать
-                      </a>
-                    </div>
-                  </div>
-                ) : (
-                  row.value || "—"
-                )}
-              </div>
+        {caseView === "status" ? (
+          <section className={styles.staffBlock}>
+            <div className={styles.staffBlockHead}>
+              <span className={styles.section}>Статус процесса</span>
+              <h2 className={styles.staffBlockTitle}>Статус клиента</h2>
+              <p className={styles.staffBlockHint}>
+                Изменение статуса сразу отобразится на портале клиента и
+                отправит ему письмо.
+              </p>
             </div>
-          ))}
-        </div>
+            {processStatus ? (
+              <p className={styles.currentStatus}>
+                Сейчас: <strong>{processStatus.value}</strong>
+                {processStatus.updatedAt
+                  ? ` · ${formatSubmittedAt(processStatus.updatedAt)}`
+                  : null}
+                {processStatus.updatedByName
+                  ? ` · ${processStatus.updatedByName}`
+                  : null}
+              </p>
+            ) : null}
+            <div className={styles.statusControls}>
+              <select
+                className={styles.statusSelect}
+                value={processStatusDraft}
+                onChange={(event) => setProcessStatusDraft(event.target.value)}
+                aria-label="Статус процесса клиента"
+              >
+                {processStatusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.primaryAction}
+                disabled={
+                  savingProcessStatus ||
+                  !processStatusDraft ||
+                  processStatusDraft === processStatus?.value
+                }
+                onClick={() => void saveProcessStatus()}
+              >
+                {savingProcessStatus ? "Сохранение…" : "Обновить статус"}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
-        <section className={styles.staffBlock}>
-          <div className={styles.staffBlockHead}>
-            <span className={styles.section}>Документы сотрудника</span>
-            <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
-            <p className={styles.staffBlockHint}>
-              PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
-            </p>
-          </div>
-          {documents.length === 0 ? (
-            <p className={styles.muted}>Пока нет загруженных документов.</p>
-          ) : (
-            <ul className={styles.docList}>
-              {documents.map((doc) => (
-                <li key={doc.id} className={styles.docItem}>
-                  <div className={styles.docMeta}>
-                    <span className={styles.fileName}>{doc.fileName}</span>
-                    <span className={styles.docSub}>
-                      {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
-                      {formatSubmittedAt(doc.createdAt)}
-                    </span>
-                    <div className={styles.fileActions}>
-                      <a
-                        className={styles.fileBtn}
-                        href={caseFileUrl(doc.id, selectedId, "open")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Открыть
-                      </a>
-                      <a
-                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                        href={caseFileUrl(doc.id, selectedId, "download")}
-                      >
-                        Скачать
-                      </a>
-                      <button
-                        type="button"
-                        className={styles.docDelete}
-                        disabled={deletingDocId === doc.id}
-                        onClick={() => void removeDocument(doc.id)}
-                      >
-                        {deletingDocId === doc.id ? "…" : "Удалить"}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <label className={styles.primaryAction}>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-              disabled={uploadingDoc}
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                event.target.value = "";
-                void uploadDocument(file);
-              }}
-            />
-            {uploadingDoc ? "Загрузка…" : "Добавить документ"}
-          </label>
-        </section>
+        {caseView === "finance" ? (
+          <section className={styles.staffBlock}>
+            <CaseFinancePanel caseId={selectedId} />
+          </section>
+        ) : null}
 
-        <section className={styles.staffBlock}>
-          <div className={styles.staffBlockHead}>
-            <span className={styles.section}>Комментарии</span>
-            <h2 className={styles.staffBlockTitle}>Заметки по клиенту</h2>
-            <p className={styles.staffBlockHint}>
-              Внутренние комментарии сотрудников по этой анкете.
-            </p>
-          </div>
-          {notes.length === 0 ? (
-            <p className={styles.muted}>Комментариев пока нет.</p>
-          ) : (
-            <ul className={styles.noteList}>
-              {notes.map((note) => (
-                <li key={note.id} className={styles.noteItem}>
-                  <div className={styles.noteMeta}>
-                    <strong>{note.authorName}</strong>
-                    <span>{formatSubmittedAt(note.createdAt)}</span>
+        {caseView === "questionnaire" ? (
+          <>
+            <div className={styles.review}>
+              {review.map((row, index) => (
+                <div key={`${row.label}-${index}`} className={styles.row}>
+                  <div className={styles.rowMeta}>
+                    <span className={styles.section}>{row.section}</span>
+                    <span className={styles.label}>{row.label}</span>
                   </div>
-                  <p className={styles.noteText}>{note.text}</p>
-                </li>
+                  <div className={styles.value}>
+                    {row.fileId && selectedId ? (
+                      <div className={styles.fileBlock}>
+                        <span className={styles.fileName}>
+                          {row.value || "Файл"}
+                        </span>
+                        <div className={styles.fileActions}>
+                          <a
+                            className={styles.fileBtn}
+                            href={caseFileUrl(row.fileId, selectedId, "open")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Открыть
+                          </a>
+                          <a
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            href={caseFileUrl(
+                              row.fileId,
+                              selectedId,
+                              "download",
+                            )}
+                          >
+                            Скачать
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      row.value || "—"
+                    )}
+                  </div>
+                </div>
               ))}
-            </ul>
-          )}
-          <textarea
-            className={styles.noteInput}
-            value={noteDraft}
-            onChange={(event) => setNoteDraft(event.target.value)}
-            rows={4}
-            placeholder="Напишите комментарий…"
-            aria-label="Новый комментарий"
-          />
-          <button
-            type="button"
-            className={styles.primaryAction}
-            disabled={savingNote || !noteDraft.trim()}
-            onClick={() => void submitNote()}
-          >
-            {savingNote ? "Сохранение…" : "Добавить комментарий"}
-          </button>
-        </section>
+            </div>
+
+            <section className={styles.staffBlock}>
+              <div className={styles.staffBlockHead}>
+                <span className={styles.section}>Документы сотрудника</span>
+                <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
+                <p className={styles.staffBlockHint}>
+                  PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
+                </p>
+              </div>
+              {documents.length === 0 ? (
+                <p className={styles.muted}>Пока нет загруженных документов.</p>
+              ) : (
+                <ul className={styles.docList}>
+                  {documents.map((doc) => (
+                    <li key={doc.id} className={styles.docItem}>
+                      <div className={styles.docMeta}>
+                        <span className={styles.fileName}>{doc.fileName}</span>
+                        <span className={styles.docSub}>
+                          {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
+                          {formatSubmittedAt(doc.createdAt)}
+                        </span>
+                        <div className={styles.fileActions}>
+                          <a
+                            className={styles.fileBtn}
+                            href={caseFileUrl(doc.id, selectedId, "open")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Открыть
+                          </a>
+                          <a
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            href={caseFileUrl(doc.id, selectedId, "download")}
+                          >
+                            Скачать
+                          </a>
+                          <button
+                            type="button"
+                            className={styles.docDelete}
+                            disabled={deletingDocId === doc.id}
+                            onClick={() => void removeDocument(doc.id)}
+                          >
+                            {deletingDocId === doc.id ? "…" : "Удалить"}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <label className={styles.primaryAction}>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                  disabled={uploadingDoc}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    event.target.value = "";
+                    void uploadDocument(file);
+                  }}
+                />
+                {uploadingDoc ? "Загрузка…" : "Добавить документ"}
+              </label>
+            </section>
+
+            <section className={styles.staffBlock}>
+              <div className={styles.staffBlockHead}>
+                <span className={styles.section}>Комментарии</span>
+                <h2 className={styles.staffBlockTitle}>Заметки по клиенту</h2>
+                <p className={styles.staffBlockHint}>
+                  Внутренние комментарии сотрудников по этой анкете.
+                </p>
+              </div>
+              {notes.length === 0 ? (
+                <p className={styles.muted}>Комментариев пока нет.</p>
+              ) : (
+                <ul className={styles.noteList}>
+                  {notes.map((note) => (
+                    <li key={note.id} className={styles.noteItem}>
+                      <div className={styles.noteMeta}>
+                        <strong>{note.authorName}</strong>
+                        <span>{formatSubmittedAt(note.createdAt)}</span>
+                      </div>
+                      <p className={styles.noteText}>{note.text}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <textarea
+                className={styles.noteInput}
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                rows={4}
+                placeholder="Напишите комментарий…"
+                aria-label="Новый комментарий"
+              />
+              <button
+                type="button"
+                className={styles.primaryAction}
+                disabled={savingNote || !noteDraft.trim()}
+                onClick={() => void submitNote()}
+              >
+                {savingNote ? "Сохранение…" : "Добавить комментарий"}
+              </button>
+            </section>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -639,7 +725,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           </h1>
           <p className={styles.lead}>
             Анкеты клиентов. Редактируйте колонки в таблице и нажмите
-            «Сохранить». Имя открывает полные ответы анкеты.
+            «Сохранить». Имя открывает разделы: анкета, статус и финансы.
           </p>
         </div>
         <div className={styles.headerActions}>

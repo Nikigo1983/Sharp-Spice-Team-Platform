@@ -123,7 +123,7 @@ const NAV_WEBSITE: NavItem = {
   external: true,
 };
 
-/** Emigrant product sections grouped in the sidebar. */
+/** Emigrant product sections grouped in the sidebar (shared). */
 export const EMIGRANT_NAV_CHILDREN: NavItem[] = [
   NAV_CLIENTS,
   NAV_CRM_LEADS,
@@ -136,17 +136,26 @@ export const EMIGRANT_NAV_CHILDREN: NavItem[] = [
   NAV_RELOCATION,
 ];
 
-const NAV_EMIGRANT: NavGroup = {
-  id: "emigrant",
-  label: "Emigrant",
-  icon: "fa-solid fa-passport",
-  href: "/emigrant",
-  children: EMIGRANT_NAV_CHILDREN,
-};
+export function getEmigrantNavChildren(role: UserRole): NavItem[] {
+  if (role === "owner") {
+    return [...EMIGRANT_NAV_CHILDREN, NAV_ANALYTICS];
+  }
+  return EMIGRANT_NAV_CHILDREN;
+}
+
+function buildEmigrantNav(role: UserRole): NavGroup {
+  return {
+    id: "emigrant",
+    label: "Emigrant",
+    icon: "fa-solid fa-passport",
+    href: "/emigrant",
+    children: getEmigrantNavChildren(role),
+  };
+}
 
 const MANAGER_NAV: NavEntry[] = [
   NAV_DASHBOARD,
-  NAV_EMIGRANT,
+  buildEmigrantNav("manager"),
   NAV_SPIORA,
   NAV_CHECKUPS_EREVAN,
   NAV_TASKS,
@@ -159,14 +168,13 @@ const MANAGER_NAV: NavEntry[] = [
 
 const OWNER_NAV: NavEntry[] = [
   NAV_DASHBOARD,
-  NAV_EMIGRANT,
+  buildEmigrantNav("owner"),
   NAV_SPIORA,
   NAV_CHECKUPS_EREVAN,
   NAV_TASKS,
   NAV_CALENDAR,
   NAV_MEETING_RECORDINGS,
   NAV_TEAM_CHAT,
-  NAV_ANALYTICS,
   NAV_TEAM,
   NAV_SETTINGS,
   NAV_WEBSITE,

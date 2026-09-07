@@ -1,44 +1,40 @@
 .shell {
   --spiora-red: #e82916;
-  --spiora-red-soft: rgba(232, 41, 22, 0.16);
-  --spiora-ink: #f7fafc;
-  --spiora-muted: rgba(255, 255, 255, 0.62);
-  --spiora-line: rgba(255, 255, 255, 0.1);
-  --spiora-card: rgba(26, 32, 44, 0.92);
-  --spiora-bg: #0f141c;
+  --spiora-red-soft: rgba(232, 41, 22, 0.1);
+  --spiora-ink: #14181f;
+  --spiora-muted: #5b6472;
+  --spiora-line: rgba(20, 24, 31, 0.1);
+  --spiora-card: #ffffff;
+  --spiora-paper: #f4efe8;
 
   min-height: 100vh;
   padding: 2rem 1.25rem 4.5rem;
   color: var(--spiora-ink);
   font-family: Inter, system-ui, sans-serif;
   background:
-    radial-gradient(ellipse 70% 45% at 12% -8%, rgba(232, 41, 22, 0.22), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(232, 41, 22, 0.08), transparent 50%),
-    linear-gradient(168deg, #0f141c 0%, #141b26 42%, #1a202c 100%);
+    radial-gradient(ellipse 70% 40% at 8% -5%, rgba(232, 41, 22, 0.1), transparent 55%),
+    linear-gradient(180deg, #f7f2eb 0%, var(--spiora-paper) 45%, #ebe4da 100%);
   -webkit-font-smoothing: antialiased;
 }
 
 .brand {
   max-width: 44rem;
-  margin: 0 auto 1.75rem;
+  margin: 0 auto 1.6rem;
   display: grid;
-  gap: 0.7rem;
+  gap: 0.55rem;
 }
 
 .logoChip {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  padding: 0.55rem 0.85rem;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(232, 41, 22, 0.25);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  padding: 0.35rem 0.15rem;
+  background: transparent;
 }
 
 .logo {
   width: auto;
-  height: 40px;
+  height: 44px;
   display: block;
   object-fit: contain;
 }
@@ -55,27 +51,27 @@
 
 .hero {
   max-width: 44rem;
-  margin: 0 auto 1.35rem;
+  margin: 0 auto 1.25rem;
 }
 
 .eyebrow {
-  margin: 0 0 0.55rem;
+  margin: 0 0 0.5rem;
   font-family: Sora, sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 600;
+  color: var(--spiora-red);
+  font-weight: 650;
 }
 
 .title {
   margin: 0;
   font-family: Sora, sans-serif;
-  font-size: clamp(1.7rem, 4vw, 2.35rem);
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
   line-height: 1.15;
   letter-spacing: -0.03em;
   font-weight: 700;
-  color: #fff;
+  color: var(--spiora-ink);
 }
 
 .subtitle {
@@ -88,14 +84,12 @@
 
 .intro {
   max-width: 44rem;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 1.35rem;
   padding: 1.2rem 1.25rem;
-  background:
-    radial-gradient(ellipse 80% 90% at 0% 0%, rgba(232, 41, 22, 0.14), transparent 55%),
-    var(--spiora-card);
-  border: 1px solid rgba(232, 41, 22, 0.28);
+  background: var(--spiora-card);
+  border: 1px solid var(--spiora-line);
   border-radius: 16px;
-  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 28px rgba(20, 24, 31, 0.05);
 }
 
 .introGreeting,
@@ -109,12 +103,12 @@
 .introGreeting {
   font-family: Sora, sans-serif;
   font-weight: 650;
-  color: #fff;
+  color: var(--spiora-ink);
 }
 
 .introLead {
   margin-top: 0.5rem;
-  color: rgba(255, 255, 255, 0.86);
+  color: #2a313c;
 }
 
 .introBody,
@@ -125,7 +119,8 @@
 
 .introDuration {
   font-size: 0.92rem;
-  color: #ffb4ab;
+  color: var(--spiora-red);
+  font-weight: 550;
 }
 
 .form {
@@ -159,6 +154,7 @@
   border: 1px solid var(--spiora-line);
   border-radius: 16px;
   background: var(--spiora-card);
+  box-shadow: 0 8px 22px rgba(20, 24, 31, 0.04);
 }
 
 .legend {
@@ -166,7 +162,7 @@
   font-family: Sora, sans-serif;
   font-size: 0.98rem;
   font-weight: 650;
-  color: #fff;
+  color: var(--spiora-ink);
   display: flex;
   align-items: flex-start;
   gap: 0.55rem;
@@ -181,7 +177,7 @@
   height: 1.55rem;
   border-radius: 8px;
   background: var(--spiora-red-soft);
-  color: #ffb4ab;
+  color: var(--spiora-red);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -201,19 +197,19 @@
 .label {
   font-size: 0.86rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
+  color: #2a313c;
 }
 
 .input,
 .textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(20, 24, 31, 0.14);
   border-radius: 12px;
   padding: 0.75rem 0.85rem;
   font: inherit;
-  background: rgba(15, 20, 28, 0.72);
-  color: #fff;
+  background: #fff;
+  color: var(--spiora-ink);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -221,12 +217,12 @@
 .input:focus,
 .textarea:focus {
   border-color: rgba(232, 41, 22, 0.55);
-  box-shadow: 0 0 0 3px rgba(232, 41, 22, 0.18);
+  box-shadow: 0 0 0 3px rgba(232, 41, 22, 0.14);
 }
 
 .input::placeholder,
 .textarea::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(20, 24, 31, 0.35);
 }
 
 .textarea {
@@ -249,7 +245,7 @@
 
 .checkRow:hover,
 .optionRow:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(232, 41, 22, 0.05);
 }
 
 .checkRow input,
@@ -283,9 +279,9 @@
   width: 2.45rem;
   height: 2.45rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 20, 28, 0.72);
-  color: #fff;
+  border: 1px solid rgba(20, 24, 31, 0.14);
+  background: #fff;
+  color: var(--spiora-ink);
   cursor: pointer;
   font-family: Sora, sans-serif;
   font-weight: 650;
@@ -315,9 +311,9 @@
   margin: 0.5rem 0 0;
   padding: 0.8rem 0.95rem;
   border-radius: 12px;
-  background: rgba(232, 41, 22, 0.14);
-  border: 1px solid rgba(232, 41, 22, 0.35);
-  color: #ffb4ab;
+  background: rgba(232, 41, 22, 0.08);
+  border: 1px solid rgba(232, 41, 22, 0.28);
+  color: #a61d10;
   font-size: 0.92rem;
 }
 
@@ -332,13 +328,13 @@
   font-size: 0.98rem;
   font-weight: 650;
   cursor: pointer;
-  box-shadow: 0 12px 28px rgba(232, 41, 22, 0.28);
+  box-shadow: 0 12px 28px rgba(232, 41, 22, 0.22);
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
 .submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.05);
+  filter: brightness(1.04);
 }
 
 .submit:disabled {
@@ -351,12 +347,10 @@
   margin: 2.5rem auto 0;
   padding: 2.1rem 1.5rem;
   text-align: center;
-  background:
-    radial-gradient(ellipse 80% 80% at 50% 0%, rgba(232, 41, 22, 0.16), transparent 60%),
-    var(--spiora-card);
-  border: 1px solid rgba(232, 41, 22, 0.28);
+  background: var(--spiora-card);
+  border: 1px solid var(--spiora-line);
   border-radius: 18px;
-  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 12px 30px rgba(20, 24, 31, 0.06);
 }
 
 .thanksTitle {
@@ -364,7 +358,7 @@
   font-family: Sora, sans-serif;
   font-size: 1.9rem;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--spiora-ink);
 }
 
 .thanksText {
@@ -379,7 +373,7 @@
   }
 
   .logo {
-    height: 36px;
+    height: 38px;
   }
 
   .scaleLabels {

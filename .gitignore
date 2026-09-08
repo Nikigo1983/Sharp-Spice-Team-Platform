@@ -14,3 +14,12 @@
 # debug
 npm-debug.log*
 .DS_Store
+
+# TypeScript incremental
+*.tsbuildinfo
+
+# Local AI eval / smoke result dumps (do not deploy)
+scripts/ai-04-results/
+scripts/ai-06-results/
+scripts/ai-07-results/
+scripts/ai-astra-results/

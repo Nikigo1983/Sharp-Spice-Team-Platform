@@ -12,6 +12,7 @@ import {
   getWorkspaceAiConfig,
   isWorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
+import { createAiRequestId } from "@/lib/ai/workspace-trace";
 import { getSession } from "@/lib/auth/session";
 
 function parseMode(value: unknown) {
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const requestId = createAiRequestId();
   const body = (await request.json()) as {
     message?: string;
     history?: WorkspaceChatTurn[];
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
             history,
             mode,
             pendingClientCandidates,
+            requestId,
           )) {
             if (typeof chunk === "string") {
               controller.enqueue(
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
             controller.enqueue(
               encoder.encode(
                 `event: meta\ndata: ${JSON.stringify({
+                  requestId: chunk.requestId,
                   sources: chunk.sources,
                   demo: chunk.demo,
                   pendingClientCandidates: sanitizeClientContextsForTransport(
@@ -86,10 +90,11 @@ export async function POST(request: Request) {
 
           controller.enqueue(encoder.encode(`event: done\ndata: {}\n\n`));
         } catch (error) {
-          console.error("[api/ai-workspace] stream", error);
+          console.error(`[api/ai-workspace][${requestId}] stream`, error);
           controller.enqueue(
             encoder.encode(
               `event: error\ndata: ${JSON.stringify({
+                requestId,
                 message:
                   "Внутренняя ошибка при обработке запроса. Попробуйте снова.",
               })}\n\n`,
@@ -106,6 +111,7 @@ export async function POST(request: Request) {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        "X-AI-Request-Id": requestId,
       },
     });
   }
@@ -116,23 +122,38 @@ export async function POST(request: Request) {
       history,
       mode,
       pendingClientCandidates,
+      requestId,
     );
-    return NextResponse.json({
-      ...result,
-      pendingClientCandidates: sanitizeClientContextsForTransport(
-        result.pendingClientCandidates,
-      ),
-    });
+    return NextResponse.json(
+      {
+        ...result,
+        requestId: result.requestId,
+        pendingClientCandidates: sanitizeClientContextsForTransport(
+          result.pendingClientCandidates,
+        ),
+      },
+      {
+        headers: {
+          "X-AI-Request-Id": result.requestId,
+        },
+      },
+    );
   } catch (error) {
-    console.error("[api/ai-workspace]", error);
+    console.error(`[api/ai-workspace][${requestId}]`, error);
     return NextResponse.json(
       {
         reply:
           "Внутренняя ошибка при обработке запроса. Перезапустите сервер и попробуйте снова.",
         sources: [],
         demo: true,
+        requestId,
       },
-      { status: 200 },
+      {
+        status: 200,
+        headers: {
+          "X-AI-Request-Id": requestId,
+        },
+      },
     );
   }
 }

@@ -1,3 +1,5 @@
+import { getOpenRouterDefaultModel } from "@/lib/ai/models";
+
 export type AiProvider = "openrouter" | "openai";
 
 export type AiRuntimeConfig = {
@@ -15,8 +17,7 @@ export function getAiRuntimeConfig(): AiRuntimeConfig | null {
       provider: "openrouter",
       apiKey: openRouterKey,
       completionsUrl: "https://openrouter.ai/api/v1/chat/completions",
-      model:
-        process.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
+      model: getOpenRouterDefaultModel(),
     };
   }
 
@@ -26,6 +27,7 @@ export function getAiRuntimeConfig(): AiRuntimeConfig | null {
       provider: "openai",
       apiKey: openaiKey,
       completionsUrl: "https://api.openai.com/v1/chat/completions",
+      // Direct OpenAI path: no Astra OpenRouter slug; keep explicit env or safe default.
       model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
     };
   }

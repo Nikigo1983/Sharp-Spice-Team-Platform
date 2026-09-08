@@ -1,3 +1,5 @@
+import { getWorkspaceFinalModel } from "@/lib/ai/models";
+
 export type WorkspaceResponseMode =
   | "brief"
   | "detailed"
@@ -5,7 +7,8 @@ export type WorkspaceResponseMode =
   | "case-analysis";
 
 export type WorkspaceAiConfig = {
-  model: string | undefined;
+  /** Always resolved — defaults to GPT-6 Astra when env unset. */
+  model: string;
   temperature: number;
   maxTokens: number;
   stream: boolean;
@@ -30,7 +33,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 
 export function getWorkspaceAiConfig(): WorkspaceAiConfig {
   return {
-    model: process.env.AI_WORKSPACE_MODEL?.trim() || undefined,
+    model: getWorkspaceFinalModel(),
     temperature: parseNumber(process.env.AI_WORKSPACE_TEMPERATURE, 0.4),
     maxTokens: parseNumber(process.env.AI_WORKSPACE_MAX_TOKENS, 1500),
     stream: parseBoolean(process.env.AI_WORKSPACE_STREAM, true),

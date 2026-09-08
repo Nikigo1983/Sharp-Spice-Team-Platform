@@ -1,4 +1,5 @@
 import { getAiRuntimeConfig } from "@/lib/ai/config";
+import { getOpenRouterDefaultModel, isGpt6AstraModel } from "@/lib/ai/models";
 import {
   assertOpenRouterPayloadSafe,
   redactForLogging,
@@ -16,6 +17,21 @@ export type ChatCompletionOptions = {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+};
+
+export type ChatCompletionUsage = {
+  inputTokens: number | "NOT_AVAILABLE";
+  outputTokens: number | "NOT_AVAILABLE";
+};
+
+export type ChatCompletionResult = {
+  content: string | null;
+  ok: boolean;
+  requestedModel: string;
+  returnedModel: string | "NOT_AVAILABLE";
+  usage: ChatCompletionUsage;
+  latencyMs: number;
+  error?: string;
 };
 
 export { getAiRuntimeConfig, isAiConfigured, getAiSetupHint } from "@/lib/ai/config";
@@ -73,7 +89,7 @@ function resolveModel(
   config: NonNullable<ReturnType<typeof getAiRuntimeConfig>>,
   options?: ChatCompletionOptions,
 ): string {
-  return options?.model?.trim() || config.model;
+  return options?.model?.trim() || config.model || getOpenRouterDefaultModel();
 }
 
 function buildRequestBody(
@@ -84,13 +100,20 @@ function buildRequestBody(
 ): string {
   const safeMessages = sanitizeChatMessagesForProvider(messages);
   assertOpenRouterPayloadSafe(safeMessages);
+  const model = resolveModel(config, options);
 
   const payload: Record<string, unknown> = {
-    model: resolveModel(config, options),
-    temperature: options?.temperature ?? 0.35,
+    model,
     messages: safeMessages,
     stream,
   };
+
+  // GPT-6 Astra via OpenRouter: max_tokens supported; temperature is not listed
+  // in supported_parameters — omit to avoid rejecting/ignoring unsafe params.
+  // Never send reasoning / include_reasoning (do not expose chain-of-thought).
+  if (!isGpt6AstraModel(model)) {
+    payload.temperature = options?.temperature ?? 0.35;
+  }
 
   if (options?.maxTokens && options.maxTokens > 0) {
     payload.max_tokens = options.maxTokens;
@@ -99,13 +122,57 @@ function buildRequestBody(
   return JSON.stringify(payload);
 }
 
-export async function createChatCompletion(
+function parseUsage(raw: unknown): ChatCompletionUsage {
+  if (!raw || typeof raw !== "object") {
+    return {
+      inputTokens: "NOT_AVAILABLE",
+      outputTokens: "NOT_AVAILABLE",
+    };
+  }
+  const usage = raw as {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  return {
+    inputTokens:
+      typeof usage.prompt_tokens === "number"
+        ? usage.prompt_tokens
+        : typeof usage.input_tokens === "number"
+          ? usage.input_tokens
+          : "NOT_AVAILABLE",
+    outputTokens:
+      typeof usage.completion_tokens === "number"
+        ? usage.completion_tokens
+        : typeof usage.output_tokens === "number"
+          ? usage.output_tokens
+          : "NOT_AVAILABLE",
+  };
+}
+
+export async function createChatCompletionResult(
   messages: ChatMessage[],
   options?: ChatCompletionOptions,
-): Promise<string | null> {
+): Promise<ChatCompletionResult> {
   const config = getAiRuntimeConfig();
-  if (!config) return null;
+  const started = Date.now();
+  if (!config) {
+    return {
+      content: null,
+      ok: false,
+      requestedModel: options?.model?.trim() || "NOT_CONFIGURED",
+      returnedModel: "NOT_AVAILABLE",
+      usage: {
+        inputTokens: "NOT_AVAILABLE",
+        outputTokens: "NOT_AVAILABLE",
+      },
+      latencyMs: Date.now() - started,
+      error: "AI_NOT_CONFIGURED",
+    };
+  }
 
+  const requestedModel = resolveModel(config, options);
   const headers = buildRequestHeaders(config);
   const body = buildRequestBody(config, messages, options, false);
   const maxAttempts = 2;
@@ -120,9 +187,23 @@ export async function createChatCompletion(
 
       if (response.ok) {
         const data = (await response.json()) as {
+          model?: string;
+          usage?: unknown;
           choices?: { message?: { content?: string } }[];
         };
-        return data.choices?.[0]?.message?.content?.trim() ?? null;
+        const content = data.choices?.[0]?.message?.content?.trim() ?? null;
+        return {
+          content,
+          ok: Boolean(content),
+          requestedModel,
+          returnedModel:
+            typeof data.model === "string" && data.model.trim()
+              ? data.model.trim()
+              : "NOT_AVAILABLE",
+          usage: parseUsage(data.usage),
+          latencyMs: Date.now() - started,
+          error: content ? undefined : "MODEL_EMPTY_RESPONSE",
+        };
       }
 
       const errBody = await response.text();
@@ -141,18 +222,59 @@ export async function createChatCompletion(
         continue;
       }
 
-      return null;
+      return {
+        content: null,
+        ok: false,
+        requestedModel,
+        returnedModel: "NOT_AVAILABLE",
+        usage: {
+          inputTokens: "NOT_AVAILABLE",
+          outputTokens: "NOT_AVAILABLE",
+        },
+        latencyMs: Date.now() - started,
+        error: `OPENROUTER_HTTP_${response.status}`,
+      };
     } catch (error) {
       console.error(`[ai/${config.provider}] request failed`, redactForLogging(error));
       if (attempt < maxAttempts) {
         await sleep(2000);
         continue;
       }
-      return null;
+      return {
+        content: null,
+        ok: false,
+        requestedModel,
+        returnedModel: "NOT_AVAILABLE",
+        usage: {
+          inputTokens: "NOT_AVAILABLE",
+          outputTokens: "NOT_AVAILABLE",
+        },
+        latencyMs: Date.now() - started,
+        error: "OPENROUTER_REQUEST_FAILED",
+      };
     }
   }
 
-  return null;
+  return {
+    content: null,
+    ok: false,
+    requestedModel,
+    returnedModel: "NOT_AVAILABLE",
+    usage: {
+      inputTokens: "NOT_AVAILABLE",
+      outputTokens: "NOT_AVAILABLE",
+    },
+    latencyMs: Date.now() - started,
+    error: "OPENROUTER_ERROR",
+  };
+}
+
+export async function createChatCompletion(
+  messages: ChatMessage[],
+  options?: ChatCompletionOptions,
+): Promise<string | null> {
+  const result = await createChatCompletionResult(messages, options);
+  return result.content;
 }
 
 function extractStreamDelta(payload: unknown): string {
@@ -166,13 +288,36 @@ function extractStreamDelta(payload: unknown): string {
   return choice?.delta?.content ?? choice?.message?.content ?? "";
 }
 
-export async function* streamChatCompletion(
+export type StreamChatCompletionEvent =
+  | { type: "delta"; content: string }
+  | { type: "meta"; result: ChatCompletionResult };
+
+export async function* streamChatCompletionResult(
   messages: ChatMessage[],
   options?: ChatCompletionOptions,
-): AsyncGenerator<string> {
+): AsyncGenerator<StreamChatCompletionEvent> {
   const config = getAiRuntimeConfig();
-  if (!config) return;
+  const started = Date.now();
+  if (!config) {
+    yield {
+      type: "meta",
+      result: {
+        content: null,
+        ok: false,
+        requestedModel: options?.model?.trim() || "NOT_CONFIGURED",
+        returnedModel: "NOT_AVAILABLE",
+        usage: {
+          inputTokens: "NOT_AVAILABLE",
+          outputTokens: "NOT_AVAILABLE",
+        },
+        latencyMs: Date.now() - started,
+        error: "AI_NOT_CONFIGURED",
+      },
+    };
+    return;
+  }
 
+  const requestedModel = resolveModel(config, options);
   const headers = buildRequestHeaders(config);
   const body = buildRequestBody(config, messages, options, true);
 
@@ -189,12 +334,33 @@ export async function* streamChatCompletion(
       response.status,
       redactSensitiveText(errBody),
     );
+    yield {
+      type: "meta",
+      result: {
+        content: null,
+        ok: false,
+        requestedModel,
+        returnedModel: "NOT_AVAILABLE",
+        usage: {
+          inputTokens: "NOT_AVAILABLE",
+          outputTokens: "NOT_AVAILABLE",
+        },
+        latencyMs: Date.now() - started,
+        error: `OPENROUTER_HTTP_${response.status}`,
+      },
+    };
     return;
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let assembled = "";
+  let returnedModel: string | "NOT_AVAILABLE" = "NOT_AVAILABLE";
+  let usage: ChatCompletionUsage = {
+    inputTokens: "NOT_AVAILABLE",
+    outputTokens: "NOT_AVAILABLE",
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -212,11 +378,46 @@ export async function* streamChatCompletion(
       if (!data || data === "[DONE]") continue;
 
       try {
-        const delta = extractStreamDelta(JSON.parse(data));
-        if (delta) yield delta;
+        const parsed = JSON.parse(data) as {
+          model?: string;
+          usage?: unknown;
+        };
+        if (typeof parsed.model === "string" && parsed.model.trim()) {
+          returnedModel = parsed.model.trim();
+        }
+        if (parsed.usage) {
+          usage = parseUsage(parsed.usage);
+        }
+        const delta = extractStreamDelta(parsed);
+        if (delta) {
+          assembled += delta;
+          yield { type: "delta", content: delta };
+        }
       } catch {
         // ignore malformed chunks
       }
     }
+  }
+
+  yield {
+    type: "meta",
+    result: {
+      content: assembled.trim() || null,
+      ok: assembled.trim().length > 0,
+      requestedModel,
+      returnedModel,
+      usage,
+      latencyMs: Date.now() - started,
+      error: assembled.trim() ? undefined : "MODEL_EMPTY_RESPONSE",
+    },
+  };
+}
+
+export async function* streamChatCompletion(
+  messages: ChatMessage[],
+  options?: ChatCompletionOptions,
+): AsyncGenerator<string> {
+  for await (const event of streamChatCompletionResult(messages, options)) {
+    if (event.type === "delta") yield event.content;
   }
 }

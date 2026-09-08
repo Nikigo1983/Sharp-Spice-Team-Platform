@@ -1,14 +1,32 @@
-import { getAiRuntimeConfig, getAiSetupHint, isAiConfigured } from "@/lib/ai/config";
 import {
-  createChatCompletion,
-  streamChatCompletion,
+  AUTHORITATIVE_EVIDENCE_BANNER,
+  buildAttributionLabels,
+  buildHistoryPrecedenceNote,
+  formatClientProvenanceBlock,
+  applyPostAnswerGroundingGuards,
+} from "@/lib/ai/answer-grounding";
+import { getAiRuntimeConfig, getAiSetupHint, isAiConfigured } from "@/lib/ai/config";
+import { decideKbGrounding } from "@/lib/ai/kb-grounding";
+import {
+  createChatCompletionResult,
+  streamChatCompletionResult,
   type ChatCompletionOptions,
   type ChatMessage,
 } from "@/lib/ai/openai";
 import {
-  detectWorkspaceIntent,
   isPassportNumberLookupQuery,
+  type WorkspaceQueryIntent,
 } from "@/lib/ai/query-intent";
+import { resolveWorkspaceRouting } from "@/lib/ai/workspace-router";
+import {
+  applyRoutingDecisionToTrace,
+  createAiRequestId,
+  createEmptyWorkspaceAiTrace,
+  estimateChars,
+  logWorkspaceAiTrace,
+  skippedDriveMeta,
+  type WorkspaceAiTrace,
+} from "@/lib/ai/workspace-trace";
 import { extractPersonNameTokens } from "@/lib/ai/name-matching";
 import { extractPassportFromClientRecord } from "@/lib/ai/client-passport";
 import {
@@ -79,6 +97,7 @@ export type WorkspaceAiResult = {
   reply: string;
   sources: string[];
   demo: boolean;
+  requestId: string;
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
 };
@@ -86,6 +105,7 @@ export type WorkspaceAiResult = {
 export type WorkspaceAiStreamMeta = {
   sources: string[];
   demo: boolean;
+  requestId: string;
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
 };
@@ -102,28 +122,31 @@ function pendingCandidatesForTransport(
 
 function buildSources(
   context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
-  intent: ReturnType<typeof detectWorkspaceIntent>,
+  intent: WorkspaceQueryIntent,
+  options?: {
+    clientLabel?: string | null;
+    deskLabel?: string | null;
+    formgridLabel?: string | null;
+    kbBlockedInsufficient?: boolean;
+  },
 ): string[] {
-  const sources: string[] = [];
-  if (intent.needsKb) sources.push("Knowledge Base");
-  if (intent.needsEmigrantDrive && context.meta.emigrantDriveConfigured) {
-    sources.push("ЭМИГРАНТ (Google Drive)");
-  }
-  if (intent.needsClients && context.meta.clientsTotal > 0) {
-    sources.push(`Клиенты (${context.meta.clientsTotal})`);
-  }
-  if (intent.needsEmigrantDesk && context.meta.emigrantDeskTotal > 0) {
-    sources.push(`Emigrant Desk (${context.meta.emigrantDeskTotal})`);
-  }
-  if (intent.needsFormgrid && context.meta.formgridRows > 0) {
-    sources.push(`Анкеты Formgrid (${context.meta.formgridRows})`);
-  }
-  return sources.length > 0 ? sources : ["Клиенты"];
+  return buildAttributionLabels({
+    kbMeta: intent.needsKb ? context.kbRetrieval : null,
+    emigrantMeta: intent.needsEmigrantDrive ? context.emigrantDriveRetrieval : null,
+    clientLabel: options?.clientLabel ?? null,
+    deskLabel: options?.deskLabel ?? null,
+    formgridLabel:
+      options?.formgridLabel ??
+      (intent.needsFormgrid && context.meta.formgridRows > 0
+        ? `Formgrid — анкеты (${context.meta.formgridRows})`
+        : null),
+    kbBlockedInsufficient: options?.kbBlockedInsufficient ?? false,
+  });
 }
 
 function buildContextBlock(
   context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
-  intent: ReturnType<typeof detectWorkspaceIntent>,
+  intent: WorkspaceQueryIntent,
   clientContext: ResolvedClientContext | null,
   clientCandidates: ResolvedClientContext[] | null = null,
   candidateScenario: ClientCandidateScenario | null = null,
@@ -143,9 +166,17 @@ function buildContextBlock(
     const header = isMergedClientContext(clientContext)
       ? "=== CLIENT CONTEXT (MERGED) ==="
       : "=== CLIENT CONTEXT (Google Sheets) ===";
-    contextParts.push(
-      `${header}\n${formatClientContextBlock(clientContext, { desk: deskSlice })}`,
-    );
+    const clientBody = formatClientContextBlock(clientContext, { desk: deskSlice });
+    const titled = isMergedClientContext(clientContext)
+      ? clientContext.parts.map((p) => p.name).filter(Boolean).join(" / ") ||
+        "merged client"
+      : clientContext.name || "client";
+    const { block } = formatClientProvenanceBlock({
+      index: 1,
+      title: titled,
+      body: `${header}\n${clientBody}`,
+    });
+    contextParts.push(block);
   }
 
   if (clientCandidates && clientCandidates.length > 0 && candidateScenario) {
@@ -195,11 +226,17 @@ function buildChatMessages(
     content: turn.content,
   }));
 
+  const hasAuthoritative =
+    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|FORMGRID|EMIGRANT CROATIA DESK/i.test(
+      contextBlock,
+    );
+
   const clientNote = contextBlock.includes("CLIENT CONTEXT")
-    ? "\n\nДля данных о клиенте используй CLIENT CONTEXT. У каждого поля указан источник — в ответе кратко поясни «таблица «Клиенты»», «анкета Formgrid» и т.д., не пиши «CRM» и не выводи сырой блок."
+    ? "\n\nДля данных о клиенте используй CLIENT CONTEXT / [SOURCE:CLIENT:…]. У каждого поля указан источник — в ответе кратко поясни «таблица «Клиенты»», «анкета Formgrid» и т.д., не пиши «CRM» и не выводи сырой блок."
     : "";
-  const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)")
-    ? "\n\nДля запросов про папку ЭМИГРАНТ используй блок «ЭМИГРАНТ (документы клиентов)». Отсутствие в таблицах Клиенты не означает отсутствие в Drive."
+  const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)") ||
+    contextBlock.includes('kind="emigrant_drive"')
+    ? "\n\nДля запросов про папку ЭМИГРАНТ используй блоки [SOURCE:DRIVE:…]. Отсутствие в таблицах Клиенты не означает отсутствие в Drive. Файл не извлечён ≠ документ отсутствует у клиента."
     : "";
   const candidatesNote = contextBlock.includes("CLIENT CANDIDATES")
     ? "\n\nЕсли в CLIENT CANDIDATES есть варианты — объясни различия и помоги выбрать. При fuzzy-поиске начни с «Точного совпадения не найдено. Возможно, вы имели в виду…». При структурированном поиске — кратко резюмируй список и выдели самых релевантных. Не отвечай сухим «клиент не найден», если кандидаты есть."
@@ -210,13 +247,16 @@ function buildChatMessages(
   const listNote = contextBlock.includes("тип запроса: list")
     ? "\n\nЭто списочный запрос: начни с «Найдено N клиентов…», перечисли клиентов нумерованным списком (имя — статус — менеджер). Если в контексте больше 20 — в ответе покажи первые 20 и добавь «Показано 20 из N клиентов.»"
     : "";
+  const groundingNote = hasAuthoritative
+    ? `\n\n${AUTHORITATIVE_EVIDENCE_BANNER}\n${buildHistoryPrecedenceNote()}`
+    : "\n\nЗапрос без обязательных authoritative-блоков: можно выполнить обычную генерацию/редактирование/перевод без секции «Источники:», если факты платформы не используются.";
 
   return [
     { role: "system", content: buildWorkspaceSystemPrompt(mode) },
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -266,6 +306,39 @@ function buildPassportLookupDirectResult(reply: string) {
     sources: ["Клиенты"],
     pendingClientCandidates: [] as ClientContext[],
     needsClientSelection: false,
+    groundingBlocked: false,
+  };
+}
+
+function emptyContextBundle(): Awaited<ReturnType<typeof buildWorkspaceContext>> {
+  return {
+    clientsText: "Клиенты: не удалось загрузить таблицу.",
+    emigrantDeskText: "Emigrant Croatia Desk: не удалось загрузить статусы дел.",
+    emigrantDriveText: "Папка ЭМИГРАНТ: не удалось загрузить Google Drive.",
+    formgridText: "Formgrid: не удалось загрузить анкеты.",
+    knowledgeBaseText: "Knowledge Base: не удалось загрузить Drive.",
+    kbRetrieval: {
+      ...skippedDriveMeta("knowledge_base"),
+      attempted: true,
+      configured: true,
+      mode: "failed",
+      groundingState: "KB_ERROR",
+      errorMessage: "CONTEXT_BUILD_ERROR",
+    },
+    emigrantDriveRetrieval: {
+      ...skippedDriveMeta("emigrant_drive"),
+      attempted: true,
+      configured: true,
+      mode: "failed",
+      groundingState: "KB_ERROR",
+      errorMessage: "CONTEXT_BUILD_ERROR",
+    },
+    meta: {
+      clientsTotal: 0,
+      emigrantDeskTotal: 0,
+      emigrantDriveConfigured: false,
+      formgridRows: 0,
+    },
   };
 }
 
@@ -295,29 +368,43 @@ async function prepareWorkspaceRequest(
   history: WorkspaceChatTurn[],
   mode: WorkspaceResponseMode,
   pendingClientCandidates: ClientContext[] | null = null,
+  requestId: string = createAiRequestId(),
 ): Promise<
-  | { kind: "empty" }
+  | { kind: "empty"; requestId: string; trace: WorkspaceAiTrace }
   | {
       kind: "direct";
       reply: string;
       sources: string[];
       pendingClientCandidates?: ClientContext[];
       needsClientSelection?: boolean;
+      requestId: string;
+      trace: WorkspaceAiTrace;
+      groundingBlocked?: boolean;
     }
   | {
       kind: "ai";
       messages: ChatMessage[];
       sources: string[];
       context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
+      contextBlock: string;
       trimmed: string;
       clientContext: ResolvedClientContext | null;
       pendingClientCandidates?: ClientContext[];
       needsClientSelection?: boolean;
+      requestId: string;
+      trace: WorkspaceAiTrace;
     }
 > {
+  const started = Date.now();
+  const trace = createEmptyWorkspaceAiTrace(requestId);
+  trace.historyTurnCount = history.length;
+
   const trimmed = userMessage.trim();
   if (!trimmed) {
-    return { kind: "empty" };
+    trace.responseOk = true;
+    trace.notes.push("empty_message");
+    logWorkspaceAiTrace(trace);
+    return { kind: "empty", requestId, trace };
   }
 
   const safePendingCandidates =
@@ -350,10 +437,16 @@ async function prepareWorkspaceRequest(
         .map((group) => formatMergedClientContextBlock(group.merged))
         .join("\n\n---\n\n")}`;
     }
+    trace.selectedRoutes = ["debug_client"];
+    trace.responseOk = true;
+    trace.latencyMs.prepare = Date.now() - started;
+    logWorkspaceAiTrace(trace);
     return {
       kind: "direct",
       reply: redactSensitiveText(debugReply),
       sources: ["Клиенты", "Новые клиенты"],
+      requestId,
+      trace,
     };
   }
 
@@ -366,23 +459,40 @@ async function prepareWorkspaceRequest(
   if (followUp?.kind === "select" && findRecentPassportQuestion(history)) {
     const fromSelected = passportReplyFromClientContext(followUp.client);
     if (fromSelected) {
-      return buildPassportLookupDirectResult(fromSelected);
+      const direct = buildPassportLookupDirectResult(fromSelected);
+      trace.selectedRoutes = ["passport_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
+      return { ...direct, requestId, trace };
     }
     const passportQuery = findRecentPassportQuestion(history);
     if (passportQuery) {
       const retry = await tryDirectPassportAnswer(passportQuery);
       if (retry) {
-        return buildPassportLookupDirectResult(retry);
+        const direct = buildPassportLookupDirectResult(retry);
+        trace.selectedRoutes = ["passport_direct"];
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return { ...direct, requestId, trace };
       }
     }
   }
 
-  const intent = detectWorkspaceIntent(trimmed);
+  const routing = await resolveWorkspaceRouting(trimmed);
+  const intent = routing.workspaceIntent;
+  applyRoutingDecisionToTrace(trace, routing);
 
   if (isPassportNumberLookupQuery(trimmed)) {
     const early = await tryDirectPassportAnswer(trimmed);
     if (early) {
-      return buildPassportLookupDirectResult(early);
+      const direct = buildPassportLookupDirectResult(early);
+      trace.selectedRoutes = ["passport_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
+      return { ...direct, requestId, trace };
     }
   }
 
@@ -396,54 +506,68 @@ async function prepareWorkspaceRequest(
 
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
-  } else {
-    const aiSearch = await lookupClientsWithAiSearch(trimmed);
-    const clientLookup = aiSearch.lookup;
-    clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
-    clientCandidatesTotalFound = aiSearch.foundClients;
+  } else if (
+    intent.needsClients ||
+    intent.needsFormgrid ||
+    intent.needsEmigrantDrive ||
+    intent.fastClientLookup
+  ) {
+    try {
+      const aiSearch = await lookupClientsWithAiSearch(trimmed);
+      const clientLookup = aiSearch.lookup;
+      clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
+      clientCandidatesTotalFound = aiSearch.foundClients;
+      const runtime = getAiRuntimeConfig();
+      if (runtime) {
+        trace.auxiliaryModel = runtime.model;
+      }
 
-    console.log(
-      `[workspace-ai] Found clients: ${aiSearch.foundClients}, Sent to Claude: ${aiSearch.sentToClaude}, Intent type: ${aiSearch.intentType}`,
-    );
+      console.log(
+        `[workspace-ai][${requestId}] Found clients: ${aiSearch.foundClients}, Sent to Claude: ${aiSearch.sentToClaude}, Intent type: ${aiSearch.intentType}`,
+      );
 
-    if (
-      aiSearch.intentType === "list" &&
-      clientLookup.kind === "single"
-    ) {
-      clientCandidates = [clientLookup.client];
-      candidateScenario = "structured";
-    } else if (clientLookup.kind === "single") {
-      clientContext = clientLookup.client;
-    } else if (clientLookup.kind === "multiple") {
-      clientCandidates = clientLookup.clients;
-      candidateScenario = aiSearch.usedStructuredSearch ? "structured" : "multiple";
       if (
-        shouldOfferClientSelection(
-          aiSearch.intentType,
-          clientLookup.kind,
-          clientLookup.clients.length,
-        )
+        aiSearch.intentType === "list" &&
+        clientLookup.kind === "single"
       ) {
-        pendingForUi = clientLookup.pendingParts;
-        needsClientSelection = true;
+        clientCandidates = [clientLookup.client];
+        candidateScenario = "structured";
+      } else if (clientLookup.kind === "single") {
+        clientContext = clientLookup.client;
+      } else if (clientLookup.kind === "multiple") {
+        clientCandidates = clientLookup.clients;
+        candidateScenario = aiSearch.usedStructuredSearch ? "structured" : "multiple";
+        if (
+          shouldOfferClientSelection(
+            aiSearch.intentType,
+            clientLookup.kind,
+            clientLookup.clients.length,
+          )
+        ) {
+          pendingForUi = clientLookup.pendingParts;
+          needsClientSelection = true;
+        }
+      } else if (clientLookup.kind === "weak") {
+        clientCandidates = clientLookup.clients;
+        candidateScenario = "weak";
+        if (aiSearch.intentType !== "list") {
+          pendingForUi = clientLookup.clients.flatMap((client) =>
+            isMergedClientContext(client) ? client.parts : [client],
+          );
+        }
+      } else if (clientLookup.kind === "not_found") {
+        const fuzzy = await lookupFuzzyClientCandidates(trimmed, 10);
+        if (fuzzy.length > 0 && aiSearch.intentType !== "list") {
+          clientCandidates = fuzzy;
+          candidateScenario = "not_found";
+          pendingForUi = fuzzy.flatMap((client) =>
+            isMergedClientContext(client) ? client.parts : [client],
+          );
+        }
       }
-    } else if (clientLookup.kind === "weak") {
-      clientCandidates = clientLookup.clients;
-      candidateScenario = "weak";
-      if (aiSearch.intentType !== "list") {
-        pendingForUi = clientLookup.clients.flatMap((client) =>
-          isMergedClientContext(client) ? client.parts : [client],
-        );
-      }
-    } else if (clientLookup.kind === "not_found") {
-      const fuzzy = await lookupFuzzyClientCandidates(trimmed, 10);
-      if (fuzzy.length > 0 && aiSearch.intentType !== "list") {
-        clientCandidates = fuzzy;
-        candidateScenario = "not_found";
-        pendingForUi = fuzzy.flatMap((client) =>
-          isMergedClientContext(client) ? client.parts : [client],
-        );
-      }
+    } catch (error) {
+      console.error(`[workspace-ai][${requestId}] client search failed`, error);
+      trace.notes.push("CLIENT_SEARCH_ERROR");
     }
   }
 
@@ -455,7 +579,11 @@ async function prepareWorkspaceRequest(
       pendingForUi,
     );
     if (passportReply) {
-      return buildPassportLookupDirectResult(passportReply);
+      const direct = buildPassportLookupDirectResult(passportReply);
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
+      return { ...direct, requestId, trace };
     }
     needsClientSelection = false;
     pendingForUi = undefined;
@@ -464,10 +592,16 @@ async function prepareWorkspaceRequest(
   if (intent.fastClientLookup && !clientContext) {
     const direct = await tryDirectBookingAnswer(trimmed);
     if (direct) {
+      trace.selectedRoutes = ["booking_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
       return {
         kind: "direct",
         reply: direct,
         sources: ["Клиенты"],
+        requestId,
+        trace,
       };
     }
   }
@@ -475,10 +609,16 @@ async function prepareWorkspaceRequest(
   if (intent.needsEmigrantDesk && /статус/iu.test(trimmed)) {
     const direct = await tryDirectEmigrantStatusAnswer(trimmed);
     if (direct) {
+      trace.selectedRoutes = ["emigrant_desk_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
       return {
         kind: "direct",
         reply: direct,
         sources: ["Emigrant Desk"],
+        requestId,
+        trace,
       };
     }
   }
@@ -486,31 +626,75 @@ async function prepareWorkspaceRequest(
   if (intent.needsFormgrid) {
     const direct = await tryDirectFormgridRecentAnswer(trimmed);
     if (direct) {
+      trace.selectedRoutes = ["formgrid_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
       return {
         kind: "direct",
         reply: direct,
         sources: ["Анкеты Formgrid"],
+        requestId,
+        trace,
       };
     }
   }
 
+  const contextStarted = Date.now();
   let context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
   try {
     context = await buildWorkspaceContext(trimmed, intent);
   } catch (error) {
-    console.error("[workspace-ai] context build failed", error);
-    context = {
-      clientsText: "Клиенты: не удалось загрузить таблицу.",
-      emigrantDeskText: "Emigrant Croatia Desk: не удалось загрузить статусы дел.",
-      emigrantDriveText: "Папка ЭМИГРАНТ: не удалось загрузить Google Drive.",
-      formgridText: "Formgrid: не удалось загрузить анкеты.",
-      knowledgeBaseText: "Knowledge Base: не удалось загрузить Drive.",
-      meta: {
-        clientsTotal: 0,
-        emigrantDeskTotal: 0,
-        emigrantDriveConfigured: false,
-        formgridRows: 0,
-      },
+    console.error(`[workspace-ai][${requestId}] context build failed`, error);
+    context = emptyContextBundle();
+    trace.fallbackActivated = true;
+    trace.fallbackReason = "CONTEXT_BUILD_ERROR";
+    trace.notes.push("CONTEXT_BUILD_ERROR");
+  }
+  trace.latencyMs.context = Date.now() - contextStarted;
+
+  trace.kbMode = context.kbRetrieval.mode;
+  trace.kbConfigured = context.kbRetrieval.configured;
+  trace.kbGroundingState = context.kbRetrieval.groundingState;
+  trace.kbRetrievedFileCount = context.kbRetrieval.selectedFiles.length;
+  trace.kbSelectedFiles = context.kbRetrieval.selectedFiles;
+  trace.kbRetrievalScores = context.kbRetrieval.selectedFiles.map((f) => f.score);
+  trace.kbContextChars = context.kbRetrieval.textCharCount;
+  trace.kbQueryTokens = context.kbRetrieval.queryTokens ?? [];
+  trace.kbFilenameSearchAttempted =
+    context.kbRetrieval.filenameSearchAttempted ?? false;
+  trace.kbContentSearchAttempted =
+    context.kbRetrieval.contentSearchAttempted ?? false;
+  trace.kbRejectedOutsideRootCount =
+    context.kbRetrieval.rejectedOutsideRootCount ?? 0;
+  trace.kbRetrievalLatencyMs =
+    context.kbRetrieval.retrievalLatencyMs ?? null;
+  trace.emigrantDriveMode = context.emigrantDriveRetrieval.mode;
+  trace.emigrantDriveFileCount =
+    context.emigrantDriveRetrieval.selectedFiles.length;
+
+  const grounding = decideKbGrounding({
+    intent,
+    kbMeta: context.kbRetrieval,
+  });
+  if (grounding.blockModel && grounding.reply) {
+    if (trace.fallbackReason === "NONE") {
+      trace.fallbackReason = grounding.reason;
+    }
+    trace.fallbackActivated = true;
+    trace.responseOk = true;
+    trace.notes.push(`kb_grounding:${grounding.state}`);
+    trace.latencyMs.prepare = Date.now() - started;
+    logWorkspaceAiTrace(trace);
+    return {
+      kind: "direct",
+      reply: grounding.reply,
+      sources: intent.needsKb
+        ? buildAttributionLabels({ kbBlockedInsufficient: true })
+        : [],
+      requestId,
+      trace,
+      groundingBlocked: true,
     };
   }
 
@@ -522,27 +706,34 @@ async function prepareWorkspaceRequest(
         deskSlice = emigrantDeskClientToContextSlice(deskClient);
       }
     } catch (error) {
-      console.error("[workspace-ai] desk lookup for client context failed", error);
+      console.error(
+        `[workspace-ai][${requestId}] desk lookup for client context failed`,
+        error,
+      );
     }
   }
 
-  const sources = clientContext
-    ? [
-        isMergedClientContext(clientContext)
-          ? deskSlice
-            ? "Клиенты + Новые клиенты + Emigrant Desk"
-            : "Клиенты + Новые клиенты"
-          : deskSlice
-            ? `${clientContext.sourceLabel} + Emigrant Desk`
-            : clientContext.sourceLabel,
-        ...buildSources(context, intent).filter(
-          (source) =>
-            !/^Клиенты|^Анкеты Formgrid|^Emigrant Desk/i.test(source),
-        ),
-      ]
+  const clientAttrLabel = clientContext
+    ? isMergedClientContext(clientContext)
+      ? deskSlice
+        ? "Client record — merged + Emigrant Desk"
+        : "Client record — merged"
+      : deskSlice
+        ? `Client record — ${clientContext.name || clientContext.sourceLabel} + Emigrant Desk`
+        : `Client record — ${clientContext.name || clientContext.sourceLabel}`
     : clientCandidates?.length
-      ? [`Клиенты (кандидаты: ${clientCandidates.length})`, ...buildSources(context, intent)]
-      : buildSources(context, intent);
+      ? `Client record — candidates (${clientCandidates.length})`
+      : intent.needsClients && context.meta.clientsTotal > 0
+        ? `Client record — table (${context.meta.clientsTotal})`
+        : null;
+
+  const sources = buildSources(context, intent, {
+    clientLabel: clientAttrLabel,
+    deskLabel:
+      intent.needsEmigrantDesk && !clientContext && context.meta.emigrantDeskTotal > 0
+        ? `Emigrant Desk — cases (${context.meta.emigrantDeskTotal})`
+        : null,
+  });
   const contextBlock = buildContextBlock(
     context,
     intent,
@@ -553,6 +744,22 @@ async function prepareWorkspaceRequest(
     clientCandidatesTotalFound,
     deskSlice,
   );
+
+  trace.clientContextCount = clientContext ? 1 : 0;
+  trace.clientCandidatesCount = clientCandidates?.length ?? 0;
+  trace.clientContextChars = estimateChars(
+    clientContext ? formatClientContextBlock(clientContext, { desk: deskSlice }) : "",
+    clientCandidates?.length
+      ? formatClientCandidatesForAi(
+          clientCandidates,
+          candidateScenario ?? "multiple",
+          clientCandidatesTotalFound ?? clientCandidates.length,
+        )
+      : "",
+  );
+  trace.contextCharsEstimate = estimateChars(contextBlock);
+  trace.latencyMs.prepare = Date.now() - started;
+
   const messages = buildChatMessages(trimmed, contextBlock, history, mode);
 
   return {
@@ -560,10 +767,13 @@ async function prepareWorkspaceRequest(
     messages,
     sources,
     context,
+    contextBlock,
     trimmed,
     clientContext,
     pendingClientCandidates: pendingCandidatesForTransport(pendingForUi),
     needsClientSelection,
+    requestId,
+    trace,
   };
 }
 
@@ -572,12 +782,15 @@ export async function runWorkspaceAi(
   history: WorkspaceChatTurn[] = [],
   mode: WorkspaceResponseMode = "brief",
   pendingClientCandidates: ClientContext[] | null = null,
+  requestId: string = createAiRequestId(),
 ): Promise<WorkspaceAiResult> {
+  const totalStarted = Date.now();
   const prepared = await prepareWorkspaceRequest(
     userMessage,
     history,
     mode,
     pendingClientCandidates,
+    requestId,
   );
 
   if (prepared.kind === "empty") {
@@ -586,6 +799,7 @@ export async function runWorkspaceAi(
         "Напишите вопрос — подключу Knowledge Base, клиентов и анкеты Formgrid.",
       sources: [],
       demo: true,
+      requestId: prepared.requestId,
     };
   }
 
@@ -594,30 +808,59 @@ export async function runWorkspaceAi(
       reply: prepared.reply,
       sources: prepared.sources,
       demo: false,
+      requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
     };
   }
 
-  const aiReply = await createChatCompletion(
+  const completion = await createChatCompletionResult(
     prepared.messages,
     getCompletionOptions(),
   );
+  prepared.trace.requestedModel = completion.requestedModel;
+  prepared.trace.returnedModel = completion.returnedModel;
+  prepared.trace.usageInputTokens = completion.usage.inputTokens;
+  prepared.trace.usageOutputTokens = completion.usage.outputTokens;
+  prepared.trace.latencyMs.model = completion.latencyMs;
+  prepared.trace.openRouterOk = completion.ok;
+  prepared.trace.latencyMs.total = Date.now() - totalStarted;
 
-  if (aiReply) {
+  if (completion.content) {
+    const guarded = applyPostAnswerGroundingGuards({
+      answer: completion.content,
+      contextBlock: prepared.contextBlock,
+      query: prepared.trimmed,
+    });
+    for (const note of guarded.notes) {
+      prepared.trace.notes.push(note);
+    }
+    prepared.trace.responseOk = true;
+    logWorkspaceAiTrace(prepared.trace);
     return {
-      reply: aiReply,
+      reply: guarded.answer,
       sources: prepared.sources,
       demo: false,
+      requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
     };
   }
+
+  prepared.trace.fallbackActivated = true;
+  prepared.trace.fallbackReason =
+    completion.error === "MODEL_EMPTY_RESPONSE"
+      ? "MODEL_EMPTY_RESPONSE"
+      : "OPENROUTER_ERROR";
+  prepared.trace.responseOk = false;
+  prepared.trace.notes.push(completion.error ?? "OPENROUTER_ERROR");
+  logWorkspaceAiTrace(prepared.trace);
 
   return {
     reply: buildDemoReply(prepared.trimmed, prepared.context),
     sources: prepared.sources,
     demo: true,
+    requestId: prepared.requestId,
     pendingClientCandidates: prepared.pendingClientCandidates,
     needsClientSelection: prepared.needsClientSelection,
   };
@@ -628,7 +871,9 @@ export async function* runWorkspaceAiStream(
   history: WorkspaceChatTurn[] = [],
   mode: WorkspaceResponseMode = "brief",
   pendingClientCandidates: ClientContext[] | null = null,
+  requestId: string = createAiRequestId(),
 ): AsyncGenerator<string | WorkspaceAiStreamMeta | WorkspaceAiStreamStatus> {
+  const totalStarted = Date.now();
   yield { status: "context" };
 
   const prepared = await prepareWorkspaceRequest(
@@ -636,12 +881,14 @@ export async function* runWorkspaceAiStream(
     history,
     mode,
     pendingClientCandidates,
+    requestId,
   );
 
   if (prepared.kind === "empty") {
     yield {
       sources: [],
       demo: true,
+      requestId: prepared.requestId,
     };
     yield "Напишите вопрос — подключу Knowledge Base, клиентов и анкеты Formgrid.";
     return;
@@ -651,6 +898,7 @@ export async function* runWorkspaceAiStream(
     yield {
       sources: prepared.sources,
       demo: false,
+      requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
     };
@@ -661,25 +909,72 @@ export async function* runWorkspaceAiStream(
   yield {
     sources: prepared.sources,
     demo: false,
+    requestId: prepared.requestId,
     pendingClientCandidates: prepared.pendingClientCandidates,
     needsClientSelection: prepared.needsClientSelection,
   };
 
   yield { status: "generating" };
 
+  const mayNeedGroundingGuard =
+    prepared.contextBlock.includes("NOT_FOUND_IN_RETRIEVED_CONTEXT") ||
+    prepared.contextBlock.includes("UNKNOWN_INSUFFICIENT") ||
+    /доход|income|минимал/i.test(prepared.trimmed);
+  let buffered = "";
   let hasContent = false;
-  for await (const chunk of streamChatCompletion(
+  for await (const event of streamChatCompletionResult(
     prepared.messages,
     getCompletionOptions(),
   )) {
-    hasContent = true;
-    yield chunk;
+    if (event.type === "delta") {
+      hasContent = true;
+      if (mayNeedGroundingGuard) {
+        buffered += event.content;
+      } else {
+        yield event.content;
+      }
+      continue;
+    }
+
+    prepared.trace.requestedModel = event.result.requestedModel;
+    prepared.trace.returnedModel = event.result.returnedModel;
+    prepared.trace.usageInputTokens = event.result.usage.inputTokens;
+    prepared.trace.usageOutputTokens = event.result.usage.outputTokens;
+    prepared.trace.latencyMs.model = event.result.latencyMs;
+    prepared.trace.openRouterOk = event.result.ok;
+    prepared.trace.latencyMs.total = Date.now() - totalStarted;
+
+    if (!event.result.ok) {
+      prepared.trace.fallbackActivated = true;
+      prepared.trace.fallbackReason =
+        event.result.error === "MODEL_EMPTY_RESPONSE"
+          ? "MODEL_EMPTY_RESPONSE"
+          : "OPENROUTER_ERROR";
+      prepared.trace.notes.push(event.result.error ?? "OPENROUTER_ERROR");
+    } else {
+      prepared.trace.responseOk = true;
+    }
+
+    if (mayNeedGroundingGuard && buffered) {
+      const guarded = applyPostAnswerGroundingGuards({
+        answer: buffered,
+        contextBlock: prepared.contextBlock,
+        query: prepared.trimmed,
+      });
+      for (const note of guarded.notes) {
+        prepared.trace.notes.push(note);
+      }
+      yield guarded.answer;
+    }
+
+    logWorkspaceAiTrace(prepared.trace);
   }
 
   if (!hasContent) {
     yield {
       sources: prepared.sources,
       demo: true,
+      requestId: prepared.requestId,
     };
     yield buildDemoReply(prepared.trimmed, prepared.context);
   }

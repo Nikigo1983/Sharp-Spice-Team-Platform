@@ -7,6 +7,10 @@ import {
   tokenizeSearchQuery,
 } from "@/lib/ai/name-matching";
 import type { WorkspaceQueryIntent } from "@/lib/ai/query-intent";
+import {
+  skippedDriveMeta,
+  type DriveRetrievalMeta,
+} from "@/lib/ai/workspace-trace";
 import { buildEmigrantDeskContextForAi } from "@/lib/emigrant-desk/clients";
 import {
   getEmigrantDriveTextForAi,
@@ -137,6 +141,8 @@ export type WorkspaceContextBundle = {
   emigrantDriveText: string;
   formgridText: string;
   knowledgeBaseText: string;
+  kbRetrieval: DriveRetrievalMeta;
+  emigrantDriveRetrieval: DriveRetrievalMeta;
   meta: {
     clientsTotal: number;
     emigrantDeskTotal: number;
@@ -149,7 +155,7 @@ export async function buildWorkspaceContext(
   userMessage: string,
   intent: WorkspaceQueryIntent,
 ): Promise<WorkspaceContextBundle> {
-  const [clients, emigrantDesk, emigrantDriveText, formgrid, knowledgeBaseText] =
+  const [clients, emigrantDesk, emigrantDrive, formgrid, knowledgeBase] =
     await Promise.all([
     intent.needsClients
       ? buildClientsContextForAi(userMessage)
@@ -164,9 +170,10 @@ export async function buildWorkspaceContext(
       ? getEmigrantDriveTextForAi(userMessage, {
           full: intent.needsEmigrantDriveFullText,
         })
-      : Promise.resolve(
-          "Папка ЭМИГРАНТ (Google Drive): для этого вопроса не подключалась.",
-        ),
+      : Promise.resolve({
+          text: "Папка ЭМИГРАНТ (Google Drive): для этого вопроса не подключалась.",
+          meta: skippedDriveMeta("emigrant_drive"),
+        }),
     intent.needsFormgrid
       ? buildFormgridContextForAi(userMessage)
       : Promise.resolve({
@@ -177,17 +184,20 @@ export async function buildWorkspaceContext(
       ? getKnowledgeBaseTextForAi(userMessage, {
           full: intent.needsKbFullText,
         })
-      : Promise.resolve(
-          "Knowledge Base: для этого вопроса не подключалась (ускорение ответа).",
-        ),
+      : Promise.resolve({
+          text: "Knowledge Base: для этого вопроса не подключалась (ускорение ответа).",
+          meta: skippedDriveMeta("knowledge_base"),
+        }),
   ]);
 
   return {
     clientsText: clients.text,
     emigrantDeskText: emigrantDesk.text,
-    emigrantDriveText,
+    emigrantDriveText: emigrantDrive.text,
     formgridText: formgrid.text,
-    knowledgeBaseText,
+    knowledgeBaseText: knowledgeBase.text,
+    kbRetrieval: knowledgeBase.meta,
+    emigrantDriveRetrieval: emigrantDrive.meta,
     meta: {
       clientsTotal: clients.count,
       emigrantDeskTotal: emigrantDesk.count,

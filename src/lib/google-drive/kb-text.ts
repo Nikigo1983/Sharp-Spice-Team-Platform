@@ -1,3 +1,9 @@
+import { classifyKbGroundingState } from "@/lib/ai/kb-grounding";
+import { annotateDriveContextWithProvenance } from "@/lib/ai/answer-grounding";
+import type {
+  DriveRetrievalMeta,
+  DriveSelectedFileMeta,
+} from "@/lib/ai/workspace-trace";
 import { fetchWithTlsFallback } from "@/lib/google-fetch";
 import {
   extractPdfText,
@@ -5,14 +11,28 @@ import {
   isImageMime,
   isPdfMime,
   isPlainTextMime,
-  snippetAroundTerms,
 } from "@/lib/google-drive/drive-content";
+import {
+  dedupeByFileId,
+  extractMeaningfulKbTokens,
+  formatRankedKbContext,
+  partitionByKbRoot,
+  rankKbDocument,
+  selectRankedKbDocuments,
+  snippetAroundStrongestMatch,
+  type RankedKbDocument,
+} from "@/lib/google-drive/kb-retrieval-core";
 import {
   getGoogleAccessToken,
   isGoogleDriveEmigrantConfigured,
   isGoogleDriveKbConfigured,
 } from "@/lib/google-sheets/auth";
 import { getCached, setCached } from "@/lib/google-sheets/cache";
+
+export type DriveRetrievalResult = {
+  text: string;
+  meta: DriveRetrievalMeta;
+};
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -22,11 +42,16 @@ const GOOGLE_SLIDES = "application/vnd.google-apps.presentation";
 
 const MAX_DEPTH = 6;
 const MAX_FILES = 40;
+/** KB tree walk slightly higher to reach nested program docs. */
+const MAX_FILES_KB = 60;
 const MAX_FILES_EMIGRANT = 60;
 const MAX_FILES_FULL_EXPORT = 8;
 const MAX_CONTENT_SCAN_FILES = 15;
+/** Strict KB content mode: fewer, better files. */
+const MAX_KB_CONTENT_SELECTED = 8;
 const MAX_CHARS_PER_FILE = 4000;
 const MAX_TOTAL_CHARS = 24_000;
+const KB_SNIPPET_RADIUS = 220;
 
 const DRIVE_STOP_WORDS = new Set([
   "найди",
@@ -160,6 +185,70 @@ function escapeDriveQueryTerm(term: string): string {
   return term.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+/**
+ * Drive fullText search scoped to an allow-list of file IDs (KB/Emigrant tree).
+ * Does NOT restrict to direct children — nested descendants can match — but any
+ * hit outside the allow-list is rejected (folder boundary).
+ */
+async function driveFullTextSearchScoped(
+  terms: string[],
+  allowedFileIds: ReadonlySet<string>,
+): Promise<{
+  hits: Array<DriveFileNode & { hitScore: number }>;
+  rejectedOutsideRoot: number;
+}> {
+  const token = await getGoogleAccessToken();
+  if (!token || terms.length === 0) {
+    return { hits: [], rejectedOutsideRoot: 0 };
+  }
+
+  const byId = new Map<string, DriveFileNode & { hitScore: number }>();
+  let rejectedOutsideRoot = 0;
+
+  for (const term of terms.slice(0, 4)) {
+    const q = `trashed=false and fullText contains '${escapeDriveQueryTerm(term)}'`;
+    const path = `/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&pageSize=50&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+
+    try {
+      const response = await fetchWithTlsFallback(`${DRIVE_API}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as {
+        files?: Array<{ id: string; name: string; mimeType: string }>;
+      };
+
+      for (const file of data.files ?? []) {
+        if (!allowedFileIds.has(file.id)) {
+          rejectedOutsideRoot += 1;
+          continue;
+        }
+        const existing = byId.get(file.id);
+        if (existing) {
+          existing.hitScore += 1;
+          continue;
+        }
+        byId.set(file.id, {
+          id: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          path: file.name,
+          hitScore: 1,
+        });
+      }
+    } catch (error) {
+      console.error("[kb-text] fullText search failed", term, error);
+    }
+  }
+
+  return {
+    hits: [...byId.values()].sort((a, b) => b.hitScore - a.hitScore),
+    rejectedOutsideRoot,
+  };
+}
+
+/** Legacy direct-child fullText (Emigrant compatibility path). */
 async function driveFullTextSearch(
   folderId: string,
   terms: string[],
@@ -334,7 +423,7 @@ async function fileToChunk(
       const trimmed = raw.trim();
       const text =
         tokens.length > 0 && trimmed.length > MAX_CHARS_PER_FILE
-          ? `[Фрагмент]\n${snippetAroundTerms(trimmed, tokens)}`
+          ? `[Фрагмент]\n${snippetAroundStrongestMatch(trimmed, tokens, KB_SNIPPET_RADIUS)}`
           : truncate(trimmed, MAX_CHARS_PER_FILE);
       return { ...base, text };
     }
@@ -344,7 +433,7 @@ async function fileToChunk(
   if (extracted) {
     const text =
       tokens.length > 0 && extracted.length > MAX_CHARS_PER_FILE
-        ? `[Фрагмент PDF/файла]\n${snippetAroundTerms(extracted, tokens)}`
+        ? `[Фрагмент PDF/файла]\n${snippetAroundStrongestMatch(extracted, tokens, KB_SNIPPET_RADIUS)}`
         : truncate(extracted, MAX_CHARS_PER_FILE);
     return { ...base, text };
   }
@@ -384,9 +473,21 @@ function formatDriveContext(
   chunks: KbTextChunk[],
   query: string,
   totalFiles?: number,
-): string {
+): {
+  text: string;
+  selectedFiles: DriveSelectedFileMeta[];
+  contentMatchCount: number;
+  contentRetrieved: boolean;
+  usefulContextEmpty: boolean;
+} {
   if (chunks.length === 0) {
-    return `${folderLabel}: файлы не найдены или нет доступа к папке.`;
+    return {
+      text: `${folderLabel}: файлы не найдены или нет доступа к папке.`,
+      selectedFiles: [],
+      contentMatchCount: 0,
+      contentRetrieved: false,
+      usefulContextEmpty: true,
+    };
   }
 
   const tokens = meaningfulSearchTokens(query);
@@ -414,25 +515,112 @@ function formatDriveContext(
       ? `${folderLabel} (Google Drive): поиск по содержимому «${tokens.join(", ")}» — найдено ${contentMatches.length + fullTextOnly.length} из ${totalFiles ?? chunks.length} файлов.`
       : `${folderLabel} (Google Drive): ${chunks.length} файлов, в ответ включено ${limited.length}.`;
 
-  const parts: string[] = [header];
+  const included: DriveSelectedFileMeta[] = [];
+  const provenanceFiles: Array<{
+    path: string;
+    text: string;
+    hasContent: boolean;
+    fileId: string;
+  }> = [];
 
   for (const chunk of limited) {
-    const block = `### ${chunk.path}\n${chunk.text}`;
-    if (total + block.length > MAX_TOTAL_CHARS) {
-      parts.push("… [остальные файлы опущены из‑за лимита контекста]");
+    const hasContent = !isUnextractedPlaceholder(chunk.text);
+    const provisional = `### ${chunk.path}\n${chunk.text}`;
+    if (total + provisional.length > MAX_TOTAL_CHARS) {
       break;
     }
-    parts.push(block);
-    total += block.length;
+    total += provisional.length;
+    included.push({
+      id: chunk.fileId,
+      path: chunk.path,
+      score: scoreChunk(chunk, tokens),
+      hasContent,
+    });
+    provenanceFiles.push({
+      path: chunk.path,
+      text: chunk.text,
+      hasContent,
+      fileId: chunk.fileId,
+    });
   }
 
+  const prefix = folderLabel.toLowerCase().includes("knowledge") ? "KB" : "DRIVE";
+  const footerNotes: string[] = [];
+  if (provenanceFiles.length < limited.length) {
+    footerNotes.push("… [остальные файлы опущены из‑за лимита контекста]");
+  }
   if (contentMatches.length === 0 && tokens.length > 0) {
-    parts.push(
+    footerNotes.push(
       "Совпадений в тексте PDF/документов не найдено. Проверьте написание или откройте файл в Drive вручную.",
     );
   }
 
-  return parts.join("\n\n");
+  const annotated = annotateDriveContextWithProvenance({
+    prefix,
+    folderLabel,
+    header,
+    files: provenanceFiles,
+    footerNotes,
+  });
+
+  const contentRetrieved = included.some((file) => file.hasContent);
+  const usefulContextEmpty =
+    contentMatches.length === 0 || !included.some((file) => file.hasContent);
+
+  return {
+    text: annotated.text,
+    selectedFiles: included,
+    contentMatchCount: contentMatches.length,
+    contentRetrieved,
+    usefulContextEmpty,
+  };
+}
+
+function buildDriveMeta(params: {
+  source: DriveRetrievalMeta["source"];
+  attempted: boolean;
+  configured: boolean;
+  mode: DriveRetrievalMeta["mode"];
+  candidateFileCount: number;
+  selectedFiles: DriveSelectedFileMeta[];
+  contentRetrieved: boolean;
+  usefulContextEmpty: boolean;
+  text: string;
+  errorMessage?: string;
+  failed?: boolean;
+  queryTokens?: string[];
+  filenameSearchAttempted?: boolean;
+  contentSearchAttempted?: boolean;
+  rejectedOutsideRootCount?: number;
+  retrievalLatencyMs?: number;
+}): DriveRetrievalMeta {
+  return {
+    source: params.source,
+    attempted: params.attempted,
+    configured: params.configured,
+    mode: params.mode,
+    groundingState: classifyKbGroundingState({
+      attempted: params.attempted,
+      configured: params.configured,
+      mode: params.mode,
+      selectedFiles: params.selectedFiles,
+      contentRetrieved: params.contentRetrieved,
+      usefulContextEmpty: params.usefulContextEmpty,
+      failed: params.failed,
+    }),
+    candidateFileCount: params.candidateFileCount,
+    selectedFiles: params.selectedFiles,
+    contentRetrieved: params.contentRetrieved,
+    usefulContextEmpty: params.usefulContextEmpty,
+    textCharCount: params.text.length,
+    errorMessage: params.errorMessage,
+    queryTokens: params.queryTokens,
+    filenameSearchAttempted: params.filenameSearchAttempted,
+    contentSearchAttempted: params.contentSearchAttempted,
+    selectedCount: params.selectedFiles.length,
+    rejectedOutsideRootCount: params.rejectedOutsideRootCount,
+    retrievalLatencyMs: params.retrievalLatencyMs,
+  };
 }
 
 async function getDriveFileList(
@@ -465,13 +653,188 @@ function mergePaths(
   });
 }
 
-async function getDriveContentSearchForAi(
+/**
+ * AI-02 Knowledge Base content retrieval:
+ * - recursive tree under KB root
+ * - Drive fullText scoped + filtered to tree membership
+ * - filename/path + content lexical ranking
+ * - no zero-score padding
+ */
+async function getKbStrictContentSearchForAi(
   folderId: string,
   folderLabel: string,
   cachePrefix: string,
   maxFiles: number,
   userQuery: string,
-): Promise<string> {
+): Promise<DriveRetrievalResult> {
+  const started = Date.now();
+  const tokens = extractMeaningfulKbTokens(userQuery);
+  const files = await getDriveFileList(
+    folderId,
+    `${cachePrefix}:files`,
+    maxFiles,
+  );
+  const allowedIds = new Set(files.map((file) => file.id));
+
+  if (files.length === 0) {
+    const text = `${folderLabel}: файлы не найдены.`;
+    return {
+      text,
+      meta: buildDriveMeta({
+        source: "knowledge_base",
+        attempted: true,
+        configured: true,
+        mode: "content",
+        candidateFileCount: 0,
+        selectedFiles: [],
+        contentRetrieved: false,
+        usefulContextEmpty: true,
+        text,
+        queryTokens: tokens,
+        filenameSearchAttempted: true,
+        contentSearchAttempted: true,
+        rejectedOutsideRootCount: 0,
+        retrievalLatencyMs: Date.now() - started,
+      }),
+    };
+  }
+
+  if (tokens.length === 0) {
+    return getDriveCatalogForAi(
+      "knowledge_base",
+      folderId,
+      folderLabel,
+      `${cachePrefix}:files`,
+      maxFiles,
+      userQuery,
+    );
+  }
+
+  const { hits: fullTextHits, rejectedOutsideRoot } =
+    await driveFullTextSearchScoped(tokens, allowedIds);
+
+  const hitScoreById = new Map(
+    fullTextHits.map((hit) => [hit.id, hit.hitScore] as const),
+  );
+
+  const filenamePathMatches = files.filter(
+    (file) =>
+      scoreFile(file, tokens) > 0 ||
+      extractMeaningfulKbTokens(`${file.path} ${file.name}`).some((t) =>
+        tokens.includes(t),
+      ),
+  );
+
+  const candidateMap = new Map<string, DriveFileNode>();
+  for (const hit of mergePaths(files, fullTextHits)) {
+    if (!allowedIds.has(hit.id)) continue;
+    candidateMap.set(hit.id, hit);
+  }
+  for (const file of filenamePathMatches) {
+    candidateMap.set(file.id, file);
+  }
+
+  // Discover content-only matches by scanning additional extractable files
+  // inside the tree — still filtered by score after extraction (no padding).
+  if (candidateMap.size < MAX_CONTENT_SCAN_FILES) {
+    for (const file of files) {
+      if (candidateMap.size >= MAX_CONTENT_SCAN_FILES) break;
+      if (candidateMap.has(file.id)) continue;
+      if (
+        isPdfMime(file.mimeType) ||
+        isPlainTextMime(file.mimeType) ||
+        exportMimeFor(file.mimeType)
+      ) {
+        candidateMap.set(file.id, file);
+      }
+    }
+  }
+
+  const candidates = dedupeByFileId([...candidateMap.values()]).filter((file) =>
+    allowedIds.has(file.id),
+  );
+  const { rejectedOutsideRoot: rejectedFromMerge } = partitionByKbRoot(
+    [...candidateMap.values()],
+    allowedIds,
+  );
+
+  const cacheKey = `${cachePrefix}:kb-content-v2:${candidates.map((f) => f.id).join(",")}:${tokens.join("|")}`;
+  let chunks = getCached<KbTextChunk[]>(cacheKey);
+  if (!chunks) {
+    chunks = await buildKbChunks(candidates, tokens);
+    setCached(cacheKey, chunks, 30 * 60_000);
+  }
+
+  const ranked: RankedKbDocument[] = chunks.map((chunk) => {
+    const hasContent = !isUnextractedPlaceholder(chunk.text);
+    return rankKbDocument({
+      file: {
+        id: chunk.fileId,
+        name: chunk.name,
+        path: chunk.path,
+        mimeType: chunk.mimeType,
+      },
+      text: chunk.text,
+      hasContent,
+      tokens,
+      query: userQuery,
+      driveHitBonus: (hitScoreById.get(chunk.fileId) ?? 0) * 4,
+    });
+  });
+
+  const selectedDocs = selectRankedKbDocuments(ranked, {
+    maxFiles: MAX_KB_CONTENT_SELECTED,
+    strictRelevance: true,
+  });
+
+  const formatted = formatRankedKbContext({
+    folderLabel,
+    docs: selectedDocs,
+    tokens,
+    totalFiles: files.length,
+    maxTotalChars: MAX_TOTAL_CHARS,
+  });
+
+  const selectedFiles: DriveSelectedFileMeta[] = formatted.selected.map(
+    (doc) => ({
+      id: doc.id,
+      path: doc.path,
+      score: doc.totalScore,
+      hasContent: doc.hasContent,
+      matchReasons: doc.matchReasons,
+      extractionOk: doc.hasContent,
+    }),
+  );
+
+  return {
+    text: formatted.text,
+    meta: buildDriveMeta({
+      source: "knowledge_base",
+      attempted: true,
+      configured: true,
+      mode: "content",
+      candidateFileCount: candidates.length,
+      selectedFiles,
+      contentRetrieved: formatted.contentRetrieved,
+      usefulContextEmpty: formatted.usefulContextEmpty,
+      text: formatted.text,
+      queryTokens: tokens,
+      filenameSearchAttempted: true,
+      contentSearchAttempted: true,
+      rejectedOutsideRootCount: rejectedOutsideRoot + rejectedFromMerge.length,
+      retrievalLatencyMs: Date.now() - started,
+    }),
+  };
+}
+
+async function getDriveContentSearchForAi(
+  source: DriveRetrievalMeta["source"],
+  folderId: string,
+  folderLabel: string,
+  cachePrefix: string,
+  maxFiles: number,
+  userQuery: string,
+): Promise<DriveRetrievalResult> {
   const tokens = meaningfulSearchTokens(userQuery);
   const files = await getDriveFileList(
     folderId,
@@ -480,11 +843,26 @@ async function getDriveContentSearchForAi(
   );
 
   if (files.length === 0) {
-    return `${folderLabel}: файлы не найдены.`;
+    const text = `${folderLabel}: файлы не найдены.`;
+    return {
+      text,
+      meta: buildDriveMeta({
+        source,
+        attempted: true,
+        configured: true,
+        mode: "content",
+        candidateFileCount: 0,
+        selectedFiles: [],
+        contentRetrieved: false,
+        usefulContextEmpty: true,
+        text,
+      }),
+    };
   }
 
   if (tokens.length === 0) {
     return getDriveCatalogForAi(
+      source,
       folderId,
       folderLabel,
       `${cachePrefix}:files`,
@@ -541,19 +919,48 @@ async function getDriveContentSearchForAi(
     return scoreChunk(b, tokens) + boost(b) - (scoreChunk(a, tokens) + boost(a));
   });
 
-  return formatDriveContext(folderLabel, ranked, userQuery, files.length);
+  const formatted = formatDriveContext(folderLabel, ranked, userQuery, files.length);
+  return {
+    text: formatted.text,
+    meta: buildDriveMeta({
+      source,
+      attempted: true,
+      configured: true,
+      mode: "content",
+      candidateFileCount: files.length,
+      selectedFiles: formatted.selectedFiles,
+      contentRetrieved: formatted.contentRetrieved,
+      usefulContextEmpty: formatted.usefulContextEmpty,
+      text: formatted.text,
+    }),
+  };
 }
 
 async function getDriveCatalogForAi(
+  source: DriveRetrievalMeta["source"],
   folderId: string,
   folderLabel: string,
   cacheKey: string,
   maxFiles: number,
   userQuery: string,
-): Promise<string> {
+): Promise<DriveRetrievalResult> {
   const files = await getDriveFileList(folderId, cacheKey, maxFiles);
   if (files.length === 0) {
-    return `${folderLabel}: файлы не найдены.`;
+    const text = `${folderLabel}: файлы не найдены.`;
+    return {
+      text,
+      meta: buildDriveMeta({
+        source,
+        attempted: true,
+        configured: true,
+        mode: "catalog",
+        candidateFileCount: 0,
+        selectedFiles: [],
+        contentRetrieved: false,
+        usefulContextEmpty: true,
+        text,
+      }),
+    };
   }
 
   const tokens = meaningfulSearchTokens(userQuery);
@@ -571,21 +978,53 @@ async function getDriveCatalogForAi(
       : f.mimeType.split("/").pop() ?? "file";
     return `- ${f.path} (${type})`;
   });
-  return `${folderLabel} — список файлов (${files.length} всего, показано ${lines.length}):\n${lines.join("\n")}`;
+  const text = `${folderLabel} — список файлов (${files.length} всего, показано ${lines.length}):\n${lines.join("\n")}`;
+  const selectedFiles: DriveSelectedFileMeta[] = picked.map((file) => ({
+    id: file.id,
+    path: file.path,
+    score: scoreFile(file, tokens),
+    hasContent: false,
+  }));
+
+  return {
+    text,
+    meta: buildDriveMeta({
+      source,
+      attempted: true,
+      configured: true,
+      mode: "catalog",
+      candidateFileCount: files.length,
+      selectedFiles,
+      contentRetrieved: false,
+      usefulContextEmpty: true,
+      text,
+    }),
+  };
 }
 
 async function getDriveTextForAi(
+  source: DriveRetrievalMeta["source"],
   folderId: string,
   folderLabel: string,
   cachePrefix: string,
   maxFiles: number,
   userQuery: string,
   options?: DriveTextOptions,
-): Promise<string> {
+): Promise<DriveRetrievalResult> {
   const tokens = meaningfulSearchTokens(userQuery);
 
   if (options?.contentSearch && tokens.length > 0) {
+    if (source === "knowledge_base") {
+      return getKbStrictContentSearchForAi(
+        folderId,
+        folderLabel,
+        cachePrefix,
+        maxFiles,
+        userQuery,
+      );
+    }
     return getDriveContentSearchForAi(
+      source,
       folderId,
       folderLabel,
       cachePrefix,
@@ -596,6 +1035,7 @@ async function getDriveTextForAi(
 
   if (!options?.full) {
     return getDriveCatalogForAi(
+      source,
       folderId,
       folderLabel,
       `${cachePrefix}:files`,
@@ -626,50 +1066,145 @@ async function getDriveTextForAi(
     setCached(cacheKey, chunks, 15 * 60_000);
   }
 
-  return formatDriveContext(folderLabel, chunks, userQuery, files.length);
+  const formatted = formatDriveContext(folderLabel, chunks, userQuery, files.length);
+  return {
+    text: formatted.text,
+    meta: buildDriveMeta({
+      source,
+      attempted: true,
+      configured: true,
+      mode: "full_export",
+      candidateFileCount: files.length,
+      selectedFiles: formatted.selectedFiles,
+      contentRetrieved: formatted.contentRetrieved,
+      usefulContextEmpty: formatted.usefulContextEmpty,
+      text: formatted.text,
+      queryTokens: tokens,
+      filenameSearchAttempted: true,
+      contentSearchAttempted: false,
+    }),
+  };
 }
 
-/** Быстро: только список файлов в KB, без скачивания текста. */
+function unconfiguredResult(
+  source: DriveRetrievalMeta["source"],
+  text: string,
+): DriveRetrievalResult {
+  return {
+    text,
+    meta: buildDriveMeta({
+      source,
+      attempted: true,
+      configured: false,
+      mode: "unconfigured",
+      candidateFileCount: 0,
+      selectedFiles: [],
+      contentRetrieved: false,
+      usefulContextEmpty: true,
+      text,
+      failed: true,
+      errorMessage: "not_configured",
+    }),
+  };
+}
+
+function failedResult(
+  source: DriveRetrievalMeta["source"],
+  text: string,
+  errorMessage: string,
+): DriveRetrievalResult {
+  return {
+    text,
+    meta: buildDriveMeta({
+      source,
+      attempted: true,
+      configured: true,
+      mode: "failed",
+      candidateFileCount: 0,
+      selectedFiles: [],
+      contentRetrieved: false,
+      usefulContextEmpty: true,
+      text,
+      failed: true,
+      errorMessage,
+    }),
+  };
+}
+
+/** Knowledge Base: content search enabled when query has meaningful tokens (AI-02). */
 export async function getKnowledgeBaseTextForAi(
   userQuery: string,
   options?: DriveTextOptions,
-): Promise<string> {
+): Promise<DriveRetrievalResult> {
   if (!isGoogleDriveKbConfigured()) {
-    return "Knowledge Base: не настроена (GOOGLE_DRIVE_KB_FOLDER_ID).";
+    return unconfiguredResult(
+      "knowledge_base",
+      "Knowledge Base: не настроена (GOOGLE_DRIVE_KB_FOLDER_ID).",
+    );
   }
 
-  return getDriveTextForAi(
-    process.env.GOOGLE_DRIVE_KB_FOLDER_ID!.trim(),
-    "Knowledge Base",
-    "kb-ai",
-    MAX_FILES,
-    userQuery,
-    options,
-  );
+  const tokens = meaningfulSearchTokens(userQuery);
+  const contentSearch = options?.contentSearch ?? tokens.length > 0;
+
+  try {
+    return await getDriveTextForAi(
+      "knowledge_base",
+      process.env.GOOGLE_DRIVE_KB_FOLDER_ID!.trim(),
+      "Knowledge Base",
+      "kb-ai",
+      MAX_FILES_KB,
+      userQuery,
+      {
+        ...options,
+        contentSearch,
+        full: options?.full || contentSearch,
+      },
+    );
+  } catch (error) {
+    console.error("[kb-text] knowledge base retrieval failed", error);
+    return failedResult(
+      "knowledge_base",
+      "Knowledge Base: не удалось загрузить Drive.",
+      error instanceof Error ? error.message : "unknown_error",
+    );
+  }
 }
 
 /** Папка «ЭМИГРАНТ» — копии документов клиентов (PDF, сканы и т.д.). */
 export async function getEmigrantDriveTextForAi(
   userQuery: string,
   options?: DriveTextOptions,
-): Promise<string> {
+): Promise<DriveRetrievalResult> {
   if (!isGoogleDriveEmigrantConfigured()) {
-    return "Папка ЭМИГРАНТ: не настроена (GOOGLE_DRIVE_EMIGRANT_FOLDER_ID).";
+    return unconfiguredResult(
+      "emigrant_drive",
+      "Папка ЭМИГРАНТ: не настроена (GOOGLE_DRIVE_EMIGRANT_FOLDER_ID).",
+    );
   }
 
   const tokens = meaningfulSearchTokens(userQuery);
   const contentSearch = options?.contentSearch ?? tokens.length > 0;
 
-  return getDriveTextForAi(
-    process.env.GOOGLE_DRIVE_EMIGRANT_FOLDER_ID!.trim(),
-    "ЭМИГРАНТ",
-    "emigrant-drive-ai",
-    MAX_FILES_EMIGRANT,
-    userQuery,
-    {
-      ...options,
-      contentSearch,
-      full: options?.full || contentSearch,
-    },
-  );
+  try {
+    return await getDriveTextForAi(
+      "emigrant_drive",
+      process.env.GOOGLE_DRIVE_EMIGRANT_FOLDER_ID!.trim(),
+      "ЭМИГРАНТ",
+      "emigrant-drive-ai",
+      MAX_FILES_EMIGRANT,
+      userQuery,
+      {
+        ...options,
+        contentSearch,
+        full: options?.full || contentSearch,
+      },
+    );
+  } catch (error) {
+    console.error("[kb-text] emigrant drive retrieval failed", error);
+    return failedResult(
+      "emigrant_drive",
+      "Папка ЭМИГРАНТ: не удалось загрузить Google Drive.",
+      error instanceof Error ? error.message : "unknown_error",
+    );
+  }
 }

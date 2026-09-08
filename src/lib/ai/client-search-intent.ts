@@ -5,6 +5,7 @@ import {
   type ChatMessage,
 } from "@/lib/ai/openai";
 import { isAiConfigured } from "@/lib/ai/config";
+import { getAuxiliaryLlmModel } from "@/lib/ai/models";
 import { extractClientEntityFromQuery } from "@/lib/ai/client-entity-extract";
 import {
   extractEmailFromQuery,
@@ -204,6 +205,7 @@ async function extractClientSearchIntentWithAi(
   const content = await createChatCompletion(messages, {
     temperature: 0,
     maxTokens: 400,
+    model: getAuxiliaryLlmModel(),
   });
   if (!content) return null;
   return parseJsonIntent(content);

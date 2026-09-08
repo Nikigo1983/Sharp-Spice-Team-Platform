@@ -752,9 +752,9 @@ export function AiWorkspaceView() {
 
 
 
-  const activeSources = sources.length > 0 ? sources : DEFAULT_SOURCES;
-
   const isEmpty = history.length === 0 && !loading;
+
+  const activeSources = sources.length > 0 ? sources : isEmpty ? DEFAULT_SOURCES : [];
 
 
 

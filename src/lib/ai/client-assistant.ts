@@ -1,4 +1,5 @@
 import { createChatCompletion } from "@/lib/ai/openai";
+import { getAuxiliaryLlmModel } from "@/lib/ai/models";
 import { TEAM_AI_SYSTEM_TONE } from "@/lib/ai/tone";
 import { buildClientAiContext } from "@/lib/google-sheets/service";
 import type { ClientDetail } from "@/lib/google-sheets/types";
@@ -36,7 +37,7 @@ export async function runClientAi(
         content: `Контекст клиента:\n${context}\n\nЗапрос менеджера:\n${prompt}`,
       },
     ],
-    { temperature: 0.55 },
+    { temperature: 0.55, model: getAuxiliaryLlmModel() },
   );
   if (text) return text;
 

@@ -1076,14 +1076,29 @@ async function resolveStructuredClientFactReply(
   const fieldId = detectRequestedClientFactField(message);
   if (!fieldId) return null;
 
-  // Ambiguous multi-match: never silently pick one client for a field fact.
-  if (!clientContext && clientCandidates && clientCandidates.length > 1) {
-    return null;
-  }
+  const hint = extractClientNameHintFromFactQuery(message);
 
-  const fromResolved =
+  // Prefer a single resolved client. If fuzzy search returned several
+  // candidates, narrow by surname hint first — do NOT bail early, or the
+  // authoritative CRM listClients fallback never runs (prod Antonova bug).
+  let fromResolved: ResolvedClientContext | null =
     clientContext ??
     (clientCandidates?.length === 1 ? clientCandidates[0] : null);
+
+  if (
+    !fromResolved &&
+    hint &&
+    clientCandidates &&
+    clientCandidates.length > 1
+  ) {
+    const narrowed = clientCandidates.filter((candidate) =>
+      clientNameMatchesQueryToken(candidate.name, hint),
+    );
+    if (narrowed.length === 1) {
+      fromResolved = narrowed[0];
+    }
+  }
+
   if (fromResolved) {
     const crm = crmPartFromResolved(fromResolved);
     if (crm) {
@@ -1098,7 +1113,7 @@ async function resolveStructuredClientFactReply(
     }
   }
 
-  const hint = extractClientNameHintFromFactQuery(message);
+  // Authoritative CRM pass: unique surname match only (never silent pick).
   if (!hint) return null;
 
   const { items } = await listClients(1, 500);

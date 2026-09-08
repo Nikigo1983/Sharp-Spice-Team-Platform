@@ -128,6 +128,25 @@ describe("production booking address bug — structured fact lookup", () => {
     assert.equal(clientNameMatchesQueryToken("АНТОНОВА", "Петровой"), false);
   });
 
+  it("narrows fuzzy multi-candidates by surname hint to unique Antonova", () => {
+    // Mirrors production: search returns 4 fuzzy hits, only one is Antonova.
+    const hint = "Антоновой";
+    const names = ["АНТОНОВА", "ПЕТРОВА", "СИДОРОВА", "ИВАНОВА"];
+    const narrowed = names.filter((name) =>
+      clientNameMatchesQueryToken(name, hint),
+    );
+    assert.deepEqual(narrowed, ["АНТОНОВА"]);
+  });
+
+  it("keeps ambiguous same-surname matches ambiguous", () => {
+    const hint = "Антоновой";
+    const names = ["АНТОНОВА", "АНТОНОВА Н.", "ПЕТРОВА"];
+    const narrowed = names.filter((name) =>
+      clientNameMatchesQueryToken(name, hint),
+    );
+    assert.ok(narrowed.length >= 2);
+  });
+
   it("UI and AI share the same bookingAddress canonical field", () => {
     const client = antonovaClient();
     const ui = getClientSheetFields(client).find(

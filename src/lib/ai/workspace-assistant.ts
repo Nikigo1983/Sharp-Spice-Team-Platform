@@ -35,6 +35,15 @@ import {
   looksLikePassportNumber,
 } from "@/lib/ai/format-client";
 import {
+  clientNameMatchesQueryToken,
+  crmPartFromResolved,
+  detectRequestedClientFactField,
+  extractClientNameHintFromFactQuery,
+  formatStructuredClientFactReply,
+  readClientFactFromClientRecord,
+  readClientFactFromCrmContext,
+} from "@/lib/ai/client-fact-lookup";
+import {
   getWorkspaceAiConfig,
   type WorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
@@ -589,21 +598,23 @@ async function prepareWorkspaceRequest(
     pendingForUi = undefined;
   }
 
-  if (intent.fastClientLookup && !clientContext) {
-    const direct = await tryDirectBookingAnswer(trimmed);
-    if (direct) {
-      trace.selectedRoutes = ["booking_direct"];
-      trace.responseOk = true;
-      trace.latencyMs.prepare = Date.now() - started;
-      logWorkspaceAiTrace(trace);
-      return {
-        kind: "direct",
-        reply: direct,
-        sources: ["Клиенты"],
-        requestId,
-        trace,
-      };
-    }
+  const structuredFact = await resolveStructuredClientFactReply(
+    trimmed,
+    clientContext,
+    clientCandidates,
+  );
+  if (structuredFact) {
+    trace.selectedRoutes = ["client_fact_direct"];
+    trace.responseOk = true;
+    trace.latencyMs.prepare = Date.now() - started;
+    logWorkspaceAiTrace(trace);
+    return {
+      kind: "direct",
+      reply: structuredFact,
+      sources: ["Клиенты"],
+      requestId,
+      trace,
+    };
   }
 
   if (intent.needsEmigrantDesk && /статус/iu.test(trimmed)) {
@@ -1057,38 +1068,54 @@ async function tryDirectPassportAnswer(message: string): Promise<string | null> 
   return formatPassportMissingReply(client.name, client.rowIndex);
 }
 
-async function tryDirectBookingAnswer(message: string): Promise<string | null> {
-  const lower = message.toLowerCase();
-  if (!lower.includes("букинг") && !lower.includes("адрес")) {
+async function resolveStructuredClientFactReply(
+  message: string,
+  clientContext: ResolvedClientContext | null,
+  clientCandidates: ResolvedClientContext[] | null,
+): Promise<string | null> {
+  const fieldId = detectRequestedClientFactField(message);
+  if (!fieldId) return null;
+
+  // Ambiguous multi-match: never silently pick one client for a field fact.
+  if (!clientContext && clientCandidates && clientCandidates.length > 1) {
     return null;
   }
 
-  const { items } = await listClients(1, 300);
-  const nameMatch = lower.match(/(?:клиент[а-я]*|у)\s+([а-яё\-]+)/iu);
-  const needle = nameMatch?.[1]?.toLowerCase();
-  if (!needle) return null;
-
-  const client = items.find((c) => c.name.toLowerCase().includes(needle));
-  if (!client) return null;
-
-  const hasAddress =
-    client.bookingAddress && client.bookingAddress !== "—";
-  const hasDates = client.bookingRange && client.bookingRange !== "—";
-
-  if (!hasAddress && !hasDates) return null;
-
-  const parts = [
-    `По **${client.name}** в таблице есть букинг.`,
-  ];
-  if (hasAddress) parts.push(`Адрес: **${client.bookingAddress}**.`);
-  if (hasDates) parts.push(`Даты: ${client.bookingRange}.`);
-  if (client.passportNumber && client.passportNumber !== "—") {
-    parts.push(`Паспорт в базе: ${client.passportNumber}.`);
+  const fromResolved =
+    clientContext ??
+    (clientCandidates?.length === 1 ? clientCandidates[0] : null);
+  if (fromResolved) {
+    const crm = crmPartFromResolved(fromResolved);
+    if (crm) {
+      const fact = readClientFactFromCrmContext(crm, fieldId);
+      return formatStructuredClientFactReply({
+        clientName: crm.name || fromResolved.name,
+        fieldId,
+        value: fact.value,
+        present: fact.present,
+        rowIndex: crm.rowIndex,
+      });
+    }
   }
-  parts.push(
-    "\n**Что дальше:** сверьте даты с клиентом и проверьте, всё ли готово к заезду.",
+
+  const hint = extractClientNameHintFromFactQuery(message);
+  if (!hint) return null;
+
+  const { items } = await listClients(1, 500);
+  const matches = items.filter((client) =>
+    clientNameMatchesQueryToken(client.name, hint),
   );
-  return parts.join(" ");
+  if (matches.length !== 1) return null;
+
+  const client = matches[0];
+  const fact = readClientFactFromClientRecord(client, fieldId);
+  return formatStructuredClientFactReply({
+    clientName: client.name,
+    fieldId,
+    value: fact.value,
+    present: fact.present,
+    rowIndex: client.rowIndex,
+  });
 }
 
 const STOP_WORDS = new Set([

@@ -61,6 +61,15 @@ function hasWord(query: string, pattern: string): boolean {
  * True only when the query likely names a real person/client — not countries,
  * program nouns, or generic search tokens from extractPersonNameTokens.
  */
+function isPlausiblePersonToken(token: string): boolean {
+  const lower = token.toLowerCase();
+  if (NON_PERSON_TOKENS.has(lower)) return false;
+  if (/^(него|неё|нее|них|нас|вас|этого|этой|клиент)/u.test(lower)) {
+    return false;
+  }
+  return true;
+}
+
 function hasClientNameSignal(query: string): boolean {
   // «Иван Петров» / «Belous Ekaterina»
   const fullName = query.match(
@@ -74,18 +83,35 @@ function hasClientNameSignal(query: string): boolean {
     }
   }
 
-  // «клиент Белоус…», «у Марии…» (not «у него»)
-  const afterClient = query.match(
-    /(?:клиент[а-яё]*|(?<!\p{L})у)\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+  // Prefer «клиент Антоновой» / «у клиента Антоновой» BEFORE bare «у …».
+  // Otherwise «У клиента X» matches as «у»+«клиента» and drops the real surname.
+  const afterClientWord = query.match(
+    /клиент[а-яё]*\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterClient?.[1]) {
-    const token = afterClient[1].toLowerCase();
-    if (
-      !NON_PERSON_TOKENS.has(token) &&
-      !/^(него|неё|нее|них|нас|вас|этого|этой|клиент)/u.test(token)
-    ) {
-      return true;
-    }
+  if (afterClientWord?.[1] && isPlausiblePersonToken(afterClientWord[1])) {
+    return true;
+  }
+
+  // «у Марии…» (not «у клиента» — handled above)
+  const afterU = query.match(
+    /(?<!\p{L})у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+  );
+  if (afterU?.[1] && isPlausiblePersonToken(afterU[1])) {
+    return true;
+  }
+
+  // «Адрес букинга Антоновой» / «Антоновой адрес букинга»
+  const afterField = query.match(
+    /(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга|паспорт|email|почта|статус)\s+([А-ЯЁA-Z][а-яёa-z\-']{3,})/u,
+  );
+  if (afterField?.[1] && isPlausiblePersonToken(afterField[1])) {
+    return true;
+  }
+  const beforeField = query.match(
+    /([А-ЯЁA-Z][а-яёa-z\-']{3,})\s+(?:адрес\s+букинга|booking\s+address|букинг)/u,
+  );
+  if (beforeField?.[1] && isPlausiblePersonToken(beforeField[1])) {
+    return true;
   }
 
   // Common first-name stems with case endings (RU) / Latin forms (EN).

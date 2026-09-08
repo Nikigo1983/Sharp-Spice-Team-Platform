@@ -14,14 +14,17 @@ const CLIENT_HEADER_MAP: Record<string, keyof Client> = {
   имя: "name",
   name: "name",
   "фио": "name",
+  фамилия: "name",
   телефон: "phone",
   phone: "phone",
   email: "email",
   "e-mail": "email",
+  "электронная почта": "email",
   страна: "country",
   country: "country",
   гражданство: "citizenship",
   citizenship: "citizenship",
+  латиница: "citizenship",
   направление: "direction",
   direction: "direction",
   статус: "status",
@@ -34,6 +37,14 @@ const CLIENT_HEADER_MAP: Record<string, keyof Client> = {
   "дата создания": "createdAt",
   "created at": "createdAt",
   "дата создания клиента": "createdAt",
+  "номер паспорта": "passportNumber",
+  паспорт: "passportNumber",
+  passport: "passportNumber",
+  "адрес букинга": "bookingAddress",
+  "booking address": "bookingAddress",
+  "дата букинга (от и до)": "bookingRange",
+  "дата букинга": "bookingRange",
+  "даты букинга": "bookingRange",
 };
 
 function normalizeHeader(value: string): string {
@@ -71,7 +82,7 @@ type ClientRow = Record<string, string> & { rowIndex?: number };
 export function parseClientRows(rows: string[][]): Client[] {
   const parsed = rowsToObjects<ClientRow>(rows, CLIENT_HEADER_MAP);
   return parsed.map((row, index) => ({
-    id: row.id || `ROW-${index + 2}`,
+    id: row.id || row.passportNumber || `ROW-${index + 2}`,
     name: row.name || "—",
     phone: row.phone || "—",
     email: row.email || "—",
@@ -82,6 +93,9 @@ export function parseClientRows(rows: string[][]): Client[] {
     manager: row.manager || "—",
     lastActivity: row.lastActivity || "—",
     createdAt: row.createdAt || "—",
+    passportNumber: row.passportNumber || "—",
+    bookingAddress: row.bookingAddress || "—",
+    bookingRange: row.bookingRange || "—",
     rowIndex:
       typeof row.rowIndex === "number"
         ? row.rowIndex

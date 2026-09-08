@@ -53,6 +53,8 @@ describe("parseCroatiaExternalClientsRows", () => {
     assert.equal(client.createdAt, "01.04.2026");
     assert.equal(client.partnerName, "ЛЕНА МОСКВА");
     assert.equal(client.contract, "дог.оказания услуг");
+    assert.equal(client.bookingAddress, "Ivana Tkalčića 34");
+    assert.equal(client.bookingRange, "04.08-11.08");
   });
 
   it("parses numeric passport for another row", () => {

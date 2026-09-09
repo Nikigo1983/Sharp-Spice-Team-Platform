@@ -9,6 +9,11 @@ import {
   isNavGroup,
 } from "@/lib/auth/permissions";
 import type { UserRole } from "@/lib/auth/types";
+import {
+  isNavBadgeHref,
+  pathnameToNavBadgeHref,
+  type NavBadgesMap,
+} from "@/lib/nav-badges/types";
 import styles from "./Sidebar.module.css";
 
 export type NavItem = {
@@ -55,10 +60,14 @@ function groupHasActiveChild(pathname: string, children: NavItem[]) {
   return children.some((child) => isActive(pathname, child.href, hrefs));
 }
 
+function formatBadgeCount(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
+
 export function Sidebar({ role }: { role: UserRole }) {
   const pathname = usePathname();
   const navItems = getNavItemsForRole(role);
-  const [teamChatUnread, setTeamChatUnread] = useState(0);
+  const [badges, setBadges] = useState<NavBadgesMap>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const activeGroupIds = useMemo(() => {
@@ -91,29 +100,41 @@ export function Sidebar({ role }: { role: UserRole }) {
   }, [activeGroupIds]);
 
   useEffect(() => {
-    if (pathname === "/team-chat" || pathname.startsWith("/team-chat/")) {
-      setTeamChatUnread(0);
-      return;
-    }
-
+    const activeHref = pathnameToNavBadgeHref(pathname);
     let cancelled = false;
 
-    async function fetchUnread() {
+    async function fetchBadges() {
       try {
-        const res = await fetch("/api/team-chat/unread");
+        const res = await fetch("/api/nav-badges", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { unread?: number };
-        if (!cancelled) {
-          setTeamChatUnread(Math.max(0, data.unread ?? 0));
-        }
+        const data = (await res.json()) as { badges?: NavBadgesMap };
+        if (cancelled) return;
+        const next = { ...(data.badges ?? {}) };
+        if (activeHref) delete next[activeHref];
+        setBadges(next);
       } catch {
         // ignore
       }
     }
 
-    void fetchUnread();
+    async function markSeenAndRefresh() {
+      if (activeHref && isNavBadgeHref(activeHref)) {
+        try {
+          await fetch("/api/nav-badges/seen", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ href: activeHref }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+      await fetchBadges();
+    }
+
+    void markSeenAndRefresh();
     const timer = setInterval(() => {
-      void fetchUnread();
+      void fetchBadges();
     }, 5000);
 
     return () => {
@@ -121,6 +142,25 @@ export function Sidebar({ role }: { role: UserRole }) {
       clearInterval(timer);
     };
   }, [pathname]);
+
+  function badgeForHref(href: string): number {
+    if (!isNavBadgeHref(href)) return 0;
+    if (pathnameToNavBadgeHref(pathname) === href) return 0;
+    return Math.max(0, badges[href] ?? 0);
+  }
+
+  function groupBadgeCount(children: NavItem[]): number {
+    return children.reduce((sum, child) => sum + badgeForHref(child.href), 0);
+  }
+
+  function renderBadge(count: number) {
+    if (count <= 0) return null;
+    return (
+      <span className={styles.unreadBadge} aria-label={`${count} новых`}>
+        {formatBadgeCount(count)}
+      </span>
+    );
+  }
 
   function renderNavLink(
     item: NavItem,
@@ -140,12 +180,8 @@ export function Sidebar({ role }: { role: UserRole }) {
     const content = (
       <>
         <i className={[item.icon, styles.icon].join(" ")} aria-hidden />
-        <span className={styles.navLabel}>
-          {item.label}
-          {item.href === "/team-chat" && teamChatUnread > 0 ? (
-            <span className={styles.unreadBadge}> ({teamChatUnread})</span>
-          ) : null}
-        </span>
+        <span className={styles.navLabel}>{item.label}</span>
+        {renderBadge(badgeForHref(item.href))}
         {item.external ? (
           <i
             className={`fa-solid fa-arrow-up-right-from-square ${styles.externalIcon}`}
@@ -200,6 +236,7 @@ export function Sidebar({ role }: { role: UserRole }) {
                 pathname,
                 entry.children,
               );
+              const groupCount = open ? 0 : groupBadgeCount(entry.children);
 
               return (
                 <li key={entry.id} className={styles.navGroup}>
@@ -224,6 +261,7 @@ export function Sidebar({ role }: { role: UserRole }) {
                           aria-hidden
                         />
                         <span className={styles.navLabel}>{entry.label}</span>
+                        {renderBadge(groupCount)}
                       </Link>
                     ) : (
                       <button
@@ -247,6 +285,7 @@ export function Sidebar({ role }: { role: UserRole }) {
                           aria-hidden
                         />
                         <span className={styles.navLabel}>{entry.label}</span>
+                        {renderBadge(groupCount)}
                       </button>
                     )}
                     <button

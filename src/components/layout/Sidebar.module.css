@@ -76,8 +76,18 @@
 }
 
 .unreadBadge {
-  color: var(--accent-burgundy-light);
+  flex-shrink: 0;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--gradient-brand, #910d0d);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.6875rem;
   font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
 }
 
 .navItemExternal {

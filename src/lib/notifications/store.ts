@@ -231,6 +231,45 @@ export async function markAllNotificationsRead(userId: string): Promise<number> 
   return count;
 }
 
+export async function countUnreadNotificationsByTypes(
+  userId: string,
+  types: Notification["type"][],
+): Promise<number> {
+  if (types.length === 0) return 0;
+  const typeSet = new Set(types);
+  const items = await listNotificationsForUser(userId, { limit: 200 });
+  return items.filter((item) => !item.is_read && typeSet.has(item.type)).length;
+}
+
+export async function markNotificationsReadByTypes(
+  userId: string,
+  types: Notification["type"][],
+): Promise<number> {
+  if (types.length === 0) return 0;
+
+  if (isSupabaseConfigured()) {
+    try {
+      return await sbNotifications.sbMarkNotificationsReadByTypes(userId, types);
+    } catch (error) {
+      console.error("[notifications] supabase read by types", error);
+      return 0;
+    }
+  }
+
+  const typeSet = new Set(types);
+  const store = await readStore();
+  let count = 0;
+  store.notifications = store.notifications.map((item) => {
+    if (item.user_id !== userId || item.is_read || !typeSet.has(item.type)) {
+      return item;
+    }
+    count += 1;
+    return { ...item, is_read: true };
+  });
+  if (count > 0) await writeStore(store);
+  return count;
+}
+
 export async function deleteNotification(
   id: string,
   userId: string,

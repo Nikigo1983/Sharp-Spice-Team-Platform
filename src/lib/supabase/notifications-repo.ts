@@ -112,6 +112,23 @@ export async function sbMarkAllNotificationsRead(
   return data?.length ?? 0;
 }
 
+export async function sbMarkNotificationsReadByTypes(
+  userId: string,
+  types: string[],
+): Promise<number> {
+  if (types.length === 0) return 0;
+  const { data, error } = await getSupabaseAdmin()
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("user_id", userId)
+    .eq("is_read", false)
+    .in("type", types)
+    .select("id");
+
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 export async function sbDeleteNotification(
   id: string,
   userId: string,

@@ -102,13 +102,13 @@ function hasClientNameSignal(query: string): boolean {
 
   // «Адрес букинга Антоновой» / «Антоновой адрес букинга»
   const afterField = query.match(
-    /(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга|паспорт|email|почта|статус)\s+([А-ЯЁA-Z][а-яёa-z\-']{3,})/u,
+    /(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга|паспорт|email|почта|статус)\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
   if (afterField?.[1] && isPlausiblePersonToken(afterField[1])) {
     return true;
   }
   const beforeField = query.match(
-    /([А-ЯЁA-Z][а-яёa-z\-']{3,})\s+(?:адрес\s+букинга|booking\s+address|букинг)/u,
+    /([А-ЯЁA-Za-zа-яё\-']{3,})\s+(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга)/iu,
   );
   if (beforeField?.[1] && isPlausiblePersonToken(beforeField[1])) {
     return true;

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  clientFactSurnameMatches,
   clientNameMatchesQueryToken,
   detectRequestedClientFactField,
+  extractClientNameHintFromFactQuery,
   formatStructuredClientFactReply,
   readClientFactFromClientRecord,
   readClientFactFromCrmContext,
@@ -126,6 +128,32 @@ describe("production booking address bug — structured fact lookup", () => {
   it("matches genitive Антоновой to АНТОНОВА", () => {
     assert.equal(clientNameMatchesQueryToken("АНТОНОВА", "Антоновой"), true);
     assert.equal(clientNameMatchesQueryToken("АНТОНОВА", "Петровой"), false);
+    assert.equal(clientFactSurnameMatches("АНТОНОВА", "Антоновой"), true);
+    assert.equal(clientFactSurnameMatches("АНТОНОВА", "Петровой"), false);
+  });
+
+  it("strict fact surname match keeps Antonova unique among loose morph hits", () => {
+    const hint = "Антоновой";
+    const names = ["АНТОНОВА", "АНТОНОВ", "АНТОН", "ПЕТРОВА"];
+    const loose = names.filter((name) =>
+      clientNameMatchesQueryToken(name, hint),
+    );
+    const strict = names.filter((name) =>
+      clientFactSurnameMatches(name, hint),
+    );
+    assert.ok(loose.length >= 1);
+    assert.deepEqual(strict, ["АНТОНОВА"]);
+  });
+
+  it("extracts name hint from short «Адрес букинга Антоновой»", () => {
+    assert.equal(
+      detectRequestedClientFactField("Адрес букинга Антоновой"),
+      "bookingAddress",
+    );
+    assert.equal(
+      extractClientNameHintFromFactQuery("Адрес букинга Антоновой"),
+      "Антоновой",
+    );
   });
 
   it("narrows fuzzy multi-candidates by surname hint to unique Antonova", () => {

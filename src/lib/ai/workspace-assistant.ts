@@ -35,7 +35,7 @@ import {
   looksLikePassportNumber,
 } from "@/lib/ai/format-client";
 import {
-  clientNameMatchesQueryToken,
+  clientFactSurnameMatches,
   crmPartFromResolved,
   detectRequestedClientFactField,
   extractClientNameHintFromFactQuery,
@@ -1092,13 +1092,53 @@ async function resolveStructuredClientFactReply(
     clientCandidates.length > 1
   ) {
     const narrowed = clientCandidates.filter((candidate) =>
-      clientNameMatchesQueryToken(candidate.name, hint),
+      clientFactSurnameMatches(candidate.name, hint),
     );
     if (narrowed.length === 1) {
       fromResolved = narrowed[0];
     }
   }
 
+  if (fromResolved) {
+    const crm = crmPartFromResolved(fromResolved);
+    if (crm) {
+      const fact = readClientFactFromCrmContext(crm, fieldId);
+      // Only short-circuit on a present value. Empty/missing must still try
+      // authoritative listClients — fuzzy candidate rows can omit fields.
+      if (fact.present) {
+        return formatStructuredClientFactReply({
+          clientName: crm.name || fromResolved.name,
+          fieldId,
+          value: fact.value,
+          present: true,
+          rowIndex: crm.rowIndex,
+        });
+      }
+    }
+  }
+
+  // Authoritative CRM pass: unique surname match only (never silent pick).
+  if (hint) {
+    const { items } = await listClients(1, 500);
+    const matches = items.filter((client) =>
+      clientFactSurnameMatches(client.name, hint),
+    );
+    if (matches.length === 1) {
+      const client = matches[0];
+      const fact = readClientFactFromClientRecord(client, fieldId);
+      return formatStructuredClientFactReply({
+        clientName: client.name,
+        fieldId,
+        value: fact.value,
+        present: fact.present,
+        rowIndex: client.rowIndex,
+      });
+    }
+    // Still ambiguous after surname filter — do not invent a pick.
+    if (matches.length > 1) return null;
+  }
+
+  // No unique CRM row: if we had a single resolved CRM client, report empty honestly.
   if (fromResolved) {
     const crm = crmPartFromResolved(fromResolved);
     if (crm) {
@@ -1113,24 +1153,7 @@ async function resolveStructuredClientFactReply(
     }
   }
 
-  // Authoritative CRM pass: unique surname match only (never silent pick).
-  if (!hint) return null;
-
-  const { items } = await listClients(1, 500);
-  const matches = items.filter((client) =>
-    clientNameMatchesQueryToken(client.name, hint),
-  );
-  if (matches.length !== 1) return null;
-
-  const client = matches[0];
-  const fact = readClientFactFromClientRecord(client, fieldId);
-  return formatStructuredClientFactReply({
-    clientName: client.name,
-    fieldId,
-    value: fact.value,
-    present: fact.present,
-    rowIndex: client.rowIndex,
-  });
+  return null;
 }
 
 const STOP_WORDS = new Set([

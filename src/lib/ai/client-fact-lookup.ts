@@ -5,7 +5,7 @@
 
 import type { ClientContext, ResolvedClientContext } from "@/lib/ai/client-context";
 import { isMergedClientContext } from "@/lib/ai/client-context";
-import { morphNameMatch } from "@/lib/ai/russian-name-morphology";
+import { morphNameMatch, getRussianNameLemmaVariants } from "@/lib/ai/russian-name-morphology";
 import type { Client } from "@/lib/google-sheets/types";
 
 export type ClientFactFieldId =
@@ -221,26 +221,79 @@ export function clientNameMatchesQueryToken(
     .some((part) => morphNameMatch(needle, part) || morphNameMatch(part, needle));
 }
 
+/**
+ * Stricter surname match for structured facts.
+ * Avoids morph startsWith / shared-stem false-positives (АНТОНОВ vs АНТОНОВА)
+ * that make listClients multi-match and skip the direct CRM answer.
+ */
+export function clientFactSurnameMatches(
+  clientName: string,
+  hint: string,
+): boolean {
+  const needle = hint.trim().toLowerCase();
+  if (needle.length < 3) return false;
+  const primary =
+    clientName
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}\-]+/u)
+      .filter(Boolean)[0] ?? "";
+  if (!primary) return false;
+  if (primary === needle) return true;
+
+  const hintVariants = getRussianNameLemmaVariants(needle);
+  const nameVariants = new Set(getRussianNameLemmaVariants(primary));
+
+  const feminineNominatives = hintVariants.filter((variant) =>
+    /(?:ова|ева|ина|ая|ская|цкая)$/i.test(variant),
+  );
+  if (feminineNominatives.length > 0) {
+    return feminineNominatives.some(
+      (variant) => nameVariants.has(variant) || primary === variant,
+    );
+  }
+
+  return hintVariants.some(
+    (variant) => variant.length >= 5 && nameVariants.has(variant),
+  );
+}
+
 export function extractClientNameHintFromFactQuery(query: string): string | null {
+  const rejectHint = (token: string | undefined): string | null => {
+    if (!token) return null;
+    if (
+      /^(адрес|букинг|booking|паспорт|email|почта|статус|дата|даты|латиниц|заметк)/i.test(
+        token,
+      )
+    ) {
+      return null;
+    }
+    return token;
+  };
+
   const afterClient = query.match(
     /клиент[а-яё]*\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterClient?.[1]) return afterClient[1];
+  const fromClient = rejectHint(afterClient?.[1]);
+  if (fromClient) return fromClient;
 
   const afterU = query.match(
     /(?<!\p{L})у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterU?.[1] && !/^клиент/i.test(afterU[1])) return afterU[1];
+  if (afterU?.[1] && !/^клиент/i.test(afterU[1])) {
+    const fromU = rejectHint(afterU[1]);
+    if (fromU) return fromU;
+  }
 
+  // Case-insensitive: «Адрес букинга Антоновой» must not miss afterField.
   const afterField = query.match(
-    /(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга|паспорт|email|почта|статус|латиниц[аы]|заметк[аи])\s+([А-ЯЁA-Z][а-яёa-z\-']{3,})/u,
+    /(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга|паспорт|email|почта|статус|латиниц[аы]|заметк[аи])\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterField?.[1]) return afterField[1];
+  const fromAfterField = rejectHint(afterField?.[1]);
+  if (fromAfterField) return fromAfterField;
 
+  // Do not use bare «букинг» — it prefixes «букинга» and captures «Адрес».
   const beforeField = query.match(
-    /([А-ЯЁA-Z][а-яёa-z\-']{3,})\s+(?:адрес\s+букинга|booking\s+address|букинг)/u,
+    /([А-ЯЁA-Za-zа-яё\-']{3,})\s+(?:адрес\s+букинга|booking\s+address|дат[аы]\s+букинга)/iu,
   );
-  if (beforeField?.[1]) return beforeField[1];
-
-  return null;
+  return rejectHint(beforeField?.[1]);
 }

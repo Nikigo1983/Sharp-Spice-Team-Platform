@@ -67,14 +67,20 @@
 }
 
 .select {
-  padding: 0.45rem 0.65rem;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
-  background: rgba(15, 20, 28, 0.7);
+  background-color: rgba(15, 20, 28, 0.7);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239ca3af' d='M1.4 0.6L6 5.2 10.6 0.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 0.7rem;
   color: #fff;
   font: inherit;
   font-size: 0.82rem;
-  max-width: 200px;
+  max-width: 220px;
 }
 
 .dateField {

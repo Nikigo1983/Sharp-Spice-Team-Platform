@@ -94,18 +94,43 @@ export async function getClientDetail(id: string): Promise<ClientDetail | null> 
 export async function getFilterOptions(): Promise<{
   managers: string[];
   countries: string[];
+  referents: string[];
+  partners: string[];
+  contracts: string[];
   source: ClientsListResult["source"];
 }> {
   const all = sheetsConfigured()
     ? await getGoogleSheetsClient().getClients()
     : DEMO_CLIENTS;
 
-  const managers = [...new Set(all.map((c) => c.manager).filter(Boolean))].sort();
-  const countries = [...new Set(all.map((c) => c.country).filter(Boolean))].sort();
+  const managers = [...new Set(all.map((c) => c.manager).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b, "ru"),
+  );
+  const countries = [
+    ...new Set(all.map((c) => c.country).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "ru"));
+  const referents = [
+    ...new Set(
+      all
+        .map((c) => (c.referentName || c.manager || "").trim())
+        .filter(Boolean),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ru"));
+  const partners = [
+    ...new Set(
+      all.map((c) => (c.partnerName ?? "").trim()).filter(Boolean),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ru"));
+  const contracts = [
+    ...new Set(all.map((c) => (c.contract ?? "").trim()).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "ru"));
 
   return {
     managers,
     countries,
+    referents,
+    partners,
+    contracts,
     source: sheetsConfigured() ? "google_sheets" : "demo",
   };
 }

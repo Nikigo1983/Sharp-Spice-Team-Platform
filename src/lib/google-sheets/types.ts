@@ -75,6 +75,19 @@ export type ClientFilters = {
   status?: string;
   manager?: string;
   country?: string;
+  /** Exact match on referentName (fallback: manager). */
+  referent?: string;
+  /** Exact match on partnerName. */
+  partner?: string;
+  /** Exact match on contract cell. */
+  contract?: string;
+  /** Inclusive YYYY-MM-DD against submittedAt/createdAt. */
+  submittedFrom?: string;
+  submittedTo?: string;
+  /** approved = has approvalAt; not_approved = empty approvalAt. */
+  approvalStatus?: "approved" | "not_approved";
+  /** yes = non-empty contract; no = empty contract. */
+  hasContract?: "yes" | "no";
 };
 
 export type ClientsListResult = {

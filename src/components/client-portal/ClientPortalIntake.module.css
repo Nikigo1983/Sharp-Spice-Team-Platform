@@ -58,6 +58,72 @@
   box-shadow: 0 0 0 2px rgba(36, 0, 255, 0.25);
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  align-items: center;
+}
+
+.select {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 20, 28, 0.7);
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  max-width: 200px;
+}
+
+.dateField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.82rem;
+}
+
+.dateInput {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 20, 28, 0.7);
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.filterBtn,
+.exportBtn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.exportBtn {
+  border-color: rgba(36, 0, 255, 0.55);
+  background: rgba(36, 0, 255, 0.18);
+}
+
+.exportBtn:disabled,
+.filterBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.filterMeta {
+  margin: 0.55rem 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+}
+
 .title {
   margin: 0;
   font-size: 1.4rem;

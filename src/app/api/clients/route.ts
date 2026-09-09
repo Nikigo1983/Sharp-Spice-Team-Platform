@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
+import { readClientFiltersFromSearchParams } from "@/lib/clients/read-client-filters";
 import { listClients } from "@/lib/google-sheets/service";
 
 export async function GET(request: Request) {
@@ -15,13 +16,11 @@ export async function GET(request: Request) {
     Math.max(1, Number(searchParams.get("pageSize") ?? "25")),
   );
 
-  const result = await listClients(page, pageSize, {
-    search: searchParams.get("search") ?? undefined,
-    direction: searchParams.get("direction") ?? undefined,
-    status: searchParams.get("status") ?? undefined,
-    manager: searchParams.get("manager") ?? undefined,
-    country: searchParams.get("country") ?? undefined,
-  });
+  const result = await listClients(
+    page,
+    pageSize,
+    readClientFiltersFromSearchParams(searchParams),
+  );
 
   return NextResponse.json(result);
 }

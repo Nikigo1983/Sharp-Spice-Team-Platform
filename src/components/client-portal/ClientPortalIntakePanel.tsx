@@ -5,6 +5,14 @@ import Link from "next/link";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CaseFinancePanel } from "@/components/finance/CaseFinancePanel";
 import {
+  dateInRange,
+  matchesApprovalFilter,
+  matchesPresenceFilter,
+  type ApprovalFilter,
+  type PresenceFilter,
+} from "@/lib/clients/list-filter-utils";
+import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
+import {
   EMPTY_STAFF_FIELDS,
   STAFF_FIELD_COLUMNS,
   type QuestionnaireStaffFields,
@@ -126,6 +134,13 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     {},
   );
   const [query, setQuery] = useState("");
+  const [curator, setCurator] = useState("");
+  const [partner, setPartner] = useState("");
+  const [contractNumber, setContractNumber] = useState("");
+  const [submittedFrom, setSubmittedFrom] = useState("");
+  const [submittedTo, setSubmittedTo] = useState("");
+  const [hasAmount, setHasAmount] = useState<PresenceFilter>("");
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
@@ -180,13 +195,91 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     void loadList();
   }, [loadList]);
 
+  const filterOptions = useMemo(() => {
+    const draftsList = items.map(
+      (item) => drafts[item.id] ?? EMPTY_STAFF_FIELDS,
+    );
+    return {
+      curators: uniqueSortedValues(draftsList.map((d) => d.curator)),
+      partners: uniqueSortedValues(draftsList.map((d) => d.partner)),
+      contracts: uniqueSortedValues(draftsList.map((d) => d.contractNumber)),
+    };
+  }, [items, drafts]);
+
   const filteredItems = useMemo(
     () =>
-      items.filter((item) =>
-        rowMatchesQuery(item, drafts[item.id] ?? EMPTY_STAFF_FIELDS, query),
-      ),
-    [items, drafts, query],
+      items.filter((item) => {
+        const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
+        if (!rowMatchesQuery(item, draft, query)) return false;
+        if (curator && draft.curator.trim() !== curator) return false;
+        if (partner && draft.partner.trim() !== partner) return false;
+        if (contractNumber && draft.contractNumber.trim() !== contractNumber) {
+          return false;
+        }
+        if (
+          !dateInRange(
+            item.submittedAt,
+            submittedFrom || undefined,
+            submittedTo || undefined,
+          )
+        ) {
+          return false;
+        }
+        if (!matchesPresenceFilter(draft.contractAmount, hasAmount)) {
+          return false;
+        }
+        if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
+          return false;
+        }
+        return true;
+      }),
+    [
+      items,
+      drafts,
+      query,
+      curator,
+      partner,
+      contractNumber,
+      submittedFrom,
+      submittedTo,
+      hasAmount,
+      approvalStatus,
+    ],
   );
+
+  const clearListFilters = () => {
+    setQuery("");
+    setCurator("");
+    setPartner("");
+    setContractNumber("");
+    setSubmittedFrom("");
+    setSubmittedTo("");
+    setHasAmount("");
+    setApprovalStatus("");
+  };
+
+  const exportFilteredCsv = () => {
+    const headers = [
+      "Клиент",
+      "Email",
+      "Дата подачи",
+      ...STAFF_FIELD_COLUMNS.map((col) => col.label),
+    ];
+    const rows = filteredItems.map((item) => {
+      const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
+      return [
+        clientName(item),
+        item.email,
+        formatSubmittedAt(item.submittedAt),
+        ...STAFF_FIELD_COLUMNS.map((col) => draft[col.key]),
+      ];
+    });
+    downloadCsv(
+      `emigrant-intake-${new Date().toISOString().slice(0, 10)}.csv`,
+      headers,
+      rows,
+    );
+  };
 
   function updateDraft(
     id: string,
@@ -785,6 +878,107 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           placeholder="Поиск по имени, email, куратору, партнёру и другим колонкам…"
           aria-label="Поиск по таблице заявок"
         />
+        <div className={styles.filters}>
+          <label className={styles.dateField}>
+            <span>Подача с</span>
+            <input
+              type="date"
+              className={styles.dateInput}
+              value={submittedFrom}
+              onChange={(e) => setSubmittedFrom(e.target.value)}
+            />
+          </label>
+          <label className={styles.dateField}>
+            <span>по</span>
+            <input
+              type="date"
+              className={styles.dateInput}
+              value={submittedTo}
+              onChange={(e) => setSubmittedTo(e.target.value)}
+            />
+          </label>
+          <select
+            className={styles.select}
+            value={curator}
+            onChange={(e) => setCurator(e.target.value)}
+            aria-label="Куратор / референт"
+          >
+            <option value="">Все кураторы</option>
+            {filterOptions.curators.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            className={styles.select}
+            value={partner}
+            onChange={(e) => setPartner(e.target.value)}
+            aria-label="Партнёр"
+          >
+            <option value="">Все партнёры</option>
+            {filterOptions.partners.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            className={styles.select}
+            value={contractNumber}
+            onChange={(e) => setContractNumber(e.target.value)}
+            aria-label="Договор"
+          >
+            <option value="">Все договоры</option>
+            {filterOptions.contracts.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            className={styles.select}
+            value={hasAmount}
+            onChange={(e) => setHasAmount(e.target.value as PresenceFilter)}
+            aria-label="Стоимость / оплата"
+          >
+            <option value="">Стоимость: все</option>
+            <option value="yes">Есть сумма договора</option>
+            <option value="no">Без суммы</option>
+          </select>
+          <select
+            className={styles.select}
+            value={approvalStatus}
+            onChange={(e) =>
+              setApprovalStatus(e.target.value as ApprovalFilter)
+            }
+            aria-label="Одобрение ВНЖ"
+          >
+            <option value="">Одобрение: все</option>
+            <option value="approved">Одобрены</option>
+            <option value="not_approved">Не одобрены</option>
+          </select>
+          <button
+            type="button"
+            className={styles.filterBtn}
+            onClick={clearListFilters}
+          >
+            Сбросить
+          </button>
+          <button
+            type="button"
+            className={styles.exportBtn}
+            disabled={filteredItems.length === 0}
+            onClick={exportFilteredCsv}
+          >
+            Выгрузить CSV
+          </button>
+        </div>
+        {!loading ? (
+          <p className={styles.filterMeta}>
+            Показано: {filteredItems.length} из {items.length}
+          </p>
+        ) : null}
       </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}

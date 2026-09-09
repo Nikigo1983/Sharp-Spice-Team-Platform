@@ -40,6 +40,70 @@
   box-shadow: 0 0 0 3px var(--hero-glow);
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--gray-800);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  max-width: 220px;
+}
+
+.dateField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--gray-300);
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+}
+
+.dateInput {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--gray-800);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.primaryBtn {
+  border: 1px solid var(--border-burgundy);
+  background: rgba(145, 13, 13, 0.35);
+  color: var(--white);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--gray-100);
+}
+
 .meta {
   margin: 0;
   font-family: Inter, sans-serif;

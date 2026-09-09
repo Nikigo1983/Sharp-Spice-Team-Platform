@@ -4,6 +4,7 @@ import {
   logClientStatusDebug,
   sanitizeCrmClientStatus,
 } from "@/lib/ai/client-status";
+import { dateInRange } from "@/lib/clients/list-filter-utils";
 import type { Client, ClientDocument, ClientNote, ClientSurvey } from "./types";
 
 const CLIENT_HEADER_MAP: Record<string, keyof Client> = {
@@ -459,11 +460,66 @@ export function clientMatchesFilters(
     status?: string;
     manager?: string;
     country?: string;
+    referent?: string;
+    partner?: string;
+    contract?: string;
+    submittedFrom?: string;
+    submittedTo?: string;
+    approvalStatus?: "approved" | "not_approved";
+    hasContract?: "yes" | "no";
   },
 ): boolean {
   if (filters.direction && client.direction !== filters.direction) return false;
   if (filters.status && client.status !== filters.status) return false;
   if (filters.manager && client.manager !== filters.manager) return false;
   if (filters.country && client.country !== filters.country) return false;
+
+  if (filters.referent) {
+    const referent = (client.referentName || client.manager || "").trim();
+    if (referent.toLowerCase() !== filters.referent.trim().toLowerCase()) {
+      return false;
+    }
+  }
+  if (filters.partner) {
+    if (
+      (client.partnerName ?? "").trim().toLowerCase() !==
+      filters.partner.trim().toLowerCase()
+    ) {
+      return false;
+    }
+  }
+  if (filters.contract) {
+    if (
+      (client.contract ?? "").trim().toLowerCase() !==
+      filters.contract.trim().toLowerCase()
+    ) {
+      return false;
+    }
+  }
+
+  if (filters.submittedFrom || filters.submittedTo) {
+    if (
+      !dateInRange(
+        client.submittedAt ?? client.createdAt,
+        filters.submittedFrom,
+        filters.submittedTo,
+      )
+    ) {
+      return false;
+    }
+  }
+
+  if (filters.approvalStatus) {
+    const approved = Boolean((client.approvalAt ?? "").trim());
+    if (filters.approvalStatus === "approved" && !approved) return false;
+    if (filters.approvalStatus === "not_approved" && approved) return false;
+  }
+
+  if (filters.hasContract) {
+    const has = Boolean((client.contract ?? "").trim());
+    if (filters.hasContract === "yes" && !has) return false;
+    if (filters.hasContract === "no" && has) return false;
+  }
+
   return true;
 }

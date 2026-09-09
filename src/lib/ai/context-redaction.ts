@@ -1,4 +1,5 @@
 import type { ClientContext } from "@/lib/ai/client-context";
+import { sanitizeClientListContinuation } from "@/lib/ai/client-list-continuation";
 
 export type ProviderChatMessage = {
   role: "system" | "user" | "assistant";
@@ -8,6 +9,7 @@ export type ProviderChatMessage = {
 export type RedactableChatTurn = {
   role: "user" | "assistant";
   content: string;
+  clientListContinuation?: unknown;
 };
 
 const SENSITIVE_KEY_PATTERNS: RegExp[] = [
@@ -106,10 +108,21 @@ export function sanitizeChatMessagesForProvider<T extends ProviderChatMessage>(
 export function sanitizeWorkspaceChatTurns<T extends RedactableChatTurn>(
   turns: T[],
 ): T[] {
-  return turns.map((turn) => ({
-    ...turn,
-    content: redactSensitiveText(turn.content),
-  }));
+  return turns.map((turn) => {
+    const continuation = sanitizeClientListContinuation(
+      turn.clientListContinuation ?? null,
+    );
+    const next = {
+      ...turn,
+      content: redactSensitiveText(turn.content),
+    } as T;
+    if (continuation) {
+      (next as RedactableChatTurn).clientListContinuation = continuation;
+    } else {
+      delete (next as RedactableChatTurn).clientListContinuation;
+    }
+    return next;
+  });
 }
 
 export function redactForLogging(value: unknown): unknown {

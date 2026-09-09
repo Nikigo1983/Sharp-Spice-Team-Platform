@@ -421,17 +421,32 @@ export async function executeStructuredClientSearch(
     }
   });
 
-  const sorted = matches.sort((a, b) => {
-    if (effectiveIntent.recentActivity) {
-      return activitySortKey(b) - activitySortKey(a);
-    }
-    return b.score - a.score;
-  });
+  // List pagination must be: match → dedupe → stable sort → total → slice.
+  // Non-list keeps score/activity ordering before dedupe so merge prefers
+  // higher-scoring parts.
+  let resolved: ReturnType<typeof deduplicateToResolved>;
+  if (effectiveIntent.isListQuery && !effectiveIntent.recentActivity) {
+    const deduped = deduplicateToResolved(matches);
+    resolved = [...deduped].sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, "ru", { sensitivity: "base" });
+      if (byName !== 0) return byName;
+      const bySource = a.sourceLabel.localeCompare(b.sourceLabel, "ru");
+      if (bySource !== 0) return bySource;
+      return (a.rowIndex ?? 0) - (b.rowIndex ?? 0);
+    });
+  } else {
+    const sorted = matches.sort((a, b) => {
+      if (effectiveIntent.recentActivity) {
+        return activitySortKey(b) - activitySortKey(a);
+      }
+      return b.score - a.score;
+    });
+    resolved = deduplicateToResolved(sorted);
+  }
 
-  const deduped = deduplicateToResolved(sorted);
   return {
-    clients: deduped.slice(0, limit),
-    totalFound: deduped.length,
+    clients: resolved.slice(0, limit),
+    totalFound: resolved.length,
   };
 }
 

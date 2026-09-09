@@ -59,9 +59,21 @@ import {
   type ResolvedClientContext,
 } from "@/lib/ai/client-context";
 import {
+  analyzeClientSearchIntent,
   formatClientSearchIntentForAi,
+  resolveClientSearchIntentType,
   shouldOfferClientSelection,
+  type ClientSearchIntent,
 } from "@/lib/ai/client-search-intent";
+import {
+  buildClientListFilterLabel,
+  formatStructuredClientListReply,
+  isClientListContinuationQuery,
+  LIST_QUERY_FULL_RETURN_LIMIT,
+  resolveTextFallbackListContinuation,
+  sanitizeClientListContinuation,
+  type ClientListContinuationState,
+} from "@/lib/ai/client-list-reply";
 import {
   buildClientSearchQuery,
   groupDuplicateClients,
@@ -72,6 +84,7 @@ import {
   parseDebugClientQuery,
   scanRawRowsForTokens,
 } from "@/lib/ai/client-lookup";
+import { executeStructuredClientSearch } from "@/lib/ai/structured-client-search";
 import {
   followUpToClientContext,
   resolveClientSelectionFollowUp,
@@ -100,6 +113,8 @@ export type { WorkspaceResponseMode } from "@/lib/ai/workspace-config";
 export type WorkspaceChatTurn = {
   role: "user" | "assistant";
   content: string;
+  /** Optional structured list pagination meta (not shown in UI text). */
+  clientListContinuation?: ClientListContinuationState | null;
 };
 
 export type WorkspaceAiResult = {
@@ -109,6 +124,7 @@ export type WorkspaceAiResult = {
   requestId: string;
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
+  clientListContinuation?: ClientListContinuationState | null;
 };
 
 export type WorkspaceAiStreamMeta = {
@@ -117,6 +133,7 @@ export type WorkspaceAiStreamMeta = {
   requestId: string;
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
+  clientListContinuation?: ClientListContinuationState | null;
 };
 
 export type WorkspaceAiStreamStatus = {
@@ -254,7 +271,7 @@ function buildChatMessages(
     ? "\n\nПоиск выполнен по распознанным фильтрам (CLIENT SEARCH INTENT). Отвечай по найденным CLIENT CONTEXT / CLIENT CANDIDATES."
     : "";
   const listNote = contextBlock.includes("тип запроса: list")
-    ? "\n\nЭто списочный запрос: начни с «Найдено N клиентов…», перечисли клиентов нумерованным списком (имя — статус — менеджер). Если в контексте больше 20 — в ответе покажи первые 20 и добавь «Показано 20 из N клиентов.»"
+    ? "\n\nЭто списочный запрос: начни с «Найдено N клиентов…», перечисли клиентов нумерованным списком (имя — статус — менеджер). Не сокращай список искусственно до 20, если в контексте переданы все записи."
     : "";
   const groundingNote = hasAuthoritative
     ? `\n\n${AUTHORITATIVE_EVIDENCE_BANNER}\n${buildHistoryPrecedenceNote()}`
@@ -372,12 +389,68 @@ async function resolvePassportLookupReply(
   return tryDirectPassportAnswer(query);
 }
 
+function listSourcesFromClients(clients: ResolvedClientContext[]): string[] {
+  const labels = new Set<string>();
+  for (const client of clients) {
+    if (isMergedClientContext(client)) {
+      for (const part of client.parts) labels.add(part.sourceLabel);
+    } else {
+      labels.add(client.sourceLabel);
+    }
+  }
+  if (labels.size === 0) return ["Клиенты", "Новые клиенты"];
+  return [...labels];
+}
+
+function buildDirectStructuredListResult(params: {
+  clients: ResolvedClientContext[];
+  totalFound: number;
+  intent: ClientSearchIntent;
+  sourceQuery: string;
+  offset?: number;
+  requestId: string;
+  trace: WorkspaceAiTrace;
+  started: number;
+}): {
+  kind: "direct";
+  reply: string;
+  sources: string[];
+  clientListContinuation?: ClientListContinuationState | null;
+  requestId: string;
+  trace: WorkspaceAiTrace;
+} {
+  const formatted = formatStructuredClientListReply({
+    clients: params.clients,
+    totalFound: params.totalFound,
+    filterLabel: buildClientListFilterLabel(params.intent),
+    sourceQuery: params.sourceQuery,
+    offset: params.offset ?? 0,
+    pageSize: LIST_QUERY_FULL_RETURN_LIMIT,
+  });
+  params.trace.selectedRoutes = ["client_list_direct"];
+  params.trace.responseOk = true;
+  params.trace.latencyMs.prepare = Date.now() - params.started;
+  params.trace.notes.push(
+    `list_reported=${formatted.reportedCount};list_rendered=${formatted.renderedCount}`,
+  );
+  logWorkspaceAiTrace(params.trace);
+  return {
+    kind: "direct",
+    reply: redactSensitiveText(formatted.reply),
+    sources: listSourcesFromClients(params.clients),
+    clientListContinuation: formatted.continuation,
+    requestId: params.requestId,
+    trace: params.trace,
+  };
+}
+
 async function prepareWorkspaceRequest(
   userMessage: string,
   history: WorkspaceChatTurn[],
   mode: WorkspaceResponseMode,
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
+  clientListContinuation: ClientListContinuationState | null = null,
 ): Promise<
   | { kind: "empty"; requestId: string; trace: WorkspaceAiTrace }
   | {
@@ -386,6 +459,7 @@ async function prepareWorkspaceRequest(
       sources: string[];
       pendingClientCandidates?: ClientContext[];
       needsClientSelection?: boolean;
+      clientListContinuation?: ClientListContinuationState | null;
       requestId: string;
       trace: WorkspaceAiTrace;
       groundingBlocked?: boolean;
@@ -512,6 +586,41 @@ async function prepareWorkspaceRequest(
   let needsClientSelection = false;
   let clientSearchIntentNote: string | null = null;
   let clientCandidatesTotalFound: number | null = null;
+  let listAiSearch: Awaited<ReturnType<typeof lookupClientsWithAiSearch>> | null =
+    null;
+
+  if (!followUp && isClientListContinuationQuery(trimmed)) {
+    const structuredContinuation = sanitizeClientListContinuation(
+      clientListContinuation,
+    );
+    const textFallback = structuredContinuation
+      ? null
+      : resolveTextFallbackListContinuation(history, trimmed);
+    const prior =
+      structuredContinuation?.sourceQuery ?? textFallback?.sourceQuery ?? null;
+    const offset =
+      structuredContinuation?.offset ?? textFallback?.offset ?? null;
+    if (prior && offset !== null) {
+      const listIntent = await analyzeClientSearchIntent(prior);
+      if (resolveClientSearchIntentType(listIntent, prior) === "list") {
+        const structured = await executeStructuredClientSearch(
+          { ...listIntent, isListQuery: true },
+          prior,
+          offset + LIST_QUERY_FULL_RETURN_LIMIT,
+        );
+        return buildDirectStructuredListResult({
+          clients: structured.clients,
+          totalFound: structured.totalFound,
+          intent: listIntent,
+          sourceQuery: prior,
+          offset,
+          requestId,
+          trace,
+          started,
+        });
+      }
+    }
+  }
 
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
@@ -523,6 +632,7 @@ async function prepareWorkspaceRequest(
   ) {
     try {
       const aiSearch = await lookupClientsWithAiSearch(trimmed);
+      listAiSearch = aiSearch;
       const clientLookup = aiSearch.lookup;
       clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
       clientCandidatesTotalFound = aiSearch.foundClients;
@@ -578,6 +688,30 @@ async function prepareWorkspaceRequest(
       console.error(`[workspace-ai][${requestId}] client search failed`, error);
       trace.notes.push("CLIENT_SEARCH_ERROR");
     }
+  }
+
+  if (
+    listAiSearch &&
+    listAiSearch.intentType === "list" &&
+    listAiSearch.usedStructuredSearch
+  ) {
+    const lookup = listAiSearch.lookup;
+    const clients =
+      lookup.kind === "multiple"
+        ? lookup.clients
+        : lookup.kind === "single"
+          ? [lookup.client]
+          : [];
+    return buildDirectStructuredListResult({
+      clients,
+      totalFound: listAiSearch.foundClients,
+      intent: listAiSearch.intent,
+      sourceQuery: trimmed,
+      offset: 0,
+      requestId,
+      trace,
+      started,
+    });
   }
 
   if (isPassportNumberLookupQuery(trimmed)) {
@@ -794,6 +928,7 @@ export async function runWorkspaceAi(
   mode: WorkspaceResponseMode = "brief",
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
+  clientListContinuation: ClientListContinuationState | null = null,
 ): Promise<WorkspaceAiResult> {
   const totalStarted = Date.now();
   const prepared = await prepareWorkspaceRequest(
@@ -802,6 +937,7 @@ export async function runWorkspaceAi(
     mode,
     pendingClientCandidates,
     requestId,
+    clientListContinuation,
   );
 
   if (prepared.kind === "empty") {
@@ -822,6 +958,7 @@ export async function runWorkspaceAi(
       requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
+      clientListContinuation: prepared.clientListContinuation ?? null,
     };
   }
 
@@ -883,6 +1020,7 @@ export async function* runWorkspaceAiStream(
   mode: WorkspaceResponseMode = "brief",
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
+  clientListContinuation: ClientListContinuationState | null = null,
 ): AsyncGenerator<string | WorkspaceAiStreamMeta | WorkspaceAiStreamStatus> {
   const totalStarted = Date.now();
   yield { status: "context" };
@@ -893,6 +1031,7 @@ export async function* runWorkspaceAiStream(
     mode,
     pendingClientCandidates,
     requestId,
+    clientListContinuation,
   );
 
   if (prepared.kind === "empty") {
@@ -912,6 +1051,7 @@ export async function* runWorkspaceAiStream(
       requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
+      clientListContinuation: prepared.clientListContinuation ?? null,
     };
     yield prepared.reply;
     return;

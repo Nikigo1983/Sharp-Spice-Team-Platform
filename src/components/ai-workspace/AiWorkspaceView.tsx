@@ -11,6 +11,10 @@ import type {
   WorkspaceResponseMode,
 } from "@/lib/ai/workspace-assistant";
 import type { ClientContext } from "@/lib/ai/client-context";
+import type { ClientListContinuationState } from "@/lib/ai/client-list-continuation";
+import {
+  resolveClientListContinuationFromHistory,
+} from "@/lib/ai/client-list-continuation";
 
 import type {
 
@@ -457,6 +461,7 @@ export function AiWorkspaceView() {
     let reply = "";
     let streamSources: string[] = [];
     let streamDemo = false;
+    let streamContinuation: ClientListContinuationState | null = null;
     let metaReceived = false;
 
     const streamingHistory: ChatEntry[] = [
@@ -497,9 +502,11 @@ export function AiWorkspaceView() {
             demo?: boolean;
             pendingClientCandidates?: ClientContext[];
             needsClientSelection?: boolean;
+            clientListContinuation?: ClientListContinuationState | null;
           };
           streamSources = meta.sources ?? [];
           streamDemo = Boolean(meta.demo);
+          streamContinuation = meta.clientListContinuation ?? null;
           metaReceived = true;
           setSources(streamSources);
           setDemo(streamDemo);
@@ -547,7 +554,13 @@ export function AiWorkspaceView() {
 
     const finalHistory: ChatEntry[] = [
       ...nextHistory,
-      { role: "assistant", content: reply },
+      {
+        role: "assistant",
+        content: reply,
+        ...(streamContinuation
+          ? { clientListContinuation: streamContinuation }
+          : {}),
+      },
     ];
     await persistChat(chatId, finalHistory);
     return finalHistory;
@@ -600,6 +613,11 @@ export function AiWorkspaceView() {
 
     try {
 
+      const listContinuation = resolveClientListContinuationFromHistory(
+        history,
+        trimmed,
+      );
+
       const res = await fetch("/api/ai-workspace", {
 
         method: "POST",
@@ -610,7 +628,10 @@ export function AiWorkspaceView() {
 
           message: trimmed,
 
-          history: history.slice(-4),
+          history: history.slice(-4).map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          })),
 
           mode: responseMode,
 
@@ -618,6 +639,8 @@ export function AiWorkspaceView() {
             pendingClientCandidates.length > 0
               ? pendingClientCandidates
               : undefined,
+
+          clientListContinuation: listContinuation ?? undefined,
 
         }),
 
@@ -651,6 +674,8 @@ export function AiWorkspaceView() {
 
         needsClientSelection?: boolean;
 
+        clientListContinuation?: ClientListContinuationState | null;
+
       };
 
 
@@ -671,11 +696,17 @@ export function AiWorkspaceView() {
         setNeedsClientSelection(false);
       }
 
+      const continuation = data.clientListContinuation ?? null;
+
       const finalHistory: ChatEntry[] = [
 
         ...nextHistory,
 
-        { role: "assistant", content: reply },
+        {
+          role: "assistant",
+          content: reply,
+          ...(continuation ? { clientListContinuation: continuation } : {}),
+        },
 
       ];
 

@@ -104,6 +104,27 @@ describe("sanitizeWorkspaceChatTurns", () => {
     ]);
     assert.equal(containsSensitiveMarkers(turns[0].content), false);
   });
+
+  it("preserves safe clientListContinuation and drops tampered fields", () => {
+    const turns = sanitizeWorkspaceChatTurns([
+      {
+        role: "assistant",
+        content: "Найдено 235",
+        clientListContinuation: {
+          sourceQuery: "Покажи клиентов от партнёра Лена",
+          offset: 100,
+          total: 235,
+          appPassword: "leak",
+        },
+      },
+    ]);
+    assert.equal(turns[0].clientListContinuation?.offset, 100);
+    assert.equal(
+      turns[0].clientListContinuation &&
+        "appPassword" in turns[0].clientListContinuation,
+      false,
+    );
+  });
 });
 
 describe("redactForLogging", () => {

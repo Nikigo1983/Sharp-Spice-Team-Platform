@@ -5,6 +5,8 @@ import {
   type WorkspaceChatTurn,
 } from "@/lib/ai/workspace-assistant";
 import type { ClientContext } from "@/lib/ai/client-context";
+import type { ClientListContinuationState } from "@/lib/ai/client-list-continuation";
+import { sanitizeClientListContinuation } from "@/lib/ai/client-list-continuation";
 import {
   sanitizeClientContextsForTransport,
 } from "@/lib/ai/context-redaction";
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     history?: WorkspaceChatTurn[];
     mode?: string;
     pendingClientCandidates?: ClientContext[];
+    clientListContinuation?: ClientListContinuationState | null;
   };
 
   const mode = parseMode(body.mode);
@@ -41,6 +44,9 @@ export async function POST(request: Request) {
   const history = body.history ?? [];
   const pendingClientCandidates =
     sanitizeClientContextsForTransport(body.pendingClientCandidates) ?? null;
+  const clientListContinuation = sanitizeClientListContinuation(
+    body.clientListContinuation ?? null,
+  );
   const { stream } = getWorkspaceAiConfig();
 
   if (stream) {
@@ -54,6 +60,7 @@ export async function POST(request: Request) {
             mode,
             pendingClientCandidates,
             requestId,
+            clientListContinuation,
           )) {
             if (typeof chunk === "string") {
               controller.enqueue(
@@ -83,6 +90,7 @@ export async function POST(request: Request) {
                     chunk.pendingClientCandidates,
                   ),
                   needsClientSelection: chunk.needsClientSelection,
+                  clientListContinuation: chunk.clientListContinuation ?? null,
                 })}\n\n`,
               ),
             );
@@ -123,6 +131,7 @@ export async function POST(request: Request) {
       mode,
       pendingClientCandidates,
       requestId,
+      clientListContinuation,
     );
     return NextResponse.json(
       {

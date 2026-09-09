@@ -21,6 +21,7 @@ import {
   queryContainsDateLiteral,
 } from "@/lib/ai/client-date-parse";
 import { looksLikePassportNumber } from "@/lib/ai/format-client";
+import { getRussianNameLemmaVariants } from "@/lib/ai/russian-name-morphology";
 import { normalizeComparable } from "@/lib/ai/search-normalize";
 
 export type ClientSearchIntent = {
@@ -46,11 +47,18 @@ export type ClientSearchIntent = {
   isListQuery: boolean;
 };
 
-/** Максимум клиентов в контексте Claude для списочных запросов. */
-export const LIST_QUERY_CLIENT_LIMIT = 50;
+/**
+ * Максимум записей для структурированного списочного ответа.
+ * До этого порога возвращаем полный список одним ответом (без «первые 20»).
+ * Alias: CLIENT_LIST_PAGE_SIZE in client-list-reply.ts
+ */
+export const LIST_QUERY_CLIENT_LIMIT = 100;
 
-/** Сколько клиентов Claude показывает в ответе, если найдено больше. */
-export const LIST_QUERY_DISPLAY_LIMIT = 20;
+/**
+ * @deprecated Prefer CLIENT_LIST_PAGE_SIZE / LIST_QUERY_FULL_RETURN_LIMIT.
+ * Kept as alias so older imports keep the full-list ceiling (not 20).
+ */
+export const LIST_QUERY_DISPLAY_LIMIT = 100;
 
 export type ClientSearchIntentType = "list" | "single";
 
@@ -260,11 +268,36 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
   }
 
   const partnerMatch = query.match(
-    /партнер[а]?\s+([^?,]+?)(?:\s+у\s+каких|\?|$)/iu,
+    /(?:от\s+)?партн[её]р[аеу]?\s+([А-ЯЁA-Za-zа-яё\-'][^?,.!]*?)(?:\s+у\s+каких|\?|$)/iu,
   );
   if (partnerMatch?.[1]) {
     intent.partnerName = partnerMatch[1].trim().replace(/[.!]+$/u, "");
     intent.isListQuery = true;
+  } else {
+    // Plural only — singular «клиент от Лены» must stay a non-partner lookup.
+    const clientsFrom = query.match(
+      /клиент(?:ы|ов|ами|ах)\s+от\s+(?:партн[её]р[аеу]?\s+)?([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+    );
+    if (clientsFrom?.[1] && !/менеджер|референт/i.test(clientsFrom[1])) {
+      intent.partnerName = clientsFrom[1].trim().replace(/[.!]+$/u, "");
+      intent.isListQuery = true;
+    } else {
+      // Plural list only: «покажи клиентов Лены» / «клиенты Лены»
+      // Do NOT match singular «клиент Лена» / «покажи клиента Лена».
+      const clientsOfPartner = query.match(
+        /(?:покажи\s+|найди\s+)?(?:всех\s+)?клиент(?:ы|ов|ами|ах)\s+([А-ЯЁA-Z][а-яёa-z\-']{2,})(?!\p{L})/u,
+      );
+      const token = clientsOfPartner?.[1]?.trim() ?? "";
+      if (
+        token &&
+        !/^(менеджер|референт|партн|статус|заявк|по|от|из|для|всех|все)/i.test(
+          token,
+        )
+      ) {
+        intent.partnerName = token.replace(/[.!]+$/u, "");
+        intent.isListQuery = true;
+      }
+    }
   }
 
   const cityMatch = query.match(
@@ -341,13 +374,17 @@ export function isClientListQuery(query: string): boolean {
   const lower = query.toLowerCase();
   return (
     /у\s+кого/i.test(lower) ||
-    /покажи\s+(?:всех\s+)?клиент/i.test(lower) ||
-    /найди\s+(?:всех\s+)?клиент/i.test(lower) ||
-    /список\s+клиент/i.test(lower) ||
-    /клиент[а-яё]*\s+(?:менеджер[а]?|референт[а]?|referent)/i.test(lower) ||
-    /клиент[а-яё]*\s+по\s+/i.test(lower) ||
+    /покажи\s+(?:всех\s+)?клиент(?:ы|ов|ами|ах)\b/iu.test(query) ||
+    /найди\s+(?:всех\s+)?клиент(?:ы|ов|ами|ах)\b/iu.test(query) ||
+    /список\s+клиент(?:ы|ов|ами|ах)?\b/iu.test(query) ||
+    /клиент(?:ы|ов|ами|ах)\s+(?:менеджер[а]?|референт[а]?|referent)/iu.test(
+      query,
+    ) ||
+    /клиент(?:ы|ов|ами|ах)\s+по\s+/iu.test(query) ||
+    /клиент(?:ы|ов|ами|ах)\s+от\s+/iu.test(query) ||
+    /от\s+партн[её]р/i.test(lower) ||
     /кто\s+находится/i.test(lower) ||
-    /(?:все|всех)\s+клиент/i.test(lower) ||
+    /(?:все|всех)\s+клиент(?:ы|ов|ами|ах)\b/iu.test(query) ||
     /у\s+каких\s+клиент/i.test(lower) ||
     (/подавал|подали|подач|заявк/i.test(lower) &&
       extractAllMonthsFromQuery(query).length > 0)
@@ -531,5 +568,19 @@ export function textMatchesField(haystack: string, needle: string): boolean {
   if (nedParts.length > 1) {
     return nedParts.every((part) => hay.includes(part));
   }
+
+  // RU morphology: «Лены» → «лена» so partner «ЛЕНА МОСКВА» still matches.
+  if (/[а-яё]/i.test(needle)) {
+    const variants = getRussianNameLemmaVariants(needle);
+    if (
+      variants.some((variant) => {
+        const normalized = normalizeComparable(stripDiacritics(variant));
+        return normalized.length >= 3 && hay.includes(normalized);
+      })
+    ) {
+      return true;
+    }
+  }
+
   return false;
 }

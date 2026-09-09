@@ -17,6 +17,70 @@ describe("parseClientSearchIntentRules submission dates", () => {
     assert.equal(intent.partnerName, "Шарипа");
   });
 
+  it("detects «от партнёра Лена» and «клиенты от Лены»", () => {
+    const a = parseClientSearchIntentRules("Покажи клиентов от партнёра Лена");
+    assert.equal(a.isListQuery, true);
+    assert.match(a.partnerName ?? "", /лена/i);
+
+    const b = parseClientSearchIntentRules("Клиенты от Лены");
+    assert.equal(b.isListQuery, true);
+    assert.match(b.partnerName ?? "", /лен/i);
+  });
+
+  it("Case G: partner morphology variants resolve to partner filter", () => {
+    for (const q of [
+      "Покажи клиентов от партнёра Лена",
+      "клиенты от Лены",
+      "клиенты партнёра Лена",
+      "от партнёра Лены",
+      "покажи клиентов Лены",
+      "клиенты от партнера Лена",
+    ]) {
+      const intent = parseClientSearchIntentRules(q);
+      assert.equal(intent.isListQuery, true, q);
+      assert.match(intent.partnerName ?? "", /лен/i, q);
+    }
+  });
+
+  it("does not treat singular client lookup as partner list", () => {
+    for (const q of [
+      "покажи клиента Лена",
+      "найди клиента Лена",
+      "клиент Лена",
+      "найди Лену",
+      "менеджер Лена",
+      "покажи карточку клиента Лена",
+      "клиент от Лены",
+    ]) {
+      const intent = parseClientSearchIntentRules(q);
+      assert.equal(
+        intent.partnerName,
+        null,
+        `${q} should not set partnerName (got ${intent.partnerName})`,
+      );
+      assert.equal(
+        intent.isListQuery,
+        false,
+        `${q} should not be list query`,
+      );
+    }
+    const partnerOnly = parseClientSearchIntentRules("партнёр Лена");
+    assert.equal(partnerOnly.isListQuery, true);
+    assert.match(partnerOnly.partnerName ?? "", /лена/i);
+  });
+
+  it("partner morphology matches CRM partner cell ЛЕНА МОСКВА", async () => {
+    const { textMatchesField } = await import("./client-search-intent");
+    for (const needle of ["Лена", "Лены", "Лене"]) {
+      assert.equal(
+        textMatchesField("ЛЕНА МОСКВА", needle),
+        true,
+        needle,
+      );
+    }
+    assert.equal(textMatchesField("ЛЕНА МОСКВА", "Шарипа"), false);
+  });
+
   it("detects january and february submission list query", () => {
     const query =
       "найди клиентов, заявки на которых мы подавали в январе и феврале";

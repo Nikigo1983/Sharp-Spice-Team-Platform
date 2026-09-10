@@ -393,6 +393,7 @@ export function AiWorkspaceView() {
     setConversationSummary(null);
     setSummaryThroughMessageCount(0);
     setCaseMemory(null);
+    setCopiedMessageIndex(null);
 
     setSources([]);
 

@@ -209,6 +209,9 @@ export function AiWorkspaceView() {
   const [caseMemory, setCaseMemory] = useState<WorkspaceCaseMemory | null>(
     null,
   );
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
+    null,
+  );
 
   const [chatLimit, setChatLimit] = useState(100);
 
@@ -358,6 +361,7 @@ export function AiWorkspaceView() {
     setConversationSummary(data.chat?.conversationSummary ?? null);
     setSummaryThroughMessageCount(data.chat?.summaryThroughMessageCount ?? 0);
     setCaseMemory(data.chat?.caseMemory ?? null);
+    setCopiedMessageIndex(null);
 
     setSources([]);
 
@@ -646,6 +650,23 @@ export function AiWorkspaceView() {
       setCaseMemory(streamCaseMemory);
     }
     return finalHistory;
+  }
+
+  async function copyAssistantMessage(index: number, content: string) {
+    const text = content.trim();
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt("Скопируйте ответ AI:", text);
+      return;
+    }
+
+    setCopiedMessageIndex(index);
+    window.setTimeout(() => {
+      setCopiedMessageIndex((current) => (current === index ? null : current));
+    }, 2000);
   }
 
   async function send(userMessage: string) {
@@ -1303,7 +1324,43 @@ export function AiWorkspaceView() {
                       {entry.role === "user" ? (
                         entry.content
                       ) : (
-                        <AssistantMessageMarkdown content={entry.content} />
+                        <>
+                          <div className={styles.msgAssistantHeader}>
+                            <button
+                              type="button"
+                              className={styles.msgCopyBtn}
+                              disabled={!entry.content.trim() || loading}
+                              aria-label={
+                                copiedMessageIndex === index
+                                  ? "Скопировано"
+                                  : "Скопировать ответ"
+                              }
+                              title={
+                                copiedMessageIndex === index
+                                  ? "Скопировано"
+                                  : "Скопировать"
+                              }
+                              onClick={() =>
+                                void copyAssistantMessage(index, entry.content)
+                              }
+                            >
+                              <i
+                                className={
+                                  copiedMessageIndex === index
+                                    ? "fa-solid fa-check"
+                                    : "fa-solid fa-copy"
+                                }
+                                aria-hidden
+                              />
+                              <span>
+                                {copiedMessageIndex === index
+                                  ? "Скопировано"
+                                  : "Копировать"}
+                              </span>
+                            </button>
+                          </div>
+                          <AssistantMessageMarkdown content={entry.content} />
+                        </>
                       )}
 
                     </div>

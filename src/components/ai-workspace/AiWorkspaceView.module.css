@@ -872,6 +872,72 @@
 
   border-bottom-left-radius: 4px;
 
+  position: relative;
+
+}
+
+
+
+.msgAssistantHeader {
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  margin: -0.15rem -0.25rem 0.4rem 0;
+
+}
+
+
+
+.msgCopyBtn {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 0.35rem;
+
+  padding: 0.2rem 0.45rem;
+
+  border: 1px solid var(--border-soft);
+
+  border-radius: 6px;
+
+  background: rgba(255, 255, 255, 0.04);
+
+  color: var(--gray-300);
+
+  font-family: Inter, sans-serif;
+
+  font-size: 0.6875rem;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+}
+
+
+
+.msgCopyBtn:hover:not(:disabled) {
+
+  color: var(--white);
+
+  border-color: rgba(145, 13, 13, 0.45);
+
+  background: rgba(145, 13, 13, 0.18);
+
+}
+
+
+
+.msgCopyBtn:disabled {
+
+  opacity: 0.45;
+
+  cursor: default;
+
 }
 
 

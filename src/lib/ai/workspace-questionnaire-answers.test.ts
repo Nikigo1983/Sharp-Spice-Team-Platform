@@ -28,11 +28,15 @@ describe("workspace questionnaire answers", () => {
     );
   });
 
-  it("builds prompt addon with required output rules", () => {
+  it("builds prompt addon with human first-person voice rules", () => {
     const addon = buildQuestionnaireAnswerPromptAddon(SAMPLE);
     assert.match(addon, /ОФИЦИАЛЬНЫЕ ОТВЕТЫ/);
-    assert.match(addon, /Signature/);
-    assert.match(addon, /не выдумывай|Не выдумывай/i);
-    assert.match(addon, /Place:/);
+    assert.match(addon, /первого лица|ПЕРВОГО ЛИЦА/i);
+    assert.match(addon, /Signature|Подпись/);
+    assert.match(addon, /Запрещено|не помню/i);
+    assert.doesNotMatch(
+      addon,
+      /Based on the information currently available, this has not been provided/,
+    );
   });
 });

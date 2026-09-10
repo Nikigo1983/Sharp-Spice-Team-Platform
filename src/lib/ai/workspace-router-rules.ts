@@ -14,6 +14,7 @@ import type {
   WorkspaceRouteSource,
   WorkspaceRouterDecision,
 } from "@/lib/ai/workspace-router-types";
+import { shouldUseInternetSearch } from "@/lib/ai/workspace-web-search";
 
 const NON_PERSON_TOKENS = new Set([
   "хорватии",
@@ -391,6 +392,7 @@ function buildIntentFromSources(params: {
     needsClients: !emigrantDrivePrimary && needsClients,
     needsEmigrantDesk: !emigrantDrivePrimary && needsEmigrantDesk,
     needsFormgrid,
+    needsInternet: shouldUseInternetSearch(query),
   };
 }
 
@@ -430,6 +432,7 @@ export function routeWorkspaceQueryByRules(query: string): RuleRouteResult {
           needsClients: false,
           needsEmigrantDesk: false,
           needsFormgrid: false,
+          needsInternet: false,
         },
       },
     };

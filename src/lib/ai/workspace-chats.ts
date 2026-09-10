@@ -12,6 +12,7 @@ import {
 } from "@/lib/ai/workspace-chat-types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import * as sbChats from "@/lib/supabase/workspace-chats-repo";
+import { getWorkspaceChatMemory, deleteWorkspaceChatMemory } from "@/lib/ai/workspace-chat-memory-store";
 
 export { MAX_WORKSPACE_CHATS };
 export type { WorkspaceChatSession, WorkspaceChatSummary };
@@ -108,9 +109,14 @@ export async function getWorkspaceChat(
   }
 
   if (!session) return null;
+  const memory = await getWorkspaceChatMemory(userId, chatId);
   return {
     ...session,
     messages: sanitizeWorkspaceChatTurns(session.messages),
+    conversationSummary: memory.conversationSummary,
+    summaryThroughMessageCount: memory.summaryThroughMessageCount,
+    caseMemory: memory.caseMemory,
+    caseMemoryThroughMessageCount: memory.caseMemoryThroughMessageCount,
   };
 }
 
@@ -185,18 +191,28 @@ export async function deleteWorkspaceChat(
   userId: string,
   chatId: string,
 ): Promise<boolean> {
+  let deleted = false;
   if (isSupabaseConfigured()) {
     try {
-      return await sbChats.sbDeleteWorkspaceChatSession(userId, chatId);
+      deleted = await sbChats.sbDeleteWorkspaceChatSession(userId, chatId);
     } catch (error) {
       console.error("[workspace-chats] supabase delete", error);
       return false;
     }
+  } else {
+    const store = await readStore(userId);
+    const next = store.sessions.filter((s) => s.id !== chatId);
+    if (next.length === store.sessions.length) return false;
+    await writeStore(userId, { sessions: next });
+    deleted = true;
   }
 
-  const store = await readStore(userId);
-  const next = store.sessions.filter((s) => s.id !== chatId);
-  if (next.length === store.sessions.length) return false;
-  await writeStore(userId, { sessions: next });
-  return true;
+  if (deleted) {
+    try {
+      await deleteWorkspaceChatMemory(userId, chatId);
+    } catch (error) {
+      console.error("[workspace-chats] memory delete", error);
+    }
+  }
+  return deleted;
 }

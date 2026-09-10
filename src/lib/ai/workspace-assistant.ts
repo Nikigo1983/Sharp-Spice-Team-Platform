@@ -75,6 +75,31 @@ import {
   type ClientListContinuationState,
 } from "@/lib/ai/client-list-reply";
 import {
+  formatConversationSummaryForPrompt,
+  selectRecentHistoryTurns,
+  sanitizeConversationSummary,
+} from "@/lib/ai/workspace-conversation-memory";
+import {
+  buildDocFillPack,
+  buildDocFillPromptAddon,
+  formatDocFillAskClientReply,
+  formatDocFillReply,
+  isDocFillIntent,
+} from "@/lib/ai/workspace-doc-fill";
+import {
+  caseMemoryHasFacts,
+  formatCaseMemoryForPrompt,
+  sanitizeCaseMemory,
+  type WorkspaceCaseMemory,
+} from "@/lib/ai/workspace-case-memory";
+import {
+  searchWebForWorkspace,
+  shouldUseInternetSearch,
+  type WorkspaceWebSearchResult,
+} from "@/lib/ai/workspace-web-search";
+import { maybeRefreshWorkspaceConversationMemory } from "@/lib/ai/workspace-conversation-summary";
+import { getWorkspaceChatMemory } from "@/lib/ai/workspace-chat-memory-store";
+import {
   buildClientSearchQuery,
   groupDuplicateClients,
   isDebugClientCommand,
@@ -125,6 +150,9 @@ export type WorkspaceAiResult = {
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
   clientListContinuation?: ClientListContinuationState | null;
+  conversationSummary?: string | null;
+  summaryThroughMessageCount?: number;
+  caseMemory?: WorkspaceCaseMemory | null;
 };
 
 export type WorkspaceAiStreamMeta = {
@@ -134,6 +162,9 @@ export type WorkspaceAiStreamMeta = {
   pendingClientCandidates?: ClientContext[];
   needsClientSelection?: boolean;
   clientListContinuation?: ClientListContinuationState | null;
+  conversationSummary?: string | null;
+  summaryThroughMessageCount?: number;
+  caseMemory?: WorkspaceCaseMemory | null;
 };
 
 export type WorkspaceAiStreamStatus = {
@@ -154,9 +185,10 @@ function buildSources(
     deskLabel?: string | null;
     formgridLabel?: string | null;
     kbBlockedInsufficient?: boolean;
+    internetLabel?: string | null;
   },
 ): string[] {
-  return buildAttributionLabels({
+  const labels = buildAttributionLabels({
     kbMeta: intent.needsKb ? context.kbRetrieval : null,
     emigrantMeta: intent.needsEmigrantDrive ? context.emigrantDriveRetrieval : null,
     clientLabel: options?.clientLabel ?? null,
@@ -168,6 +200,10 @@ function buildSources(
         : null),
     kbBlockedInsufficient: options?.kbBlockedInsufficient ?? false,
   });
+  if (options?.internetLabel) {
+    labels.push(options.internetLabel);
+  }
+  return labels;
 }
 
 function buildContextBlock(
@@ -179,6 +215,7 @@ function buildContextBlock(
   clientSearchIntentNote: string | null = null,
   clientCandidatesTotalFound: number | null = null,
   deskSlice: EmigrantDeskContextSlice | null = null,
+  webSearchText: string | null = null,
 ): string {
   const contextParts: string[] = [];
 
@@ -238,6 +275,9 @@ function buildContextBlock(
   if (intent.needsFormgrid && !clientContext) {
     contextParts.push(`=== FORMGRID ===\n${context.formgridText}`);
   }
+  if (webSearchText) {
+    contextParts.push(webSearchText);
+  }
   return contextParts.join("\n\n");
 }
 
@@ -246,32 +286,50 @@ function buildChatMessages(
   contextBlock: string,
   history: WorkspaceChatTurn[],
   mode: WorkspaceResponseMode,
+  conversationSummary: string | null = null,
+  caseMemory: WorkspaceCaseMemory | null = null,
 ): ChatMessage[] {
-  const historyMessages: ChatMessage[] = history.slice(-4).map((turn) => ({
-    role: turn.role,
-    content: turn.content,
-  }));
+  const historyMessages: ChatMessage[] = selectRecentHistoryTurns(history).map(
+    (turn) => ({
+      role: turn.role,
+      content: turn.content,
+    }),
+  );
+
+  const summaryBlock = formatConversationSummaryForPrompt(conversationSummary);
+  const caseBlock = formatCaseMemoryForPrompt(caseMemory);
+  const memoryBlocks = [caseBlock, summaryBlock].filter(Boolean).join("\n\n");
+  const contextWithMemory = memoryBlocks
+    ? `${memoryBlocks}\n\n${contextBlock}`
+    : contextBlock;
 
   const hasAuthoritative =
-    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|FORMGRID|EMIGRANT CROATIA DESK/i.test(
-      contextBlock,
+    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
+      contextWithMemory,
     );
 
-  const clientNote = contextBlock.includes("CLIENT CONTEXT")
+  const clientNote = contextWithMemory.includes("CLIENT CONTEXT")
     ? "\n\nДля данных о клиенте используй CLIENT CONTEXT / [SOURCE:CLIENT:…]. У каждого поля указан источник — в ответе кратко поясни «таблица «Клиенты»», «анкета Formgrid» и т.д., не пиши «CRM» и не выводи сырой блок."
     : "";
-  const emigrantNote = contextBlock.includes("ЭМИГРАНТ (документы клиентов)") ||
-    contextBlock.includes('kind="emigrant_drive"')
+  const emigrantNote = contextWithMemory.includes("ЭМИГРАНТ (документы клиентов)") ||
+    contextWithMemory.includes('kind="emigrant_drive"')
     ? "\n\nДля запросов про папку ЭМИГРАНТ используй блоки [SOURCE:DRIVE:…]. Отсутствие в таблицах Клиенты не означает отсутствие в Drive. Файл не извлечён ≠ документ отсутствует у клиента."
     : "";
-  const candidatesNote = contextBlock.includes("CLIENT CANDIDATES")
+  const candidatesNote = contextWithMemory.includes("CLIENT CANDIDATES")
     ? "\n\nЕсли в CLIENT CANDIDATES есть варианты — объясни различия и помоги выбрать. При fuzzy-поиске начни с «Точного совпадения не найдено. Возможно, вы имели в виду…». При структурированном поиске — кратко резюмируй список и выдели самых релевантных. Не отвечай сухим «клиент не найден», если кандидаты есть."
     : "";
-  const structuredNote = contextBlock.includes("CLIENT SEARCH INTENT")
+  const structuredNote = contextWithMemory.includes("CLIENT SEARCH INTENT")
     ? "\n\nПоиск выполнен по распознанным фильтрам (CLIENT SEARCH INTENT). Отвечай по найденным CLIENT CONTEXT / CLIENT CANDIDATES."
     : "";
-  const listNote = contextBlock.includes("тип запроса: list")
+  const listNote = contextWithMemory.includes("тип запроса: list")
     ? "\n\nЭто списочный запрос: начни с «Найдено N клиентов…», перечисли клиентов нумерованным списком (имя — статус — менеджер). Не сокращай список искусственно до 20, если в контексте переданы все записи."
+    : "";
+  const memoryNote =
+    caseBlock || summaryBlock
+      ? "\n\nУчитывай ПАМЯТЬ КЕЙСА и/или СВОДКУ ДИАЛОГА. Последние сообщения history приоритетнее сводки при конфликте фактов разговора; CLIENT CONTEXT приоритетнее памяти кейса для CRM-полей."
+      : "";
+  const internetNote = contextWithMemory.includes("ИНТЕРНЕТ (web search)")
+    ? "\n\nБлок ИНТЕРНЕТ — только для внешних актуальных фактов. Для данных клиента он слабее CLIENT CONTEXT. В ответе указывай URL источников."
     : "";
   const groundingNote = hasAuthoritative
     ? `\n\n${AUTHORITATIVE_EVIDENCE_BANNER}\n${buildHistoryPrecedenceNote()}`
@@ -282,7 +340,7 @@ function buildChatMessages(
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}\n\n${contextBlock}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${memoryNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}${internetNote}\n\n${contextWithMemory}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
@@ -451,6 +509,8 @@ async function prepareWorkspaceRequest(
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
   clientListContinuation: ClientListContinuationState | null = null,
+  conversationSummary: string | null = null,
+  caseMemory: WorkspaceCaseMemory | null = null,
 ): Promise<
   | { kind: "empty"; requestId: string; trace: WorkspaceAiTrace }
   | {
@@ -628,7 +688,8 @@ async function prepareWorkspaceRequest(
     intent.needsClients ||
     intent.needsFormgrid ||
     intent.needsEmigrantDrive ||
-    intent.fastClientLookup
+    intent.fastClientLookup ||
+    isDocFillIntent(trimmed)
   ) {
     try {
       const aiSearch = await lookupClientsWithAiSearch(trimmed);
@@ -751,6 +812,52 @@ async function prepareWorkspaceRequest(
     };
   }
 
+  if (isDocFillIntent(trimmed) && !needsClientSelection) {
+    if (clientContext || caseMemoryHasFacts(caseMemory)) {
+      const pack = buildDocFillPack({
+        query: trimmed,
+        client: clientContext,
+        caseMemory,
+      });
+      if (clientContext || pack.filledCount > 0) {
+        const sources = [
+          ...(clientContext
+            ? [
+                isMergedClientContext(clientContext)
+                  ? "Клиенты + Formgrid"
+                  : clientContext.sourceLabel,
+              ]
+            : []),
+          ...(caseMemoryHasFacts(caseMemory) ? ["Память кейса"] : []),
+        ];
+        trace.selectedRoutes = ["doc_fill_direct"];
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: formatDocFillReply(pack),
+          sources,
+          requestId,
+          trace,
+        };
+      }
+    }
+    if (!clientContext && !clientCandidates?.length) {
+      trace.selectedRoutes = ["doc_fill_need_client"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
+      return {
+        kind: "direct",
+        reply: formatDocFillAskClientReply(),
+        sources: [],
+        requestId,
+        trace,
+      };
+    }
+  }
+
   if (intent.needsEmigrantDesk && /статус/iu.test(trimmed)) {
     const direct = await tryDirectEmigrantStatusAnswer(trimmed);
     if (direct) {
@@ -858,6 +965,25 @@ async function prepareWorkspaceRequest(
     }
   }
 
+  let webSearch: WorkspaceWebSearchResult | null = null;
+  const needsInternet =
+    intent.needsInternet || shouldUseInternetSearch(trimmed);
+  if (needsInternet) {
+    try {
+      webSearch = await searchWebForWorkspace(trimmed);
+      if (webSearch.ok) {
+        trace.notes.push(`web_search:${webSearch.provider};hits=${webSearch.hits.length}`);
+      } else {
+        trace.notes.push(
+          `web_search_skip:${webSearch.provider};${webSearch.error ?? "none"}`,
+        );
+      }
+    } catch (error) {
+      console.error(`[workspace-ai][${requestId}] web search failed`, error);
+      trace.notes.push("web_search_error");
+    }
+  }
+
   const clientAttrLabel = clientContext
     ? isMergedClientContext(clientContext)
       ? deskSlice
@@ -878,6 +1004,12 @@ async function prepareWorkspaceRequest(
       intent.needsEmigrantDesk && !clientContext && context.meta.emigrantDeskTotal > 0
         ? `Emigrant Desk — cases (${context.meta.emigrantDeskTotal})`
         : null,
+    internetLabel:
+      webSearch && (webSearch.ok || webSearch.text)
+        ? webSearch.ok
+          ? `Интернет — ${webSearch.provider} (${webSearch.hits.length})`
+          : "Интернет — недоступен"
+        : null,
   });
   const contextBlock = buildContextBlock(
     context,
@@ -888,7 +1020,25 @@ async function prepareWorkspaceRequest(
     clientSearchIntentNote,
     clientCandidatesTotalFound,
     deskSlice,
+    webSearch?.text ?? null,
   );
+
+  const fillAwareContextBlock = isDocFillIntent(trimmed)
+    ? [
+        buildDocFillPromptAddon(
+          clientContext || caseMemoryHasFacts(caseMemory)
+            ? buildDocFillPack({
+                query: trimmed,
+                client: clientContext,
+                caseMemory,
+              })
+            : null,
+        ),
+        contextBlock,
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    : contextBlock;
 
   trace.clientContextCount = clientContext ? 1 : 0;
   trace.clientCandidatesCount = clientCandidates?.length ?? 0;
@@ -902,23 +1052,121 @@ async function prepareWorkspaceRequest(
         )
       : "",
   );
-  trace.contextCharsEstimate = estimateChars(contextBlock);
+  trace.contextCharsEstimate = estimateChars(fillAwareContextBlock);
   trace.latencyMs.prepare = Date.now() - started;
 
-  const messages = buildChatMessages(trimmed, contextBlock, history, mode);
+  const messages = buildChatMessages(
+    trimmed,
+    fillAwareContextBlock,
+    history,
+    mode,
+    conversationSummary,
+    caseMemory,
+  );
 
   return {
     kind: "ai",
     messages,
     sources,
     context,
-    contextBlock,
+    contextBlock: fillAwareContextBlock,
     trimmed,
     clientContext,
     pendingClientCandidates: pendingCandidatesForTransport(pendingForUi),
     needsClientSelection,
     requestId,
     trace,
+  };
+}
+
+async function attachRefreshedConversationMemory(params: {
+  userId?: string | null;
+  chatId?: string | null;
+  history: WorkspaceChatTurn[];
+  userMessage: string;
+  assistantReply: string;
+  clientSnapshot?: {
+    id?: string | null;
+    name?: string | null;
+    citizenship?: string | null;
+    passportNumber?: string | null;
+    country?: string | null;
+    direction?: string | null;
+    bookingAddress?: string | null;
+    bookingRange?: string | null;
+    submittedAt?: string | null;
+    approvalAt?: string | null;
+    notes?: string | null;
+  } | null;
+}): Promise<{
+  conversationSummary?: string | null;
+  summaryThroughMessageCount?: number;
+  caseMemory?: WorkspaceCaseMemory | null;
+}> {
+  const userId = params.userId?.trim();
+  const chatId = params.chatId?.trim();
+  if (!userId || !chatId || !params.assistantReply.trim()) return {};
+
+  const turns = [
+    ...params.history,
+    { role: "user" as const, content: params.userMessage },
+    { role: "assistant" as const, content: params.assistantReply },
+  ];
+
+  const refreshed = await maybeRefreshWorkspaceConversationMemory({
+    userId,
+    chatId,
+    turns,
+    clientSnapshot: params.clientSnapshot ?? null,
+  });
+  if (refreshed) {
+    return {
+      conversationSummary: refreshed.conversationSummary,
+      summaryThroughMessageCount: refreshed.summaryThroughMessageCount,
+      caseMemory: refreshed.caseMemory,
+    };
+  }
+
+  const current = await getWorkspaceChatMemory(userId, chatId);
+  if (!current.conversationSummary && !current.caseMemory) return {};
+  return {
+    conversationSummary: current.conversationSummary,
+    summaryThroughMessageCount: current.summaryThroughMessageCount,
+    caseMemory: current.caseMemory,
+  };
+}
+
+function clientSnapshotFromResolved(
+  client: ResolvedClientContext | null | undefined,
+) {
+  if (!client) return null;
+  const debugRows = isMergedClientContext(client)
+    ? client.parts.flatMap((part) => Object.entries(part.debugRow))
+    : Object.entries(client.debugRow);
+
+  const pick = (...patterns: RegExp[]) => {
+    for (const [key, value] of debugRows) {
+      if (!value?.trim()) continue;
+      if (patterns.some((pattern) => pattern.test(key))) return value.trim();
+    }
+    return null;
+  };
+
+  return {
+    id:
+      client.source === "merged"
+        ? `merged:${client.rowIndex}`
+        : `${client.source}:${client.rowIndex}`,
+    name: client.name ?? null,
+    citizenship: pick(/гражданств|citizenship|латиниц/i),
+    passportNumber: pick(/паспорт|passport/i),
+    country: client.country ?? null,
+    direction: client.direction ?? null,
+    bookingAddress: pick(/адрес\s*букинг|booking.*address/i),
+    bookingRange: pick(/дата\s*букинг|booking.*date|booking.*range/i),
+    submittedAt: pick(/дата\s*подач|submitted/i),
+    approvalAt: pick(/одобрен|approval/i),
+    notes: pick(/^заметк|notes$/i),
   };
 }
 
@@ -929,6 +1177,9 @@ export async function runWorkspaceAi(
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
   clientListContinuation: ClientListContinuationState | null = null,
+  conversationSummary: string | null = null,
+  memoryContext: { userId: string; chatId: string } | null = null,
+  caseMemory: WorkspaceCaseMemory | null = null,
 ): Promise<WorkspaceAiResult> {
   const totalStarted = Date.now();
   const prepared = await prepareWorkspaceRequest(
@@ -938,6 +1189,8 @@ export async function runWorkspaceAi(
     pendingClientCandidates,
     requestId,
     clientListContinuation,
+    sanitizeConversationSummary(conversationSummary),
+    sanitizeCaseMemory(caseMemory),
   );
 
   if (prepared.kind === "empty") {
@@ -951,6 +1204,13 @@ export async function runWorkspaceAi(
   }
 
   if (prepared.kind === "direct") {
+    const memory = await attachRefreshedConversationMemory({
+      userId: memoryContext?.userId,
+      chatId: memoryContext?.chatId,
+      history,
+      userMessage,
+      assistantReply: prepared.reply,
+    });
     return {
       reply: prepared.reply,
       sources: prepared.sources,
@@ -959,6 +1219,7 @@ export async function runWorkspaceAi(
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
       clientListContinuation: prepared.clientListContinuation ?? null,
+      ...memory,
     };
   }
 
@@ -985,6 +1246,14 @@ export async function runWorkspaceAi(
     }
     prepared.trace.responseOk = true;
     logWorkspaceAiTrace(prepared.trace);
+    const memory = await attachRefreshedConversationMemory({
+      userId: memoryContext?.userId,
+      chatId: memoryContext?.chatId,
+      history,
+      userMessage,
+      assistantReply: guarded.answer,
+      clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
+    });
     return {
       reply: guarded.answer,
       sources: prepared.sources,
@@ -992,6 +1261,7 @@ export async function runWorkspaceAi(
       requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
+      ...memory,
     };
   }
 
@@ -1021,6 +1291,9 @@ export async function* runWorkspaceAiStream(
   pendingClientCandidates: ClientContext[] | null = null,
   requestId: string = createAiRequestId(),
   clientListContinuation: ClientListContinuationState | null = null,
+  conversationSummary: string | null = null,
+  memoryContext: { userId: string; chatId: string } | null = null,
+  caseMemory: WorkspaceCaseMemory | null = null,
 ): AsyncGenerator<string | WorkspaceAiStreamMeta | WorkspaceAiStreamStatus> {
   const totalStarted = Date.now();
   yield { status: "context" };
@@ -1032,6 +1305,8 @@ export async function* runWorkspaceAiStream(
     pendingClientCandidates,
     requestId,
     clientListContinuation,
+    sanitizeConversationSummary(conversationSummary),
+    sanitizeCaseMemory(caseMemory),
   );
 
   if (prepared.kind === "empty") {
@@ -1045,6 +1320,13 @@ export async function* runWorkspaceAiStream(
   }
 
   if (prepared.kind === "direct") {
+    const memory = await attachRefreshedConversationMemory({
+      userId: memoryContext?.userId,
+      chatId: memoryContext?.chatId,
+      history,
+      userMessage,
+      assistantReply: prepared.reply,
+    });
     yield {
       sources: prepared.sources,
       demo: false,
@@ -1052,6 +1334,7 @@ export async function* runWorkspaceAiStream(
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
       clientListContinuation: prepared.clientListContinuation ?? null,
+      ...memory,
     };
     yield prepared.reply;
     return;
@@ -1072,6 +1355,7 @@ export async function* runWorkspaceAiStream(
     prepared.contextBlock.includes("UNKNOWN_INSUFFICIENT") ||
     /доход|income|минимал/i.test(prepared.trimmed);
   let buffered = "";
+  let streamed = "";
   let hasContent = false;
   for await (const event of streamChatCompletionResult(
     prepared.messages,
@@ -1082,6 +1366,7 @@ export async function* runWorkspaceAiStream(
       if (mayNeedGroundingGuard) {
         buffered += event.content;
       } else {
+        streamed += event.content;
         yield event.content;
       }
       continue;
@@ -1106,6 +1391,7 @@ export async function* runWorkspaceAiStream(
       prepared.trace.responseOk = true;
     }
 
+    let finalAnswer = streamed;
     if (mayNeedGroundingGuard && buffered) {
       const guarded = applyPostAnswerGroundingGuards({
         answer: buffered,
@@ -1115,10 +1401,36 @@ export async function* runWorkspaceAiStream(
       for (const note of guarded.notes) {
         prepared.trace.notes.push(note);
       }
+      finalAnswer = guarded.answer;
       yield guarded.answer;
     }
 
     logWorkspaceAiTrace(prepared.trace);
+
+    if (finalAnswer.trim()) {
+      const memory = await attachRefreshedConversationMemory({
+        userId: memoryContext?.userId,
+        chatId: memoryContext?.chatId,
+        history,
+        userMessage,
+        assistantReply: finalAnswer,
+        clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
+      });
+      if (
+        memory.conversationSummary != null ||
+        memory.summaryThroughMessageCount != null ||
+        memory.caseMemory != null
+      ) {
+        yield {
+          sources: prepared.sources,
+          demo: false,
+          requestId: prepared.requestId,
+          pendingClientCandidates: prepared.pendingClientCandidates,
+          needsClientSelection: prepared.needsClientSelection,
+          ...memory,
+        };
+      }
+    }
   }
 
   if (!hasContent) {

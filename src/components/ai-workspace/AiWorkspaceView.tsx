@@ -15,6 +15,11 @@ import type { ClientListContinuationState } from "@/lib/ai/client-list-continuat
 import {
   resolveClientListContinuationFromHistory,
 } from "@/lib/ai/client-list-continuation";
+import {
+  selectRecentHistoryTurns,
+  WORKSPACE_RECENT_HISTORY_TURNS,
+} from "@/lib/ai/workspace-conversation-memory";
+import type { WorkspaceCaseMemory } from "@/lib/ai/workspace-case-memory";
 
 import type {
 
@@ -93,6 +98,26 @@ const PRESETS = [
 
   },
 
+  {
+
+    icon: "fa-file-signature",
+
+    label: "Данные для заявления",
+
+    text: "Собери данные для заполнения заявления по клиенту",
+
+  },
+
+  {
+
+    icon: "fa-globe",
+
+    label: "Актуально в сети",
+
+    text: "Проверь в интернете актуальные требования Digital Nomad в Хорватии на сегодня",
+
+  },
+
 ];
 
 
@@ -166,6 +191,14 @@ export function AiWorkspaceView() {
   const [chatList, setChatList] = useState<WorkspaceChatSummary[]>([]);
 
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [conversationSummary, setConversationSummary] = useState<string | null>(
+    null,
+  );
+  const [summaryThroughMessageCount, setSummaryThroughMessageCount] =
+    useState(0);
+  const [caseMemory, setCaseMemory] = useState<WorkspaceCaseMemory | null>(
+    null,
+  );
 
   const [chatLimit, setChatLimit] = useState(100);
 
@@ -312,6 +345,9 @@ export function AiWorkspaceView() {
     setActiveChatId(chatId);
 
     setHistory(data.chat?.messages ?? []);
+    setConversationSummary(data.chat?.conversationSummary ?? null);
+    setSummaryThroughMessageCount(data.chat?.summaryThroughMessageCount ?? 0);
+    setCaseMemory(data.chat?.caseMemory ?? null);
 
     setSources([]);
 
@@ -340,6 +376,9 @@ export function AiWorkspaceView() {
     setActiveChatId(data.chat.id);
 
     setHistory([]);
+    setConversationSummary(null);
+    setSummaryThroughMessageCount(0);
+    setCaseMemory(null);
 
     setSources([]);
 
@@ -462,6 +501,9 @@ export function AiWorkspaceView() {
     let streamSources: string[] = [];
     let streamDemo = false;
     let streamContinuation: ClientListContinuationState | null = null;
+    let streamSummary: string | null | undefined;
+    let streamSummaryThrough: number | null | undefined;
+    let streamCaseMemory: WorkspaceCaseMemory | null | undefined;
     let metaReceived = false;
 
     const streamingHistory: ChatEntry[] = [
@@ -503,17 +545,38 @@ export function AiWorkspaceView() {
             pendingClientCandidates?: ClientContext[];
             needsClientSelection?: boolean;
             clientListContinuation?: ClientListContinuationState | null;
+            conversationSummary?: string | null;
+            summaryThroughMessageCount?: number | null;
+            caseMemory?: WorkspaceCaseMemory | null;
           };
-          streamSources = meta.sources ?? [];
-          streamDemo = Boolean(meta.demo);
-          streamContinuation = meta.clientListContinuation ?? null;
+          if (meta.sources) {
+            streamSources = meta.sources;
+            setSources(streamSources);
+          }
+          if (typeof meta.demo === "boolean") {
+            streamDemo = meta.demo;
+            setDemo(streamDemo);
+          }
+          if (meta.clientListContinuation !== undefined) {
+            streamContinuation = meta.clientListContinuation ?? null;
+          }
+          if (meta.conversationSummary !== undefined) {
+            streamSummary = meta.conversationSummary;
+          }
+          if (
+            meta.summaryThroughMessageCount !== undefined &&
+            meta.summaryThroughMessageCount !== null
+          ) {
+            streamSummaryThrough = meta.summaryThroughMessageCount;
+          }
+          if (meta.caseMemory !== undefined) {
+            streamCaseMemory = meta.caseMemory;
+          }
           metaReceived = true;
-          setSources(streamSources);
-          setDemo(streamDemo);
           if (meta.needsClientSelection && meta.pendingClientCandidates) {
             setPendingClientCandidates(meta.pendingClientCandidates);
             setNeedsClientSelection(true);
-          } else {
+          } else if (meta.needsClientSelection === false) {
             setPendingClientCandidates([]);
             setNeedsClientSelection(false);
           }
@@ -563,6 +626,15 @@ export function AiWorkspaceView() {
       },
     ];
     await persistChat(chatId, finalHistory);
+    if (streamSummary !== undefined) {
+      setConversationSummary(streamSummary);
+    }
+    if (streamSummaryThrough != null) {
+      setSummaryThroughMessageCount(streamSummaryThrough);
+    }
+    if (streamCaseMemory !== undefined) {
+      setCaseMemory(streamCaseMemory);
+    }
     return finalHistory;
   }
 
@@ -628,12 +700,21 @@ export function AiWorkspaceView() {
 
           message: trimmed,
 
-          history: history.slice(-4).map((turn) => ({
+          history: selectRecentHistoryTurns(
+            history,
+            WORKSPACE_RECENT_HISTORY_TURNS,
+          ).map((turn) => ({
             role: turn.role,
             content: turn.content,
           })),
 
           mode: responseMode,
+
+          chatId,
+
+          conversationSummary: conversationSummary ?? undefined,
+
+          caseMemory: caseMemory ?? undefined,
 
           pendingClientCandidates:
             pendingClientCandidates.length > 0
@@ -676,6 +757,12 @@ export function AiWorkspaceView() {
 
         clientListContinuation?: ClientListContinuationState | null;
 
+        conversationSummary?: string | null;
+
+        summaryThroughMessageCount?: number | null;
+
+        caseMemory?: WorkspaceCaseMemory | null;
+
       };
 
 
@@ -694,6 +781,19 @@ export function AiWorkspaceView() {
       } else {
         setPendingClientCandidates([]);
         setNeedsClientSelection(false);
+      }
+
+      if (data.conversationSummary !== undefined) {
+        setConversationSummary(data.conversationSummary);
+      }
+      if (
+        data.summaryThroughMessageCount !== undefined &&
+        data.summaryThroughMessageCount !== null
+      ) {
+        setSummaryThroughMessageCount(data.summaryThroughMessageCount);
+      }
+      if (data.caseMemory !== undefined) {
+        setCaseMemory(data.caseMemory);
       }
 
       const continuation = data.clientListContinuation ?? null;

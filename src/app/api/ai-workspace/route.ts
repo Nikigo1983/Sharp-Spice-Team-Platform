@@ -7,6 +7,8 @@ import {
 import type { ClientContext } from "@/lib/ai/client-context";
 import type { ClientListContinuationState } from "@/lib/ai/client-list-continuation";
 import { sanitizeClientListContinuation } from "@/lib/ai/client-list-continuation";
+import { sanitizeConversationSummary } from "@/lib/ai/workspace-conversation-memory";
+import { sanitizeCaseMemory } from "@/lib/ai/workspace-case-memory";
 import {
   sanitizeClientContextsForTransport,
 } from "@/lib/ai/context-redaction";
@@ -37,6 +39,9 @@ export async function POST(request: Request) {
     mode?: string;
     pendingClientCandidates?: ClientContext[];
     clientListContinuation?: ClientListContinuationState | null;
+    conversationSummary?: string | null;
+    caseMemory?: unknown;
+    chatId?: string | null;
   };
 
   const mode = parseMode(body.mode);
@@ -47,6 +52,17 @@ export async function POST(request: Request) {
   const clientListContinuation = sanitizeClientListContinuation(
     body.clientListContinuation ?? null,
   );
+  const conversationSummary = sanitizeConversationSummary(
+    body.conversationSummary ?? null,
+  );
+  const caseMemory = sanitizeCaseMemory(body.caseMemory ?? null);
+  const chatId =
+    typeof body.chatId === "string" && body.chatId.trim()
+      ? body.chatId.trim()
+      : null;
+  const memoryContext = chatId
+    ? { userId: session.id, chatId }
+    : null;
   const { stream } = getWorkspaceAiConfig();
 
   if (stream) {
@@ -61,6 +77,9 @@ export async function POST(request: Request) {
             pendingClientCandidates,
             requestId,
             clientListContinuation,
+            conversationSummary,
+            memoryContext,
+            caseMemory,
           )) {
             if (typeof chunk === "string") {
               controller.enqueue(
@@ -91,6 +110,10 @@ export async function POST(request: Request) {
                   ),
                   needsClientSelection: chunk.needsClientSelection,
                   clientListContinuation: chunk.clientListContinuation ?? null,
+                  conversationSummary: chunk.conversationSummary ?? null,
+                  summaryThroughMessageCount:
+                    chunk.summaryThroughMessageCount ?? null,
+                  caseMemory: chunk.caseMemory ?? null,
                 })}\n\n`,
               ),
             );
@@ -132,6 +155,9 @@ export async function POST(request: Request) {
       pendingClientCandidates,
       requestId,
       clientListContinuation,
+      conversationSummary,
+      memoryContext,
+      caseMemory,
     );
     return NextResponse.json(
       {

@@ -3,6 +3,7 @@ import {
   isEmigrantDrivePrimaryQuery,
   isPassportNumberLookupQuery,
 } from "@/lib/ai/query-intent-signals";
+import { shouldUseInternetSearch } from "@/lib/ai/workspace-web-search";
 
 export type WorkspaceQueryIntent = {
   /** Букинг/адрес конкретного клиента — ответ из таблицы без AI */
@@ -18,6 +19,8 @@ export type WorkspaceQueryIntent = {
   needsClients: boolean;
   needsEmigrantDesk: boolean;
   needsFormgrid: boolean;
+  /** Внешний web search — только когда явно нужны актуальные внешние факты */
+  needsInternet: boolean;
 };
 
 export {
@@ -30,5 +33,9 @@ export {
  * Full hybrid routing: resolveWorkspaceRouting() in workspace-router.ts.
  */
 export function detectWorkspaceIntent(query: string): WorkspaceQueryIntent {
-  return routeWorkspaceQueryByRules(query).decision.workspaceIntent;
+  const intent = routeWorkspaceQueryByRules(query).decision.workspaceIntent;
+  return {
+    ...intent,
+    needsInternet: shouldUseInternetSearch(query),
+  };
 }

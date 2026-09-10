@@ -8,6 +8,7 @@ import { fetchWithTlsFallback } from "@/lib/google-fetch";
 import { isDocFillIntent } from "@/lib/ai/workspace-doc-fill";
 import { isPassportNumberLookupQuery } from "@/lib/ai/query-intent-signals";
 import { isClientListQuery } from "@/lib/ai/client-search-intent";
+import { isQuestionnaireAnswerIntent } from "@/lib/ai/workspace-questionnaire-answers";
 
 export type WebSearchHit = {
   title: string;
@@ -53,6 +54,7 @@ export function shouldUseInternetSearch(query: string): boolean {
   const trimmed = query.trim();
   if (!trimmed) return false;
   if (isDocFillIntent(trimmed)) return false;
+  if (isQuestionnaireAnswerIntent(trimmed)) return false;
   if (isPassportNumberLookupQuery(trimmed)) return false;
   if (isClientListQuery(trimmed)) return false;
   if (INTERNAL_ONLY_RE.test(trimmed) && !EXPLICIT_INTERNET_RE.test(trimmed)) {

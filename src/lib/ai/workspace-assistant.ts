@@ -87,6 +87,11 @@ import {
   isDocFillIntent,
 } from "@/lib/ai/workspace-doc-fill";
 import {
+  buildQuestionnaireAnswerPromptAddon,
+  isQuestionnaireAnswerIntent,
+  WORKSPACE_QUESTIONNAIRE_MAX_TOKENS,
+} from "@/lib/ai/workspace-questionnaire-answers";
+import {
   caseMemoryHasFacts,
   formatCaseMemoryForPrompt,
   sanitizeCaseMemory,
@@ -331,6 +336,11 @@ function buildChatMessages(
   const internetNote = contextWithMemory.includes("ИНТЕРНЕТ (web search)")
     ? "\n\nБлок ИНТЕРНЕТ — только для внешних актуальных фактов. Для данных клиента он слабее CLIENT CONTEXT. В ответе указывай URL источников."
     : "";
+  const questionnaireNote = contextWithMemory.includes(
+    "РЕЖИМ: ОФИЦИАЛЬНЫЕ ОТВЕТЫ НА АНКЕТУ",
+  )
+    ? "\n\nСейчас режим официальных ответов на анкету: игнорируй краткий формат, сохрани текст каждого вопроса и дай statement-ответ на английском. Не выдумывай недостающие факты."
+    : "";
   const groundingNote = hasAuthoritative
     ? `\n\n${AUTHORITATIVE_EVIDENCE_BANNER}\n${buildHistoryPrecedenceNote()}`
     : "\n\nЗапрос без обязательных authoritative-блоков: можно выполнить обычную генерацию/редактирование/перевод без секции «Источники:», если факты платформы не используются.";
@@ -340,17 +350,20 @@ function buildChatMessages(
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${memoryNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}${internetNote}\n\n${contextWithMemory}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${memoryNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}${internetNote}${questionnaireNote}\n\n${contextWithMemory}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }
 
-function getCompletionOptions(): ChatCompletionOptions {
+function getCompletionOptions(
+  overrides?: Partial<ChatCompletionOptions>,
+): ChatCompletionOptions {
   const workspaceConfig = getWorkspaceAiConfig();
   return {
     temperature: workspaceConfig.temperature,
     maxTokens: workspaceConfig.maxTokens,
     model: workspaceConfig.model,
+    ...overrides,
   };
 }
 
@@ -536,6 +549,7 @@ async function prepareWorkspaceRequest(
       needsClientSelection?: boolean;
       requestId: string;
       trace: WorkspaceAiTrace;
+      maxTokens?: number;
     }
 > {
   const started = Date.now();
@@ -812,7 +826,11 @@ async function prepareWorkspaceRequest(
     };
   }
 
-  if (isDocFillIntent(trimmed) && !needsClientSelection) {
+  if (
+    isDocFillIntent(trimmed) &&
+    !isQuestionnaireAnswerIntent(trimmed) &&
+    !needsClientSelection
+  ) {
     if (clientContext || caseMemoryHasFacts(caseMemory)) {
       const pack = buildDocFillPack({
         query: trimmed,
@@ -1023,22 +1041,39 @@ async function prepareWorkspaceRequest(
     webSearch?.text ?? null,
   );
 
-  const fillAwareContextBlock = isDocFillIntent(trimmed)
-    ? [
-        buildDocFillPromptAddon(
-          clientContext || caseMemoryHasFacts(caseMemory)
-            ? buildDocFillPack({
-                query: trimmed,
-                client: clientContext,
-                caseMemory,
-              })
-            : null,
-        ),
-        contextBlock,
-      ]
+  const questionnaireMode = isQuestionnaireAnswerIntent(trimmed);
+  const effectiveMode: WorkspaceResponseMode = questionnaireMode
+    ? "detailed"
+    : mode;
+
+  const fillAwareContextBlock = questionnaireMode
+    ? [buildQuestionnaireAnswerPromptAddon(trimmed), contextBlock]
         .filter(Boolean)
         .join("\n\n")
-    : contextBlock;
+    : isDocFillIntent(trimmed)
+      ? [
+          buildDocFillPromptAddon(
+            clientContext || caseMemoryHasFacts(caseMemory)
+              ? buildDocFillPack({
+                  query: trimmed,
+                  client: clientContext,
+                  caseMemory,
+                })
+              : null,
+          ),
+          contextBlock,
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      : contextBlock;
+
+  if (questionnaireMode) {
+    trace.notes.push("questionnaire_answers_mode");
+    trace.selectedRoutes = [
+      ...(trace.selectedRoutes ?? []),
+      "questionnaire_answers",
+    ];
+  }
 
   trace.clientContextCount = clientContext ? 1 : 0;
   trace.clientCandidatesCount = clientCandidates?.length ?? 0;
@@ -1059,7 +1094,7 @@ async function prepareWorkspaceRequest(
     trimmed,
     fillAwareContextBlock,
     history,
-    mode,
+    effectiveMode,
     conversationSummary,
     caseMemory,
   );
@@ -1076,6 +1111,12 @@ async function prepareWorkspaceRequest(
     needsClientSelection,
     requestId,
     trace,
+    maxTokens: questionnaireMode
+      ? Math.max(
+          getWorkspaceAiConfig().maxTokens,
+          WORKSPACE_QUESTIONNAIRE_MAX_TOKENS,
+        )
+      : undefined,
   };
 }
 
@@ -1225,7 +1266,9 @@ export async function runWorkspaceAi(
 
   const completion = await createChatCompletionResult(
     prepared.messages,
-    getCompletionOptions(),
+    getCompletionOptions(
+      prepared.maxTokens ? { maxTokens: prepared.maxTokens } : undefined,
+    ),
   );
   prepared.trace.requestedModel = completion.requestedModel;
   prepared.trace.returnedModel = completion.returnedModel;
@@ -1359,7 +1402,9 @@ export async function* runWorkspaceAiStream(
   let hasContent = false;
   for await (const event of streamChatCompletionResult(
     prepared.messages,
-    getCompletionOptions(),
+    getCompletionOptions(
+      prepared.maxTokens ? { maxTokens: prepared.maxTokens } : undefined,
+    ),
   )) {
     if (event.type === "delta") {
       hasContent = true;

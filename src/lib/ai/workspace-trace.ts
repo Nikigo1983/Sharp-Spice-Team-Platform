@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { redactForLogging, redactSensitiveText } from "@/lib/ai/context-redaction";
 import type { WorkspaceQueryIntent } from "@/lib/ai/query-intent";
 import type { WorkspaceRouterDecision } from "@/lib/ai/workspace-router-types";
+import { sanitizeToolCallTraceList } from "@/lib/ai/workspace-tools/trace-sanitize";
 
 export type KbGroundingState =
   | "KB_SKIPPED"
@@ -123,6 +124,24 @@ export type WorkspaceAiTrace = {
     total?: number;
   };
   notes: string[];
+  /** Phase 1 agent tool-calling observability (safe). */
+  agentMode: boolean;
+  astraRounds: number;
+  toolCallCount: number;
+  toolCalls: Array<{
+    toolName: string;
+    toolCallId?: string;
+    ok: boolean;
+    errorCode: string | null;
+    latencyMs: number;
+    resultCount: number | null;
+    outputChars: number;
+    cacheHit: boolean;
+  }>;
+  loopStopReason: string | null;
+  totalToolChars: number;
+  finalSourceSet: string[];
+  astraCalled: boolean;
 };
 
 const TRACE_STORE_MAX = 200;
@@ -182,6 +201,14 @@ export function createEmptyWorkspaceAiTrace(
     responseOk: false,
     latencyMs: {},
     notes: [],
+    agentMode: false,
+    astraRounds: 0,
+    toolCallCount: 0,
+    toolCalls: [],
+    loopStopReason: null,
+    totalToolChars: 0,
+    finalSourceSet: [],
+    astraCalled: false,
   };
 }
 
@@ -331,6 +358,14 @@ export function serializeWorkspaceAiTraceForLog(
     responseOk: trace.responseOk,
     latencyMs: trace.latencyMs,
     notes: trace.notes,
+    agentMode: trace.agentMode,
+    astraRounds: trace.astraRounds,
+    toolCallCount: trace.toolCallCount,
+    toolCalls: sanitizeToolCallTraceList(trace.toolCalls),
+    loopStopReason: trace.loopStopReason,
+    totalToolChars: trace.totalToolChars,
+    finalSourceSet: trace.finalSourceSet,
+    astraCalled: trace.astraCalled,
   };
 
   return redactForLogging(payload) as Record<string, unknown>;

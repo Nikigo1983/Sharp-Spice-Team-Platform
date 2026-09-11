@@ -45,8 +45,16 @@ import {
 } from "@/lib/ai/client-fact-lookup";
 import {
   getWorkspaceAiConfig,
+  shouldEnterWorkspaceAgentPath,
+  type WorkspaceAgentActor,
   type WorkspaceResponseMode,
 } from "@/lib/ai/workspace-config";
+import {
+  buildWorkspaceAgentMessages,
+  incrementWorkspaceToolMetric,
+  runWorkspaceAgentToolLoop,
+  type AgentToolStatusEvent,
+} from "@/lib/ai/workspace-tools/index";
 import {
   formatClientCandidatesForAi,
   formatClientContextBlock,
@@ -160,6 +168,28 @@ export type WorkspaceAiResult = {
   caseMemory?: WorkspaceCaseMemory | null;
 };
 
+/** Server-side identity for conversation memory + internal agent eligibility. */
+export type WorkspaceMemoryContext = {
+  userId: string;
+  chatId: string | null;
+  email?: string;
+  role?: WorkspaceAgentActor["role"];
+};
+
+function actorFromMemoryContext(
+  memoryContext: WorkspaceMemoryContext | null,
+): WorkspaceAgentActor | null {
+  if (!memoryContext?.userId || !memoryContext.email || !memoryContext.role) {
+    return null;
+  }
+  return {
+    id: memoryContext.userId,
+    userId: memoryContext.userId,
+    email: memoryContext.email,
+    role: memoryContext.role,
+  };
+}
+
 export type WorkspaceAiStreamMeta = {
   sources: string[];
   demo: boolean;
@@ -173,7 +203,17 @@ export type WorkspaceAiStreamMeta = {
 };
 
 export type WorkspaceAiStreamStatus = {
-  status: "context" | "generating";
+  status:
+    | "context"
+    | "generating"
+    | "tool_started"
+    | "tool_completed"
+    | "tool_failed";
+  tool?: string;
+  label?: string;
+  ok?: boolean;
+  errorCode?: string | null;
+  resultCount?: number | null;
 };
 
 function pendingCandidatesForTransport(
@@ -524,6 +564,8 @@ async function prepareWorkspaceRequest(
   clientListContinuation: ClientListContinuationState | null = null,
   conversationSummary: string | null = null,
   caseMemory: WorkspaceCaseMemory | null = null,
+  forceLegacy = false,
+  actor: WorkspaceAgentActor | null = null,
 ): Promise<
   | { kind: "empty"; requestId: string; trace: WorkspaceAiTrace }
   | {
@@ -536,6 +578,19 @@ async function prepareWorkspaceRequest(
       requestId: string;
       trace: WorkspaceAiTrace;
       groundingBlocked?: boolean;
+    }
+  | {
+      kind: "agent";
+      trimmed: string;
+      mode: WorkspaceResponseMode;
+      history: WorkspaceChatTurn[];
+      conversationSummary: string | null;
+      caseMemory: WorkspaceCaseMemory | null;
+      clientContext: ResolvedClientContext | null;
+      pendingClientCandidates?: ClientContext[];
+      needsClientSelection?: boolean;
+      requestId: string;
+      trace: WorkspaceAiTrace;
     }
   | {
       kind: "ai";
@@ -910,6 +965,41 @@ async function prepareWorkspaceRequest(
     }
   }
 
+  // Phase 1 agent path: after deterministic directs only. Default flag = off.
+  // Requires mode=internal (staff) or mode=on. Shadow is non-executing.
+  if (!forceLegacy && !isQuestionnaireAnswerIntent(trimmed)) {
+    const cfg = getWorkspaceAiConfig();
+    if (
+      shouldEnterWorkspaceAgentPath({
+        mode: cfg.agentToolsMode,
+        actor,
+        forceLegacy,
+      })
+    ) {
+      incrementWorkspaceToolMetric("agent_path_entered");
+      trace.agentMode = true;
+      trace.selectedRoutes = ["agent_tools"];
+      trace.latencyMs.prepare = Date.now() - started;
+      return {
+        kind: "agent",
+        trimmed,
+        mode,
+        history,
+        conversationSummary,
+        caseMemory,
+        clientContext,
+        pendingClientCandidates: pendingCandidatesForTransport(pendingForUi),
+        needsClientSelection,
+        requestId,
+        trace,
+      };
+    }
+    if (cfg.agentToolsMode === "internal") {
+      incrementWorkspaceToolMetric("agent_path_skipped_ineligible");
+      trace.notes.push("agent_path_skipped_ineligible");
+    }
+  }
+
   const contextStarted = Date.now();
   let context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
   try {
@@ -1211,6 +1301,172 @@ function clientSnapshotFromResolved(
   };
 }
 
+async function executeAgentPrepared(params: {
+  prepared: {
+    kind: "agent";
+    trimmed: string;
+    mode: WorkspaceResponseMode;
+    history: WorkspaceChatTurn[];
+    conversationSummary: string | null;
+    caseMemory: WorkspaceCaseMemory | null;
+    clientContext: ResolvedClientContext | null;
+    pendingClientCandidates?: ClientContext[];
+    needsClientSelection?: boolean;
+    requestId: string;
+    trace: WorkspaceAiTrace;
+  };
+  memoryContext: WorkspaceMemoryContext | null;
+  userMessage: string;
+  history: WorkspaceChatTurn[];
+  stream: boolean;
+  onStatus?: (event: AgentToolStatusEvent) => void | Promise<void>;
+  onFinalDelta?: (delta: string) => void | Promise<void>;
+}): Promise<{
+  result: WorkspaceAiResult;
+  statusEvents: AgentToolStatusEvent[];
+} | null> {
+  const { prepared } = params;
+  const recent = selectRecentHistoryTurns(prepared.history).map((turn) => ({
+    role: turn.role,
+    content: turn.content,
+  }));
+
+  const activeClientId =
+    prepared.clientContext && !isMergedClientContext(prepared.clientContext)
+      ? prepared.clientContext.debugRow?.id?.trim() || null
+      : prepared.clientContext && isMergedClientContext(prepared.clientContext)
+        ? prepared.clientContext.parts.find((p) => p.source === "clients")
+            ?.debugRow?.id?.trim() || null
+        : null;
+
+  const messages = buildWorkspaceAgentMessages({
+    userMessage: prepared.trimmed,
+    history: recent,
+    baseSystemPrompt: buildWorkspaceSystemPrompt(prepared.mode),
+    conversationSummary: prepared.conversationSummary,
+    activeClientId,
+  });
+
+  if (caseMemoryHasFacts(prepared.caseMemory)) {
+    messages.splice(1, 0, {
+      role: "system",
+      content: formatCaseMemoryForPrompt(prepared.caseMemory!),
+    });
+  }
+
+  const toolContext = {
+    requestId: prepared.requestId,
+    userId: params.memoryContext?.userId ?? "anonymous",
+    chatId: params.memoryContext?.chatId ?? null,
+    activeClientId,
+  };
+
+  prepared.trace.agentMode = true;
+  prepared.trace.astraCalled = true;
+
+  try {
+    const loop = await runWorkspaceAgentToolLoop({
+      messages,
+      context: toolContext,
+      completionOptions: getCompletionOptions(),
+      streamFinalAnswer: params.stream,
+      onStatus: params.onStatus,
+      onFinalDelta: params.onFinalDelta,
+    });
+
+    prepared.trace.astraRounds = loop.astraRounds;
+    prepared.trace.toolCallCount = loop.toolCalls.length;
+    prepared.trace.toolCalls = loop.toolCalls;
+    prepared.trace.loopStopReason = loop.stopReason;
+    prepared.trace.totalToolChars = loop.totalToolChars;
+    prepared.trace.finalSourceSet = loop.finalSourceSet;
+    if (loop.lastCompletion) {
+      prepared.trace.requestedModel = loop.lastCompletion.requestedModel;
+      prepared.trace.returnedModel = loop.lastCompletion.returnedModel;
+      prepared.trace.usageInputTokens = loop.lastCompletion.usage.inputTokens;
+      prepared.trace.usageOutputTokens = loop.lastCompletion.usage.outputTokens;
+      prepared.trace.latencyMs.model = loop.lastCompletion.latencyMs;
+      prepared.trace.openRouterOk = loop.lastCompletion.ok;
+    }
+
+    if (!loop.answer) {
+      prepared.trace.notes.push(`agent_stop:${loop.stopReason}`);
+      prepared.trace.responseOk = false;
+      logWorkspaceAiTrace(prepared.trace);
+      return {
+        result: {
+          reply:
+            "Не удалось получить ответ. Уточните запрос или повторите позже.",
+          sources: loop.finalSourceSet,
+          demo: false,
+          requestId: prepared.requestId,
+          pendingClientCandidates: prepared.pendingClientCandidates,
+          needsClientSelection: prepared.needsClientSelection,
+        },
+        statusEvents: loop.statusEvents,
+      };
+    }
+
+    const guarded = applyPostAnswerGroundingGuards({
+      answer: loop.answer,
+      contextBlock: "",
+      query: prepared.trimmed,
+    });
+    for (const note of guarded.notes) {
+      prepared.trace.notes.push(note);
+    }
+    prepared.trace.responseOk = true;
+    logWorkspaceAiTrace(prepared.trace);
+
+    const memory = await attachRefreshedConversationMemory({
+      userId: params.memoryContext?.userId,
+      chatId: params.memoryContext?.chatId,
+      history: params.history,
+      userMessage: params.userMessage,
+      assistantReply: guarded.answer,
+      clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
+    });
+
+    const sources =
+      loop.finalSourceSet.length > 0
+        ? loop.finalSourceSet.map((tag) =>
+            tag === "KB" ? "Knowledge Base" : "Клиенты",
+          )
+        : ["Агент"];
+
+    return {
+      result: {
+        reply: guarded.answer,
+        sources,
+        demo: false,
+        requestId: prepared.requestId,
+        pendingClientCandidates: prepared.pendingClientCandidates,
+        needsClientSelection: prepared.needsClientSelection,
+        ...memory,
+      },
+      statusEvents: loop.statusEvents,
+    };
+  } catch (error) {
+    console.error(
+      `[workspace-ai][${prepared.requestId}] agent loop failed`,
+      error,
+    );
+    prepared.trace.notes.push("agent_loop_error");
+    prepared.trace.fallbackActivated = true;
+    logWorkspaceAiTrace(prepared.trace);
+    return {
+      result: {
+        reply:
+          "Сбой режима агента. Повторите запрос (legacy можно включить AI_WORKSPACE_AGENT_TOOLS=off).",
+        sources: [],
+        demo: false,
+        requestId: prepared.requestId,
+      },
+      statusEvents: [],
+    };
+  }
+}
+
 export async function runWorkspaceAi(
   userMessage: string,
   history: WorkspaceChatTurn[] = [],
@@ -1219,10 +1475,11 @@ export async function runWorkspaceAi(
   requestId: string = createAiRequestId(),
   clientListContinuation: ClientListContinuationState | null = null,
   conversationSummary: string | null = null,
-  memoryContext: { userId: string; chatId: string } | null = null,
+  memoryContext: WorkspaceMemoryContext | null = null,
   caseMemory: WorkspaceCaseMemory | null = null,
 ): Promise<WorkspaceAiResult> {
   const totalStarted = Date.now();
+  const actor = actorFromMemoryContext(memoryContext);
   const prepared = await prepareWorkspaceRequest(
     userMessage,
     history,
@@ -1232,6 +1489,8 @@ export async function runWorkspaceAi(
     clientListContinuation,
     sanitizeConversationSummary(conversationSummary),
     sanitizeCaseMemory(caseMemory),
+    false,
+    actor,
   );
 
   if (prepared.kind === "empty") {
@@ -1264,6 +1523,82 @@ export async function runWorkspaceAi(
     };
   }
 
+  if (prepared.kind === "agent") {
+    const agentResult = await executeAgentPrepared({
+      prepared,
+      memoryContext,
+      userMessage,
+      history,
+      stream: false,
+    });
+    if (agentResult) return agentResult.result;
+
+    // Shadow / failure: fall back to legacy fixed-context path.
+    const legacy = await prepareWorkspaceRequest(
+      userMessage,
+      history,
+      mode,
+      pendingClientCandidates,
+      requestId,
+      clientListContinuation,
+      sanitizeConversationSummary(conversationSummary),
+      sanitizeCaseMemory(caseMemory),
+      true,
+      actor,
+    );
+    if (legacy.kind === "ai") {
+      legacy.trace.notes.push("agent_fallback_legacy");
+      legacy.trace.fallbackActivated = true;
+      const completion = await createChatCompletionResult(
+        legacy.messages,
+        getCompletionOptions(
+          legacy.maxTokens ? { maxTokens: legacy.maxTokens } : undefined,
+        ),
+      );
+      legacy.trace.requestedModel = completion.requestedModel;
+      legacy.trace.returnedModel = completion.returnedModel;
+      legacy.trace.usageInputTokens = completion.usage.inputTokens;
+      legacy.trace.usageOutputTokens = completion.usage.outputTokens;
+      legacy.trace.latencyMs.model = completion.latencyMs;
+      legacy.trace.openRouterOk = completion.ok;
+      legacy.trace.astraCalled = true;
+      legacy.trace.latencyMs.total = Date.now() - totalStarted;
+      if (completion.content) {
+        const guarded = applyPostAnswerGroundingGuards({
+          answer: completion.content,
+          contextBlock: legacy.contextBlock,
+          query: legacy.trimmed,
+        });
+        legacy.trace.responseOk = true;
+        logWorkspaceAiTrace(legacy.trace);
+        const memory = await attachRefreshedConversationMemory({
+          userId: memoryContext?.userId,
+          chatId: memoryContext?.chatId,
+          history,
+          userMessage,
+          assistantReply: guarded.answer,
+          clientSnapshot: clientSnapshotFromResolved(legacy.clientContext),
+        });
+        return {
+          reply: guarded.answer,
+          sources: legacy.sources,
+          demo: false,
+          requestId: legacy.requestId,
+          pendingClientCandidates: legacy.pendingClientCandidates,
+          needsClientSelection: legacy.needsClientSelection,
+          ...memory,
+        };
+      }
+    }
+    return {
+      reply:
+        "Не удалось получить ответ агента. Повторите запрос или отключите AI_WORKSPACE_AGENT_TOOLS.",
+      sources: [],
+      demo: false,
+      requestId: prepared.requestId,
+    };
+  }
+
   const completion = await createChatCompletionResult(
     prepared.messages,
     getCompletionOptions(
@@ -1276,6 +1611,7 @@ export async function runWorkspaceAi(
   prepared.trace.usageOutputTokens = completion.usage.outputTokens;
   prepared.trace.latencyMs.model = completion.latencyMs;
   prepared.trace.openRouterOk = completion.ok;
+  prepared.trace.astraCalled = true;
   prepared.trace.latencyMs.total = Date.now() - totalStarted;
 
   if (completion.content) {
@@ -1335,12 +1671,13 @@ export async function* runWorkspaceAiStream(
   requestId: string = createAiRequestId(),
   clientListContinuation: ClientListContinuationState | null = null,
   conversationSummary: string | null = null,
-  memoryContext: { userId: string; chatId: string } | null = null,
+  memoryContext: WorkspaceMemoryContext | null = null,
   caseMemory: WorkspaceCaseMemory | null = null,
 ): AsyncGenerator<string | WorkspaceAiStreamMeta | WorkspaceAiStreamStatus> {
   const totalStarted = Date.now();
   yield { status: "context" };
 
+  const actor = actorFromMemoryContext(memoryContext);
   const prepared = await prepareWorkspaceRequest(
     userMessage,
     history,
@@ -1350,6 +1687,8 @@ export async function* runWorkspaceAiStream(
     clientListContinuation,
     sanitizeConversationSummary(conversationSummary),
     sanitizeCaseMemory(caseMemory),
+    false,
+    actor,
   );
 
   if (prepared.kind === "empty") {
@@ -1380,6 +1719,116 @@ export async function* runWorkspaceAiStream(
       ...memory,
     };
     yield prepared.reply;
+    return;
+  }
+
+  if (prepared.kind === "agent") {
+    yield { status: "generating" };
+    const deltas: string[] = [];
+    const agentOutcome = await executeAgentPrepared({
+      prepared,
+      memoryContext,
+      userMessage,
+      history,
+      stream: true,
+      onFinalDelta: async (delta) => {
+        deltas.push(delta);
+      },
+    });
+
+    if (agentOutcome) {
+      for (const event of agentOutcome.statusEvents) {
+        if (event.type === "tool_started") {
+          yield {
+            status: "tool_started",
+            tool: event.tool,
+            label: event.label,
+          };
+        } else if (event.type === "tool_completed") {
+          yield {
+            status: "tool_completed",
+            tool: event.tool,
+            ok: event.ok,
+            resultCount: event.resultCount,
+          };
+        } else if (event.type === "tool_failed") {
+          yield {
+            status: "tool_failed",
+            tool: event.tool,
+            errorCode: event.errorCode,
+          };
+        }
+      }
+      const agentResult = agentOutcome.result;
+      yield {
+        sources: agentResult.sources,
+        demo: false,
+        requestId: agentResult.requestId,
+        pendingClientCandidates: agentResult.pendingClientCandidates,
+        needsClientSelection: agentResult.needsClientSelection,
+        conversationSummary: agentResult.conversationSummary,
+        summaryThroughMessageCount: agentResult.summaryThroughMessageCount,
+        caseMemory: agentResult.caseMemory,
+      };
+      if (deltas.length > 0) {
+        for (const d of deltas) yield d;
+      } else {
+        yield agentResult.reply;
+      }
+      return;
+    }
+
+    // Shadow fallback to legacy stream path
+    const legacy = await prepareWorkspaceRequest(
+      userMessage,
+      history,
+      mode,
+      pendingClientCandidates,
+      requestId,
+      clientListContinuation,
+      sanitizeConversationSummary(conversationSummary),
+      sanitizeCaseMemory(caseMemory),
+      true,
+      actor,
+    );
+    if (legacy.kind !== "ai") {
+      yield {
+        sources: [],
+        demo: false,
+        requestId: prepared.requestId,
+      };
+      yield "Не удалось получить ответ агента.";
+      return;
+    }
+    yield {
+      sources: legacy.sources,
+      demo: false,
+      requestId: legacy.requestId,
+      pendingClientCandidates: legacy.pendingClientCandidates,
+      needsClientSelection: legacy.needsClientSelection,
+    };
+    yield { status: "generating" };
+    let streamed = "";
+    for await (const event of streamChatCompletionResult(
+      legacy.messages,
+      getCompletionOptions(
+        legacy.maxTokens ? { maxTokens: legacy.maxTokens } : undefined,
+      ),
+    )) {
+      if (event.type === "delta") {
+        streamed += event.content;
+        yield event.content;
+        continue;
+      }
+      legacy.trace.notes.push("agent_fallback_legacy_stream");
+      legacy.trace.astraCalled = true;
+      legacy.trace.openRouterOk = event.result.ok;
+      legacy.trace.responseOk = event.result.ok;
+      logWorkspaceAiTrace(legacy.trace);
+    }
+    if (!streamed.trim()) {
+      yield buildDemoReply(legacy.trimmed, legacy.context);
+    }
     return;
   }
 

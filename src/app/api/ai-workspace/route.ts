@@ -60,9 +60,14 @@ export async function POST(request: Request) {
     typeof body.chatId === "string" && body.chatId.trim()
       ? body.chatId.trim()
       : null;
-  const memoryContext = chatId
-    ? { userId: session.id, chatId }
-    : null;
+  // Always pass session identity so internal agent eligibility can be evaluated
+  // even when conversation memory (chatId) is not attached yet.
+  const memoryContext = {
+    userId: session.id,
+    chatId,
+    email: session.email,
+    role: session.role,
+  };
   const { stream } = getWorkspaceAiConfig();
 
   if (stream) {
@@ -93,7 +98,14 @@ export async function POST(request: Request) {
             if ("status" in chunk) {
               controller.enqueue(
                 encoder.encode(
-                  `event: status\ndata: ${JSON.stringify({ phase: chunk.status })}\n\n`,
+                  `event: status\ndata: ${JSON.stringify({
+                    phase: chunk.status,
+                    tool: chunk.tool,
+                    label: chunk.label,
+                    ok: chunk.ok,
+                    errorCode: chunk.errorCode,
+                    resultCount: chunk.resultCount,
+                  })}\n\n`,
                 ),
               );
               continue;

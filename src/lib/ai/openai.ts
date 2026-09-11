@@ -8,15 +8,45 @@ import {
 } from "@/lib/ai/context-redaction";
 import { fetchWithTlsFallback } from "@/lib/google-fetch";
 
-export type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
+export type ChatMessageRole = "system" | "user" | "assistant" | "tool";
+
+export type ChatToolFunctionCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
 };
+
+export type ChatMessage = {
+  role: ChatMessageRole;
+  content: string | null;
+  tool_calls?: ChatToolFunctionCall[];
+  tool_call_id?: string;
+  name?: string;
+};
+
+export type ChatToolDefinition = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
+export type ChatToolChoice =
+  | "auto"
+  | "none"
+  | { type: "function"; function: { name: string } };
 
 export type ChatCompletionOptions = {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  tools?: ChatToolDefinition[];
+  tool_choice?: ChatToolChoice;
 };
 
 export type ChatCompletionUsage = {
@@ -32,6 +62,9 @@ export type ChatCompletionResult = {
   usage: ChatCompletionUsage;
   latencyMs: number;
   error?: string;
+  /** Present when the model requested tool calls instead of (or with) text. */
+  toolCalls?: ChatToolFunctionCall[];
+  finishReason?: string | null;
 };
 
 export { getAiRuntimeConfig, isAiConfigured, getAiSetupHint } from "@/lib/ai/config";
@@ -119,7 +152,44 @@ function buildRequestBody(
     payload.max_tokens = options.maxTokens;
   }
 
+  if (options?.tools && options.tools.length > 0) {
+    payload.tools = options.tools;
+    if (options.tool_choice !== undefined) {
+      payload.tool_choice = options.tool_choice;
+    }
+  }
+
   return JSON.stringify(payload);
+}
+
+function parseToolCalls(raw: unknown): ChatToolFunctionCall[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const parsed: ChatToolFunctionCall[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as {
+      id?: string;
+      type?: string;
+      function?: { name?: string; arguments?: string };
+    };
+    const name = item.function?.name?.trim();
+    if (!name) continue;
+    parsed.push({
+      id:
+        typeof item.id === "string" && item.id.trim()
+          ? item.id.trim()
+          : `tool_${parsed.length}`,
+      type: "function",
+      function: {
+        name,
+        arguments:
+          typeof item.function?.arguments === "string"
+            ? item.function.arguments
+            : "{}",
+      },
+    });
+  }
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 function parseUsage(raw: unknown): ChatCompletionUsage {
@@ -189,12 +259,25 @@ export async function createChatCompletionResult(
         const data = (await response.json()) as {
           model?: string;
           usage?: unknown;
-          choices?: { message?: { content?: string } }[];
+          choices?: {
+            finish_reason?: string | null;
+            message?: {
+              content?: string | null;
+              tool_calls?: unknown;
+            };
+          }[];
         };
-        const content = data.choices?.[0]?.message?.content?.trim() ?? null;
+        const message = data.choices?.[0]?.message;
+        const toolCalls = parseToolCalls(message?.tool_calls);
+        const rawContent = message?.content;
+        const content =
+          typeof rawContent === "string" && rawContent.trim()
+            ? rawContent.trim()
+            : null;
+        const ok = Boolean(content) || Boolean(toolCalls?.length);
         return {
           content,
-          ok: Boolean(content),
+          ok,
           requestedModel,
           returnedModel:
             typeof data.model === "string" && data.model.trim()
@@ -202,7 +285,9 @@ export async function createChatCompletionResult(
               : "NOT_AVAILABLE",
           usage: parseUsage(data.usage),
           latencyMs: Date.now() - started,
-          error: content ? undefined : "MODEL_EMPTY_RESPONSE",
+          error: ok ? undefined : "MODEL_EMPTY_RESPONSE",
+          toolCalls,
+          finishReason: data.choices?.[0]?.finish_reason ?? null,
         };
       }
 
@@ -352,6 +437,12 @@ export async function* streamChatCompletionResult(
     return;
   }
 
+  const { StreamToolCallAccumulator } = await import(
+    "@/lib/ai/workspace-tools/stream-tool-calls"
+  );
+  const toolAccumulator = new StreamToolCallAccumulator();
+  const suppressContentDeltas = Boolean(options?.tools?.length);
+
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -361,6 +452,7 @@ export async function* streamChatCompletionResult(
     inputTokens: "NOT_AVAILABLE",
     outputTokens: "NOT_AVAILABLE",
   };
+  let finishReason: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -381,6 +473,7 @@ export async function* streamChatCompletionResult(
         const parsed = JSON.parse(data) as {
           model?: string;
           usage?: unknown;
+          choices?: { finish_reason?: string | null }[];
         };
         if (typeof parsed.model === "string" && parsed.model.trim()) {
           returnedModel = parsed.model.trim();
@@ -388,10 +481,17 @@ export async function* streamChatCompletionResult(
         if (parsed.usage) {
           usage = parseUsage(parsed.usage);
         }
+        const fr = parsed.choices?.[0]?.finish_reason;
+        if (typeof fr === "string") {
+          finishReason = fr;
+        }
+        toolAccumulator.ingestDelta(parsed);
         const delta = extractStreamDelta(parsed);
         if (delta) {
           assembled += delta;
-          yield { type: "delta", content: delta };
+          if (!suppressContentDeltas) {
+            yield { type: "delta", content: delta };
+          }
         }
       } catch {
         // ignore malformed chunks
@@ -399,16 +499,22 @@ export async function* streamChatCompletionResult(
     }
   }
 
+  const toolCalls = toolAccumulator.finalize();
+  const content = assembled.trim() ? assembled : null;
+  const ok = Boolean(content) || toolCalls.length > 0;
+
   yield {
     type: "meta",
     result: {
-      content: assembled.trim() || null,
-      ok: assembled.trim().length > 0,
+      content,
+      ok,
       requestedModel,
       returnedModel,
       usage,
       latencyMs: Date.now() - started,
-      error: assembled.trim() ? undefined : "MODEL_EMPTY_RESPONSE",
+      error: ok ? undefined : "MODEL_EMPTY_RESPONSE",
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      finishReason,
     },
   };
 }

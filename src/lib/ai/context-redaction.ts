@@ -2,8 +2,11 @@ import type { ClientContext } from "@/lib/ai/client-context";
 import { sanitizeClientListContinuation } from "@/lib/ai/client-list-continuation";
 
 export type ProviderChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: unknown;
+  tool_call_id?: string;
+  name?: string;
 };
 
 export type RedactableChatTurn = {
@@ -101,7 +104,10 @@ export function sanitizeChatMessagesForProvider<T extends ProviderChatMessage>(
 ): T[] {
   return messages.map((message) => ({
     ...message,
-    content: redactSensitiveText(message.content),
+    content:
+      message.content == null
+        ? message.content
+        : redactSensitiveText(message.content),
   }));
 }
 
@@ -149,7 +155,10 @@ export function redactForLogging(value: unknown): unknown {
 
 export function assertOpenRouterPayloadSafe(messages: ProviderChatMessage[]): void {
   for (const message of messages) {
-    if (containsSensitiveMarkers(message.content)) {
+    if (
+      typeof message.content === "string" &&
+      containsSensitiveMarkers(message.content)
+    ) {
       console.warn(
         `[ai/security] sensitive marker detected in ${message.role} message before OpenRouter — content redacted`,
       );

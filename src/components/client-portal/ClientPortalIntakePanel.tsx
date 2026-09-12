@@ -646,35 +646,61 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
-  async function uploadDocument(file: File | null) {
-    if (!selectedId || !file) return;
+  async function uploadDocuments(files: FileList | null) {
+    if (!selectedId || !files?.length) return;
     setUploadingDoc(true);
     setError(null);
     setStatus(null);
+    const selected = Array.from(files);
+    let uploaded = 0;
+    let latest: StaffDocument[] | null = null;
+    let failMessage: string | null = null;
     try {
-      const form = new FormData();
-      form.set("questionnaireId", selectedId);
-      form.set("file", file);
-      const res = await fetch("/api/client-cases/documents", {
-        method: "POST",
-        body: form,
-      });
-      const data = (await res.json()) as {
-        documents?: StaffDocument[];
-        error?: string;
-      };
-      if (!res.ok) {
+      for (const file of selected) {
+        const form = new FormData();
+        form.set("questionnaireId", selectedId);
+        form.set("file", file);
+        const res = await fetch("/api/client-cases/documents", {
+          method: "POST",
+          body: form,
+        });
+        const data = (await res.json()) as {
+          documents?: StaffDocument[];
+          error?: string;
+        };
+        if (!res.ok) {
+          failMessage =
+            data.error === "FILE_TOO_LARGE"
+              ? `«${file.name}»: файл слишком большой (макс. 10 МБ).`
+              : data.error === "UNSUPPORTED_FILE_TYPE"
+                ? `«${file.name}»: допустимы PDF и изображения (JPG, PNG, WEBP).`
+                : `Не удалось загрузить «${file.name}».`;
+          break;
+        }
+        uploaded += 1;
+        latest = data.documents ?? latest;
+      }
+      if (latest) setDocuments(latest);
+      if (failMessage) {
         setError(
-          data.error === "FILE_TOO_LARGE"
-            ? "Файл слишком большой (макс. 10 МБ)."
-            : data.error === "UNSUPPORTED_FILE_TYPE"
-              ? "Допустимы PDF и изображения (JPG, PNG, WEBP)."
-              : "Не удалось загрузить документ.",
+          uploaded > 0
+            ? `Загружено ${uploaded} из ${selected.length}. ${failMessage}`
+            : failMessage,
         );
+        if (uploaded > 0) {
+          setStatus(
+            uploaded === 1
+              ? "Загружен 1 документ"
+              : `Загружено документов: ${uploaded}`,
+          );
+        }
         return;
       }
-      setDocuments(data.documents ?? []);
-      setStatus("Документ загружен");
+      setStatus(
+        uploaded === 1
+          ? "Документ загружен"
+          : `Загружено документов: ${uploaded}`,
+      );
     } finally {
       setUploadingDoc(false);
     }
@@ -966,7 +992,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <span className={styles.section}>Документы сотрудника</span>
               <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
               <p className={styles.staffBlockHint}>
-                PDF или изображение до 10 МБ. Файлы видны только сотрудникам.
+                Можно выбрать несколько файлов сразу. PDF или изображение до 10
+                МБ каждый. Файлы видны только сотрудникам.
               </p>
             </div>
             {documents.length === 0 ? (
@@ -1013,15 +1040,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <label className={styles.primaryAction}>
               <input
                 type="file"
+                multiple
                 accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                 disabled={uploadingDoc}
                 onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
+                  const files = event.target.files;
                   event.target.value = "";
-                  void uploadDocument(file);
+                  void uploadDocuments(files);
                 }}
               />
-              {uploadingDoc ? "Загрузка…" : "Добавить документ"}
+              {uploadingDoc ? "Загрузка…" : "Добавить документы"}
             </label>
           </section>
         ) : null}

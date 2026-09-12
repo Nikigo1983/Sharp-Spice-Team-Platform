@@ -306,6 +306,12 @@
 }
 
 .tableScrollWrap {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  max-height: calc(100dvh - 72px - 3rem);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: rgba(26, 26, 26, 0.55);
@@ -313,23 +319,28 @@
 }
 
 .tableScrollTop {
+  flex: 0 0 auto;
   overflow-x: auto;
   overflow-y: hidden;
+  background: rgba(18, 18, 22, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .tableScrollTopSpacer {
-  height: 1px;
+  height: 12px;
   pointer-events: none;
 }
 
 .tableScroll {
-  overflow-x: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 1600px;
   font-size: 0.82rem;
 }
@@ -345,7 +356,9 @@
 .table th {
   position: sticky;
   top: 0;
-  background: rgba(18, 18, 22, 0.96);
+  z-index: 2;
+  background: rgba(18, 18, 22, 0.98);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.72);
   font-weight: 600;
   font-size: 0.74rem;

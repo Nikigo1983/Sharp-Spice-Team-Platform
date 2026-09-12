@@ -10,7 +10,7 @@ import { getClientDetail } from "@/lib/google-sheets/service";
 
 type RouteContext = { params: Promise<{ id: string; docId: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,7 +34,9 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const contentType = document.contentType ?? file.contentType;
-  const disposition = canPreviewInline(contentType) ? "inline" : "attachment";
+  const forceDownload = new URL(request.url).searchParams.get("download") === "1";
+  const disposition =
+    forceDownload || !canPreviewInline(contentType) ? "attachment" : "inline";
   const encodedName = encodeURIComponent(fileName);
 
   return new NextResponse(new Uint8Array(file.data), {

@@ -16,6 +16,13 @@ type ClientDocumentsProps = {
   initialDocuments: ClientDocument[];
 };
 
+function isPlatformUpload(doc: ClientDocument): boolean {
+  return (
+    doc.source === "upload" ||
+    Boolean(doc.fileName && doc.contentType && doc.sizeBytes != null)
+  );
+}
+
 export function ClientDocuments({
   clientId,
   initialDocuments,
@@ -109,14 +116,17 @@ export function ClientDocuments({
       ) : (
         <ul className={styles.list}>
           {documents.map((doc) => {
-            const isUpload = doc.source === "upload";
+            const canManage = isPlatformUpload(doc);
             const fileName = doc.fileName ?? doc.name;
-            const url = isUpload
+            const openUrl = canManage
               ? getClientDocumentUrl(clientId, doc.id)
+              : null;
+            const downloadUrl = canManage
+              ? getClientDocumentUrl(clientId, doc.id, { download: true })
               : null;
             const metaParts = [
               doc.category,
-              isUpload && doc.sizeBytes != null
+              canManage && doc.sizeBytes != null
                 ? formatFileSize(doc.sizeBytes)
                 : null,
               doc.uploadedBy,
@@ -125,48 +135,47 @@ export function ClientDocuments({
 
             return (
               <li key={doc.id} className={styles.item}>
-                {url ? (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.fileLink}
-                    title="Открыть файл"
-                  >
-                    <FileTypeIcon
-                      contentType={doc.contentType ?? ""}
-                      className={styles.fileIcon}
-                    />
-                    <span className={styles.fileMeta}>
-                      <span className={styles.fileName}>{fileName}</span>
-                      <span className={styles.fileSub}>
-                        {metaParts.join(" · ")}
-                      </span>
-                    </span>
-                  </a>
-                ) : (
-                  <span className={styles.fileLink}>
-                    <span className={styles.fileIcon} aria-hidden>
-                      <i className="fa-regular fa-file" />
-                    </span>
-                    <span className={styles.fileMeta}>
-                      <span className={styles.fileName}>{fileName}</span>
-                      <span className={styles.fileSub}>
-                        {metaParts.join(" · ")}
-                      </span>
+                <div className={styles.fileMain}>
+                  <FileTypeIcon
+                    contentType={doc.contentType ?? ""}
+                    className={styles.fileIcon}
+                  />
+                  <span className={styles.fileMeta}>
+                    <span className={styles.fileName}>{fileName}</span>
+                    <span className={styles.fileSub}>
+                      {metaParts.join(" · ")}
                     </span>
                   </span>
+                </div>
+
+                {canManage && openUrl && downloadUrl ? (
+                  <div className={styles.actions}>
+                    <a
+                      href={openUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.actionBtn}
+                    >
+                      Открыть
+                    </a>
+                    <a
+                      href={downloadUrl}
+                      className={styles.actionBtn}
+                      download={fileName}
+                    >
+                      Скачать
+                    </a>
+                    <button
+                      type="button"
+                      className={styles.deleteAction}
+                      onClick={() => void handleDelete(doc)}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                ) : (
+                  <span className={styles.sheetOnly}>только запись</span>
                 )}
-                {isUpload ? (
-                  <button
-                    type="button"
-                    className={styles.deleteBtn}
-                    aria-label="Удалить файл"
-                    onClick={() => void handleDelete(doc)}
-                  >
-                    ×
-                  </button>
-                ) : null}
               </li>
             );
           })}

@@ -22,5 +22,9 @@ describe("client document formats", () => {
       getClientDocumentUrl("CL-1", "CD-2"),
       "/api/clients/CL-1/documents/CD-2",
     );
+    assert.equal(
+      getClientDocumentUrl("CL-1", "CD-2", { download: true }),
+      "/api/clients/CL-1/documents/CD-2?download=1",
+    );
   });
 });

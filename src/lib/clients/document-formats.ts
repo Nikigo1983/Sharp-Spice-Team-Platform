@@ -29,6 +29,11 @@ export {
   normalizeTaskAttachmentContentType as normalizeClientDocumentContentType,
 };
 
-export function getClientDocumentUrl(clientId: string, documentId: string): string {
-  return `/api/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(documentId)}`;
+export function getClientDocumentUrl(
+  clientId: string,
+  documentId: string,
+  options?: { download?: boolean },
+): string {
+  const base = `/api/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(documentId)}`;
+  return options?.download ? `${base}?download=1` : base;
 }

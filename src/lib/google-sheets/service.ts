@@ -1,4 +1,3 @@
-import { getAiMirrorSource, getAiMirrorContext } from "@/lib/ai-data/reader";
 import { formatClientForAi } from "@/lib/ai/format-client";
 import {
   DEMO_CLIENTS,
@@ -33,11 +32,7 @@ export async function listAllClients(filters: ClientFilters = {}): Promise<{
   let all: Client[];
   let source: ClientsListResult["source"];
 
-  const mirror = await getAiMirrorSource("clients");
-  if (mirror) {
-    all = mirror.payload.clients;
-    source = "supabase";
-  } else if (sheetsConfigured()) {
+  if (sheetsConfigured()) {
     all = await getGoogleSheetsClient().getClients();
     source = "google_sheets";
   } else {
@@ -85,26 +80,6 @@ async function mergeUploadedDocuments(
 }
 
 export async function getClientDetail(id: string): Promise<ClientDetail | null> {
-  const mirror = await getAiMirrorSource("clients");
-  if (mirror) {
-    const client = mirror.payload.clients.find(c => c.id === id);
-    if (!client) return null;
-    const context = await getAiMirrorContext();
-    const notes = [...mirror.payload.notes, ...context.notes].filter(
-      (r) => r.clientId === id,
-    );
-    const documents = await mergeUploadedDocuments(
-      id,
-      mirror.payload.documents.filter((r) => r.clientId === id),
-    );
-    return {
-      client,
-      source: "supabase",
-      surveys: mirror.payload.surveys.filter((r) => r.clientId === id),
-      documents,
-      notes,
-    };
-  }
   if (sheetsConfigured()) {
     const sheets = getGoogleSheetsClient();
     const client = await sheets.getClientById(id);

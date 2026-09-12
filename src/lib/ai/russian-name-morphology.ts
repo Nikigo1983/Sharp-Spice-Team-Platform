@@ -33,27 +33,44 @@ function addVariant(set: Set<string>, value: string): void {
   if (v.length >= 2) set.add(v);
 }
 
+/**
+ * Feminine surname case forms.
+ * Stem already ends with ов/ев/ин/ын — never append another -ова/-ева
+ * (that produced collisions like ратниковова ↔ бронниковова).
+ */
+function feminineSurnameFromStem(stem: string): string[] {
+  return [`${stem}а`, stem];
+}
+
 /** Женские фамилии на -ова/-ева/-ина/-ая */
 const FEMININE_SURNAME_RULES: MorphRule[] = [
   [/^(.+(?:ова|ева|ина|ая|яя|ская|цкая))$/i, (w) => [w]],
-  [/^(.+(?:ов|ев|ин|ын|ий|ой|ай|ей))ой$/i, (s) => [`${s}а`, `${s}ова`, `${s}ева`]],
-  [/^(.+(?:ов|ев|ин|ын))ую$/i, (s) => [`${s}а`, `${s}ова`]],
-  [/^(.+(?:ов|ев|ин|ын))ой$/i, (s) => [`${s}а`, `${s}ова`]],
-  [/^(.+(?:ов|ев|ин|ын))у$/i, (s) => [`${s}а`, `${s}ова`, s]],
-  [/^(.+(?:ов|ев|ин|ын))е$/i, (s) => [`${s}а`, `${s}ова`, s]],
-  [/^(.+(?:ов|ев|ин|ын))и$/i, (s) => [`${s}а`, `${s}ова`, s]],
-  [/^(.+(?:ов|ев|ин|ын))а$/i, (s) => [`${s}а`, s, `${s}ова`]],
+  [/^(.+(?:ов|ев|ин|ын|ий|ой|ай|ей))ой$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))ую$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))ой$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))у$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))е$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))и$/i, feminineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын))а$/i, feminineSurnameFromStem],
 ];
+
+/**
+ * Masculine surname case forms.
+ * Stem already ends with ов/ев/ин/ск… — do not append another -ов/-ев.
+ */
+function masculineSurnameFromStem(stem: string): string[] {
+  return [stem];
+}
 
 /** Мужские фамилии на -ов/-ев/-ин/-ский/-ян */
 const MASCULINE_SURNAME_RULES: MorphRule[] = [
   [/^(.+(?:ов|ев|ин|ын|ой|ий|ский|ской|цкий|цкой|ян|ian))$/i, (w) => [w]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))у$/i, (s) => [s, `${s}ов`, `${s}ев`]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))е$/i, (s) => [s, `${s}ов`, `${s}ев`]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))а$/i, (s) => [s, `${s}ов`, `${s}ев`]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))ом$/i, (s) => [s, `${s}ов`]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))ым$/i, (s) => [s, `${s}ов`]],
-  [/^(.+(?:ов|ев|ин|ын|ск|цк))и$/i, (s) => [s, `${s}ов`]],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))у$/i, masculineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))е$/i, masculineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))а$/i, masculineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))ом$/i, masculineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))ым$/i, masculineSurnameFromStem],
+  [/^(.+(?:ов|ев|ин|ын|ск|цк))и$/i, masculineSurnameFromStem],
   [/^(.+(?:ян|ian))у$/i, (s) => [`${s}ян`, s]],
   [/^(.+(?:ян|ian))а$/i, (s) => [`${s}ян`, s]],
   [/^(.+(?:ян|ian))е$/i, (s) => [`${s}ян`, s]],
@@ -97,11 +114,21 @@ const ALL_RULE_GROUPS = [
   MASCULINE_NAME_RULES,
 ];
 
+function looksLikeRussianSurname(word: string): boolean {
+  return /(?:ова|ева|ина|ая|яя|ская|цкая|ский|ской|цкий|цкой|ян|ов|ев|ин|ын)$/i.test(
+    word,
+  );
+}
+
 function applyMorphRules(word: string): string[] {
   const variants = new Set<string>();
   addVariant(variants, word);
 
-  for (const rules of ALL_RULE_GROUPS) {
+  const ruleGroups = looksLikeRussianSurname(word)
+    ? [FEMININE_SURNAME_RULES, MASCULINE_SURNAME_RULES]
+    : ALL_RULE_GROUPS;
+
+  for (const rules of ruleGroups) {
     for (const [pattern, expand] of rules) {
       const match = word.match(pattern);
       if (!match?.[1]) continue;

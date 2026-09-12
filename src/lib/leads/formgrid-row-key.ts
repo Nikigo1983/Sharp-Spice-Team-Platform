@@ -22,3 +22,12 @@ export function formgridSheetRowFromIndex(dataRowIndex: number): number {
 export function formgridDataRowIndexFromSheetRow(sheetRow: number): number {
   return sheetRow - 2;
 }
+
+export function isFormgridRowDismissed(
+  headers: string[],
+  row: string[],
+  dismissedKeys: Set<string>,
+): boolean {
+  if (dismissedKeys.size === 0) return false;
+  return dismissedKeys.has(buildFormgridRowKey(headers, row));
+}

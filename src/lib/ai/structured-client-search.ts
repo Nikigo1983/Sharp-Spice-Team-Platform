@@ -27,6 +27,10 @@ import {
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
 import { listAllClients } from "@/lib/google-sheets/service";
 import type { Client } from "@/lib/google-sheets/types";
+import {
+  getDismissedFormgridRowKeys,
+  isFormgridRowDismissed,
+} from "@/lib/leads/formgrid-active-leads";
 
 const STRUCTURED_MIN_SCORE = 35;
 
@@ -408,7 +412,9 @@ export async function executeStructuredClientSearch(
   }
 
   const formgrid = await getFormgridLeadsTable();
+  const dismissed = await getDismissedFormgridRowKeys();
   formgrid.rows.forEach((row, index) => {
+    if (isFormgridRowDismissed(formgrid.headers, row, dismissed)) return;
     const fields = formgridRowToSearchFields(formgrid.headers, row);
     const { score, matchedFields, passed } = scoreRecordAgainstIntent(
       fields,

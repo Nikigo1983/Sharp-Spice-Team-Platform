@@ -7,7 +7,7 @@ export default function NewFormgridClientsPage() {
     <AppShell sectionTitle="Новые клиенты из анкеты">
       <SectionHeader
         title="Новые клиенты из анкеты"
-        subtitle="Автосинхронизация с таблицей Formgrid в Google Sheets"
+        subtitle="Автосинхронизация с Formgrid. Анкету можно убрать из списка, если сотрудничество не состоится."
       />
       <NewFormgridClientsList />
     </AppShell>

@@ -171,3 +171,45 @@
   padding: 2rem !important;
   color: var(--gray-300);
 }
+
+.hint {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gray-300);
+  line-height: 1.4;
+}
+
+.actionError {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-size: 0.875rem;
+  color: #f0a0a0;
+}
+
+.actionsHead,
+.actionsCell {
+  width: 7.5rem;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.dangerBtn {
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(180, 60, 60, 0.55);
+  background: rgba(120, 24, 24, 0.35);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.dangerBtn:hover:not(:disabled) {
+  background: rgba(145, 13, 13, 0.55);
+}
+
+.dangerBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

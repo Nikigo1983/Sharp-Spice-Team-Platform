@@ -8,6 +8,10 @@ import {
   getFormgridSubmissionDate,
 } from "@/lib/google-sheets/formgrid-dates";
 import { getFormgridLeadsTable, type LeadsTableResult } from "./formgrid-leads";
+import {
+  getDismissedFormgridRowKeys,
+  isFormgridRowDismissed,
+} from "@/lib/leads/formgrid-active-leads";
 
 function findColumnIndex(headers: string[], patterns: RegExp[]): number {
   return headers.findIndex((header) =>
@@ -17,6 +21,7 @@ function findColumnIndex(headers: string[], patterns: RegExp[]): number {
 
 export type FormgridClientFields = {
   name: string;
+  latinName: string;
   email: string;
   phone: string;
   passport: string;
@@ -36,11 +41,17 @@ export function getFormgridClientFields(
   const phoneIdx = findColumnIndex(headers, [/телефон|phone/i]);
   const emailIdx = findColumnIndex(headers, [/email|почта|e-mail|электронн/i]);
   const birthIdx = findColumnIndex(headers, [/дата рождения|birth/i]);
+  const latinIdx = findColumnIndex(headers, [
+    /фио\s*\(латин/i,
+    /латинским/i,
+    /latin/i,
+  ]);
 
   const submitted = getFormgridSubmissionDate(headers, row);
 
   return {
     name: getFormgridClientName(headers, row),
+    latinName: latinIdx >= 0 ? (row[latinIdx]?.trim() ?? "") : "",
     email: emailIdx >= 0 ? (row[emailIdx]?.trim() ?? "") : "",
     phone: phoneIdx >= 0 ? (row[phoneIdx]?.trim() ?? "") : "",
     passport: passportIdx >= 0 ? (row[passportIdx]?.trim() ?? "") : "",
@@ -52,6 +63,51 @@ export function getFormgridClientFields(
           year: "numeric",
         })
       : "",
+  };
+}
+
+export const FORMGRID_CLIENT_ID_PREFIX = "formgrid:";
+
+export function isFormgridClientId(id: string): boolean {
+  return id.trim().startsWith(FORMGRID_CLIENT_ID_PREFIX);
+}
+
+export function parseFormgridClientId(id: string): number | null {
+  const raw = id.trim();
+  if (!isFormgridClientId(raw)) return null;
+  const n = Number(raw.slice(FORMGRID_CLIENT_ID_PREFIX.length));
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** Load a Formgrid lead as a Client-shaped record for Phase-1 tools. */
+export async function getFormgridClientById(
+  id: string,
+): Promise<import("./types").Client | null> {
+  const rowIndex = parseFormgridClientId(id);
+  if (rowIndex == null) return null;
+  const table = await getFormgridLeadsTable();
+  const row = table.rows[rowIndex];
+  if (!row) return null;
+  const dismissed = await getDismissedFormgridRowKeys();
+  if (isFormgridRowDismissed(table.headers, row, dismissed)) return null;
+  const fields = getFormgridClientFields(table.headers, row);
+  if (!fields.name) return null;
+  return {
+    id: `${FORMGRID_CLIENT_ID_PREFIX}${rowIndex}`,
+    name: fields.name,
+    phone: fields.phone || "—",
+    email: fields.email || "—",
+    country: "—",
+    // Codebase historically stores Latin FIO in citizenship for CRM projection.
+    citizenship: fields.latinName || "—",
+    direction: "Хорватия",
+    status: "Новый",
+    manager: "—",
+    lastActivity: fields.submittedAt || "—",
+    createdAt: fields.submittedAt || "—",
+    passportNumber: fields.passport || undefined,
+    submittedAt: fields.submittedAt || undefined,
+    rowIndex: rowIndex + 2,
   };
 }
 

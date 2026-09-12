@@ -540,7 +540,12 @@ export function scoreClientRecord(
     score = Math.max(score, 80);
   }
 
-  if (query.morphology.lemmaTokens.length > 0 && score < 80) {
+  // Multi-token name queries (e.g. «Ратникова Мария») must not promote
+  // first-name-only / surname-only fuzzy hits — that caused AMBIGUOUS floods
+  // of unrelated «Мария» clients when the surname had a Formgrid-only hit.
+  const multiTokenNameQuery = query.morphology.lemmaTokens.length >= 2;
+
+  if (query.morphology.lemmaTokens.length > 0 && score < 80 && !multiTokenNameQuery) {
     const primaryLemma =
       query.morphology.normalizedSurname ??
       [...query.morphology.lemmaTokens].sort((a, b) => b.length - a.length)[0];
@@ -563,7 +568,7 @@ export function scoreClientRecord(
     }
   }
 
-  if (query.morphology.lemmaTokens.length > 0 && score < 65) {
+  if (query.morphology.lemmaTokens.length > 0 && score < 65 && !multiTokenNameQuery) {
     const searchTokens = [
       ...query.tokens,
       ...query.morphology.lemmaTokens,

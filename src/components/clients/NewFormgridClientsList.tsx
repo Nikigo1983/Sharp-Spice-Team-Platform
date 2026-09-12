@@ -19,14 +19,31 @@ import styles from "./NewFormgridClientsList.module.css";
 type LeadsTableResult = {
   headers: string[];
   rows: string[][];
+  sheetRows?: number[];
   source: "google_sheets" | "demo";
 };
+
+function displayNameFromRow(headers: string[], row: string[]): string {
+  const nameIdx = headers.findIndex((header) =>
+    /имя|name|фио/i.test(header || ""),
+  );
+  if (nameIdx >= 0) {
+    const value = (row[nameIdx] ?? "").trim();
+    if (value) return value;
+  }
+  return "эту анкету";
+}
 
 export function NewFormgridClientsList() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
+  const [sheetRows, setSheetRows] = useState<number[]>([]);
   const [source, setSource] = useState<LeadsTableResult["source"]>("google_sheets");
   const [loading, setLoading] = useState(true);
+  const [dismissingSheetRow, setDismissingSheetRow] = useState<number | null>(
+    null,
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [partner, setPartner] = useState("");
   const [referent, setReferent] = useState("");
@@ -36,27 +53,34 @@ export function NewFormgridClientsList() {
   const [hasAmount, setHasAmount] = useState<PresenceFilter>("");
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
 
-  const fetchTable = useCallback(async () => {
-    setLoading(true);
+  const fetchTable = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     try {
       const res = await fetch("/api/formgrid-leads");
       if (!res.ok) throw new Error("fetch failed");
       const data = (await res.json()) as LeadsTableResult;
       setHeaders(data.headers);
       setRows(data.rows);
+      setSheetRows(
+        Array.isArray(data.sheetRows) && data.sheetRows.length === data.rows.length
+          ? data.sheetRows
+          : data.rows.map((_, index) => index + 2),
+      );
       setSource(data.source);
+      setActionError(null);
     } catch {
       setHeaders([]);
       setRows([]);
+      setSheetRows([]);
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void fetchTable();
     const interval = setInterval(() => {
-      void fetchTable();
+      void fetchTable({ quiet: true });
     }, 20_000);
     return () => clearInterval(interval);
   }, [fetchTable]);
@@ -75,40 +99,46 @@ export function NewFormgridClientsList() {
     };
   }, [rows, columns]);
 
-  const filteredRows = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((row) => {
+    const items: Array<{ row: string[]; sheetRow: number }> = [];
+    rows.forEach((row, index) => {
       if (q && !row.some((cell) => (cell ?? "").toLowerCase().includes(q))) {
-        return false;
+        return;
       }
       if (partner && columns.partner != null) {
-        if ((row[columns.partner] ?? "").trim() !== partner) return false;
+        if ((row[columns.partner] ?? "").trim() !== partner) return;
       }
       if (referent && columns.referent != null) {
-        if ((row[columns.referent] ?? "").trim() !== referent) return false;
+        if ((row[columns.referent] ?? "").trim() !== referent) return;
       }
       if (contract && columns.contract != null) {
-        if ((row[columns.contract] ?? "").trim() !== contract) return false;
+        if ((row[columns.contract] ?? "").trim() !== contract) return;
       }
       if (submittedFrom || submittedTo) {
         const submitted = getFormgridSubmissionDate(headers, row);
         const iso = submitted?.toISOString() ?? "";
         if (!dateInRange(iso || null, submittedFrom || undefined, submittedTo || undefined)) {
-          return false;
+          return;
         }
       }
       if (hasAmount && columns.amount != null) {
-        if (!matchesPresenceFilter(row[columns.amount], hasAmount)) return false;
+        if (!matchesPresenceFilter(row[columns.amount], hasAmount)) return;
       }
       if (approvalStatus && columns.approval != null) {
         if (!matchesApprovalFilter(row[columns.approval], approvalStatus)) {
-          return false;
+          return;
         }
       }
-      return true;
+      items.push({
+        row,
+        sheetRow: sheetRows[index] ?? index + 2,
+      });
     });
+    return items;
   }, [
     rows,
+    sheetRows,
     headers,
     search,
     partner,
@@ -136,11 +166,42 @@ export function NewFormgridClientsList() {
     downloadCsv(
       `formgrid-clients-${new Date().toISOString().slice(0, 10)}.csv`,
       headers.map((h, i) => h || `Колонка ${i + 1}`),
-      filteredRows,
+      filtered.map((item) => item.row),
     );
   };
 
-  const colSpan = Math.max(1, headers.length);
+  const dismissLead = async (sheetRow: number, row: string[]) => {
+    const label = displayNameFromRow(headers, row);
+    const confirmed = window.confirm(
+      `Убрать «${label}» из списка «Новые клиенты»?\n\nАнкета останется в Google Sheets, но исчезнет из этого раздела и поиска по новым анкетам. Используйте, если человек не будет сотрудничать.`,
+    );
+    if (!confirmed) return;
+
+    setDismissingSheetRow(sheetRow);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/formgrid-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dismiss", sheetRow }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || "Не удалось удалить анкету");
+      }
+      await fetchTable({ quiet: true });
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Не удалось удалить анкету",
+      );
+    } finally {
+      setDismissingSheetRow(null);
+    }
+  };
+
+  const colSpan = Math.max(1, headers.length + 1);
 
   return (
     <div className={styles.wrap}>
@@ -251,7 +312,7 @@ export function NewFormgridClientsList() {
           <button
             type="button"
             className={styles.primaryBtn}
-            disabled={loading || filteredRows.length === 0}
+            disabled={loading || filtered.length === 0}
             onClick={exportCsv}
           >
             Выгрузить CSV
@@ -260,10 +321,15 @@ export function NewFormgridClientsList() {
       </div>
 
       <p className={styles.meta}>
-        {loading ? "Загрузка…" : `${filteredRows.length} записей`}
+        {loading ? "Загрузка…" : `${filtered.length} записей`}
         <span className={styles.source}>
           {source === "google_sheets" ? "Google Sheets" : "Демо-данные"}
         </span>
+      </p>
+      {actionError ? <p className={styles.actionError}>{actionError}</p> : null}
+      <p className={styles.hint}>
+        Кнопка «Удалить» убирает анкету из этого списка (если человек не будет
+        сотрудничать). Строка в Google Sheets не стирается.
       </p>
 
       <Card className={styles.tableCard}>
@@ -274,6 +340,7 @@ export function NewFormgridClientsList() {
                 {headers.map((header, index) => (
                   <th key={`${header}-${index}`}>{header || `Колонка ${index + 1}`}</th>
                 ))}
+                <th className={styles.actionsHead}>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -283,20 +350,30 @@ export function NewFormgridClientsList() {
                     Загрузка данных Formgrid…
                   </td>
                 </tr>
-              ) : filteredRows.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan} className={styles.empty}>
                     Записи не найдены
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row, rowIndex) => (
-                  <tr key={`row-${rowIndex}`}>
+                filtered.map(({ row, sheetRow }) => (
+                  <tr key={`sheet-${sheetRow}`}>
                     {headers.map((_, colIndex) => (
-                      <td key={`cell-${rowIndex}-${colIndex}`}>
+                      <td key={`cell-${sheetRow}-${colIndex}`}>
                         {(row[colIndex] ?? "").trim() || "—"}
                       </td>
                     ))}
+                    <td className={styles.actionsCell}>
+                      <button
+                        type="button"
+                        className={styles.dangerBtn}
+                        disabled={dismissingSheetRow === sheetRow}
+                        onClick={() => void dismissLead(sheetRow, row)}
+                      >
+                        {dismissingSheetRow === sheetRow ? "Удаление…" : "Удалить"}
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}

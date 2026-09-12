@@ -145,6 +145,8 @@ export function formgridRowToContext(
   if (fields.passport) {
     debugRow.passport = fields.passport;
   }
+  // Stable Phase-1 tool id so Formgrid-only leads are not dropped by search_clients.
+  debugRow.id = `formgrid:${rowIndex}`;
 
   return {
     source: "new_clients",

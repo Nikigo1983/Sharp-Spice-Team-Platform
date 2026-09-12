@@ -17,6 +17,10 @@ import {
 } from "@/lib/ai/client-search";
 import { looksLikePassportNumber } from "@/lib/ai/format-client";
 import { getClientDetail } from "@/lib/google-sheets/service";
+import {
+  getFormgridClientById,
+  isFormgridClientId,
+} from "@/lib/google-sheets/formgrid-lookup";
 import type { Client } from "@/lib/google-sheets/types";
 import {
   deepRedactToolPayload,
@@ -39,17 +43,23 @@ function display(value: string | undefined | null): string | null {
   return trimmed;
 }
 
+/** Exact full-name class vs weaker morph hits. */
 function confidenceFromScore(score: number): "high" | "medium" | "low" {
-  if (score >= 40) return "high";
-  if (score >= 20) return "medium";
+  if (score >= 90) return "high";
+  if (score >= 65) return "medium";
   return "low";
 }
 
 function resolvedClientId(client: ResolvedClientContext): string | null {
   if (isMergedClientContext(client)) {
     const crm = client.parts.find((p) => p.source === "clients");
-    const id = crm?.debugRow?.id?.trim();
-    return id || null;
+    const crmId = crm?.debugRow?.id?.trim();
+    if (crmId) return crmId;
+    const formgrid = client.parts.find((p) => p.source === "new_clients");
+    const fgId = formgrid?.debugRow?.id?.trim();
+    if (fgId) return fgId;
+    const prefixed = client.debugRow?.["Клиенты:id"]?.trim();
+    return prefixed || null;
   }
   return client.debugRow?.id?.trim() || null;
 }
@@ -213,6 +223,7 @@ export async function executeSearchClients(
           status: display(client.status),
           partner: partnerFromResolved(client),
           manager: display(client.manager),
+          score: client.score,
           confidence: confidenceFromScore(client.score),
           matchReasons: (client.matchedFields ?? []).slice(0, 6),
           source: isMergedClientContext(client)
@@ -235,10 +246,22 @@ export async function executeSearchClients(
       });
     }
 
-    const highOrMed = matches.filter(
-      (m) => m && (m.confidence === "high" || m.confidence === "medium"),
+    // One strong exact full-name match outranks weak morph candidates.
+    const bestScore = Math.max(...matches.map((m) => m!.score));
+    let ranked = matches;
+    if (bestScore >= 90) {
+      ranked = matches.filter((m) => m!.score >= 80);
+    }
+
+    const publicMatches = ranked.map((m) => {
+      const { score: _score, ...rest } = m!;
+      return rest;
+    });
+
+    const highOrMed = publicMatches.filter(
+      (m) => m.confidence === "high" || m.confidence === "medium",
     );
-    const ambiguous = highOrMed.length > 1 || matches.length > 1;
+    const ambiguous = highOrMed.length > 1;
 
     return baseResult("search_clients", started, {
       ok: true,
@@ -247,11 +270,11 @@ export async function executeSearchClients(
         ? "Multiple credible matches — ask the user which client"
         : null,
       data: {
-        matches,
+        matches: publicMatches,
         ambiguous,
         totalMatches: totalFound,
       },
-      resultCount: matches.length,
+      resultCount: publicMatches.length,
       sourceTags: ["CLIENT"],
     });
   } catch (error) {
@@ -282,8 +305,15 @@ export async function executeGetClient(
   }
 
   try {
-    const detail = await getClientDetail(validated.value.clientId);
-    if (!detail?.client) {
+    let client: Client | null = null;
+    if (isFormgridClientId(validated.value.clientId)) {
+      client = await getFormgridClientById(validated.value.clientId);
+    } else {
+      const detail = await getClientDetail(validated.value.clientId);
+      client = detail?.client ?? null;
+    }
+
+    if (!client) {
       return baseResult("get_client", started, {
         ok: false,
         errorCode: "NOT_FOUND",
@@ -294,11 +324,8 @@ export async function executeGetClient(
       });
     }
 
-    const safe = projectSafeClient(detail.client);
+    const safe = projectSafeClient(client);
     assertNoSensitiveKeys(safe as unknown as Record<string, unknown>);
-    if ("appPassword" in (detail.client as object)) {
-      // Ensure projection never copies it
-    }
 
     return baseResult("get_client", started, {
       ok: true,
@@ -338,8 +365,23 @@ export async function executeGetCaseContext(
   }
 
   try {
-    const detail = await getClientDetail(validated.value.clientId);
-    if (!detail?.client) {
+    let clientRecord: Client | null = null;
+    let documents: Array<{
+      id: string;
+      name: string;
+      category: string;
+      uploadedAt: string;
+    }> = [];
+
+    if (isFormgridClientId(validated.value.clientId)) {
+      clientRecord = await getFormgridClientById(validated.value.clientId);
+    } else {
+      const detail = await getClientDetail(validated.value.clientId);
+      clientRecord = detail?.client ?? null;
+      documents = detail?.documents ?? [];
+    }
+
+    if (!clientRecord) {
       return baseResult("get_case_context", started, {
         ok: false,
         errorCode: "NOT_FOUND",
@@ -350,8 +392,8 @@ export async function executeGetCaseContext(
       });
     }
 
-    const client = projectSafeClient(detail.client);
-    const documentsInventory = (detail.documents ?? []).slice(0, 25).map((doc) => ({
+    const client = projectSafeClient(clientRecord);
+    const documentsInventory = documents.slice(0, 25).map((doc) => ({
       documentId: doc.id,
       title: doc.name,
       category: doc.category || null,
@@ -365,6 +407,8 @@ export async function executeGetCaseContext(
       client.notes == null
         ? null
         : truncateChars(client.notes, 800).text;
+
+    const formgridOnly = isFormgridClientId(validated.value.clientId);
 
     let payload: Record<string, unknown> = {
       client,
@@ -385,7 +429,8 @@ export async function executeGetCaseContext(
       documentsInventory,
       documentCount: documentsInventory.length,
       sourcesAvailable: {
-        clients: true,
+        clients: !formgridOnly,
+        formgrid: formgridOnly,
         sheetsDocuments: documentsInventory.length > 0,
         emigrantDrive: false,
         knowledgeBase: false,
@@ -393,6 +438,11 @@ export async function executeGetCaseContext(
       limitations: [
         "Phase 1: Emigrant Drive and KB full content not included in get_case_context.",
         "Use search_knowledge_base for program requirements.",
+        ...(formgridOnly
+          ? [
+              "Client resolved from Formgrid lead row (not yet in CRM Clients sheet).",
+            ]
+          : []),
       ],
       partial: false,
     };

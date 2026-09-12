@@ -183,14 +183,14 @@ export function buildClientAiContext(detail: ClientDetail): string {
               `- ${s.title} (${s.filledAt}), статус: ${s.processingStatus}`,
           )
           .join("\n")
-      : "Нет анкет";
+      : "Сведения об анкетах в полученном контексте отсутствуют";
 
   const docsText =
     documents.length > 0
       ? documents
           .map((d) => `- ${d.name} [${d.category}], ${d.uploadedAt}`)
           .join("\n")
-      : "Нет документов";
+      : "Сведения о документах в полученном контексте отсутствуют; это не подтверждает отсутствие документов у клиента";
 
   const notesText =
     notes.length > 0

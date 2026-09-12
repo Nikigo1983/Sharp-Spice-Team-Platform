@@ -1,5 +1,5 @@
 import { fetchWithTlsFallback } from "@/lib/google-fetch";
-import * as https from "node:https";
+import { currentAiSignal } from "@/lib/ai/request-scope";
 import { getCached, setCached } from "./cache";
 
 const DEFAULT_FORMGRID_SPREADSHEET_ID = "1S8Y0VCaAQ78wxg5Rxl8fcFMkwSsvr-X-cLrAlK4nF9Q";
@@ -77,58 +77,6 @@ function parseCsvRows(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c && c.trim()));
 }
 
-function fetchTextInsecure(url: string, redirectDepth = 0): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (redirectDepth > 5) {
-      reject(new Error("[formgrid] insecure fetch failed: too many redirects"));
-      return;
-    }
-
-    const req = https.get(
-      url,
-      {
-        rejectUnauthorized: false,
-        headers: { "User-Agent": "sharp-spice-team-platform/1.0" },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-        res.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          const status = res.statusCode ?? 0;
-          const location = res.headers.location;
-
-          if (
-            location &&
-            (status === 301 ||
-              status === 302 ||
-              status === 303 ||
-              status === 307 ||
-              status === 308)
-          ) {
-            const nextUrl = new URL(location, url).toString();
-            fetchTextInsecure(nextUrl, redirectDepth + 1)
-              .then(resolve)
-              .catch(reject);
-            return;
-          }
-
-          if (status < 200 || status >= 300) {
-            reject(
-              new Error(`[formgrid] insecure fetch failed: ${status} ${body.slice(0, 200)}`),
-            );
-            return;
-          }
-
-          resolve(body);
-        });
-      },
-    );
-
-    req.on("error", reject);
-  });
-}
-
 async function fetchFormgridCsv(): Promise<string[][]> {
   const spreadsheetId = getFormgridSpreadsheetId();
   const gid = getFormgridGid();
@@ -136,20 +84,12 @@ async function fetchFormgridCsv(): Promise<string[][]> {
 
   try {
     const response = await fetchWithTlsFallback(url, { cache: "no-store" });
-    if (!response.ok) {
-      console.error("[formgrid] csv fetch error", response.status, await response.text());
-      return [];
-    }
+    if (!response.ok) throw new Error(`Formgrid HTTP ${response.status}`);
     return parseCsvRows(await response.text());
   } catch (error) {
-    try {
-      const text = await fetchTextInsecure(url);
-      return parseCsvRows(text);
-    } catch (insecureError) {
-      console.error("[formgrid] csv insecure fallback failed", insecureError);
-      console.error("[formgrid] original fetch failed", error);
-      return [];
-    }
+    if (currentAiSignal()) throw error;
+    console.error("[formgrid] csv fetch failed");
+    return [];
   }
 }
 

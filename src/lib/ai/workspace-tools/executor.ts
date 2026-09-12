@@ -1,3 +1,4 @@
+import { createAiDeadline, currentAiSignal, withAiRequestScope, throwIfAiAborted } from "@/lib/ai/request-scope";
 /**
  * Validate + execute a single allowlisted tool call.
  */
@@ -48,20 +49,22 @@ export function createToolExecutorState(
   };
 }
 
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+async function withTimeout<T>(run: () => Promise<T>, timeoutMs: number): Promise<T> {
+  const deadline = createAiDeadline(currentAiSignal(), timeoutMs);
+  let rejectAbort: (() => void) | undefined;
   try {
+    deadline.signal.throwIfAborted();
     return await Promise.race([
-      promise,
+      withAiRequestScope(deadline.signal, run),
       new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("TOOL_TIMEOUT")), timeoutMs);
+        rejectAbort = () => reject(deadline.signal.reason?.name === "TimeoutError" ? new Error("TOOL_TIMEOUT") : deadline.signal.reason);
+        deadline.signal.addEventListener("abort", rejectAbort, { once: true });
+        if (deadline.signal.aborted) rejectAbort();
       }),
     ]);
   } finally {
-    if (timer) clearTimeout(timer);
+    if (rejectAbort) deadline.signal.removeEventListener("abort", rejectAbort);
+    deadline.dispose();
   }
 }
 
@@ -72,6 +75,7 @@ export async function executeWorkspaceToolCall(params: {
   cache?: ToolExecutorCache;
   state?: ToolExecutorState;
 }): Promise<WorkspaceToolResult> {
+  throwIfAiAborted();
   const { call, context } = params;
   const state =
     params.state ??
@@ -162,7 +166,7 @@ export async function executeWorkspaceToolCall(params: {
 
   try {
     const executed = await withTimeout(
-      def.execute(cleaned, context),
+      () => def.execute(cleaned, context),
       state.timeoutMs,
     );
     const result: WorkspaceToolResult = {

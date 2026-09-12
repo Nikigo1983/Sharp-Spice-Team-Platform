@@ -4,7 +4,7 @@ import {
   isGoogleSheetsConfigured,
   isGoogleSheetsPublicClientsConfigured,
 } from "./auth";
-import * as https from "node:https";
+import { currentAiSignal } from "@/lib/ai/request-scope";
 import { getCached, invalidateCache, setCached } from "./cache";
 import {
   parseClientRows,
@@ -34,56 +34,6 @@ export class GoogleSheetsClient {
     return isGoogleSheetsPublicClientsConfigured();
   }
 
-  private fetchTextInsecure(url: string, redirectDepth = 0): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (redirectDepth > 5) {
-        reject(new Error("[google-sheets] insecure fetch failed: too many redirects"));
-        return;
-      }
-
-      const req = https.get(
-        url,
-        {
-          rejectUnauthorized: false,
-          headers: {
-            "User-Agent": "sharp-spice-team-platform/1.0",
-          },
-        },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-          res.on("end", () => {
-            const body = Buffer.concat(chunks).toString("utf8");
-            const status = res.statusCode ?? 0;
-            const location = res.headers.location;
-
-            if (
-              location &&
-              (status === 301 || status === 302 || status === 303 || status === 307 || status === 308)
-            ) {
-              const nextUrl = new URL(location, url).toString();
-              this.fetchTextInsecure(nextUrl, redirectDepth + 1)
-                .then(resolve)
-                .catch(reject);
-              return;
-            }
-
-            if (status < 200 || status >= 300) {
-              reject(
-                new Error(
-                  `[google-sheets] insecure fetch failed: ${status} ${body.slice(0, 200)}`,
-                ),
-              );
-              return;
-            }
-            resolve(body);
-          });
-        },
-      );
-      req.on("error", reject);
-    });
-  }
-
   private async fetchPublicClientsCsv(): Promise<string[][]> {
     if (!isGoogleSheetsPublicClientsConfigured()) return [];
     const spreadsheetId = getSpreadsheetId();
@@ -97,48 +47,14 @@ export class GoogleSheetsClient {
         cache: "no-store",
       });
 
-      if (!response.ok) {
-        console.error(
-          "[google-sheets] public csv fetch error",
-          response.status,
-          await response.text(),
-        );
-        return [];
-      }
+      if (!response.ok) throw new Error(`Google Sheets HTTP ${response.status}`);
 
       const text = await response.text();
       return this.parseCsvRows(text);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const causeMessage =
-        error && typeof error === "object" && "cause" in error
-          ? String((error as { cause?: unknown }).cause ?? "")
-          : "";
-      const combined = `${message} ${causeMessage}`.toLowerCase();
-      const tlsError =
-        combined.includes("unable_to_verify_leaf_signature") ||
-        combined.includes("unable to verify the first certificate") ||
-        combined.includes("fetch failed");
-
-      if (!tlsError) {
-        console.error("[google-sheets] public csv fetch failed", error);
-      }
-
-      // Dev fallback for Windows environments with broken local CA chain
-      // (and for generic fetch failures around TLS in Node).
-      try {
-        console.warn(
-          "[google-sheets] TLS chain error detected, retrying CSV download with relaxed TLS verification",
-        );
-        const text = await this.fetchTextInsecure(url);
-        return this.parseCsvRows(text);
-      } catch (insecureError) {
-        console.error(
-          "[google-sheets] public csv insecure fallback failed",
-          insecureError,
-        );
-        return [];
-      }
+      if (currentAiSignal()) throw error;
+      console.error("[google-sheets] public csv fetch failed");
+      return [];
     }
   }
 

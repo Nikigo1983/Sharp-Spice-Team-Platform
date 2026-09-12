@@ -260,6 +260,9 @@ export function AiWorkspaceView() {
   >([]);
   const [needsClientSelection, setNeedsClientSelection] = useState(false);
 
+  const requestAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => requestAbortRef.current?.abort(), []);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -344,6 +347,7 @@ export function AiWorkspaceView() {
 
 
   const loadChat = useCallback(async (chatId: string) => {
+    if (requestAbortRef.current) return;
 
     const res = await fetch(
 
@@ -378,6 +382,7 @@ export function AiWorkspaceView() {
 
 
   const startNewChat = useCallback(async () => {
+    if (requestAbortRef.current) return;
 
     const res = await fetch("/api/ai-workspace/chats", { method: "POST" });
 
@@ -519,7 +524,7 @@ export function AiWorkspaceView() {
     let streamSummary: string | null | undefined;
     let streamSummaryThrough: number | null | undefined;
     let streamCaseMemory: WorkspaceCaseMemory | null | undefined;
-    let metaReceived = false;
+    let terminalReceived = false;
 
     const streamingHistory: ChatEntry[] = [
       ...nextHistory,
@@ -527,6 +532,7 @@ export function AiWorkspaceView() {
     ];
     setHistory(streamingHistory);
 
+    try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -545,9 +551,10 @@ export function AiWorkspaceView() {
         const rawData = dataLine.slice(5).trim();
         if (!rawData) continue;
 
+        if (event === "done") { terminalReceived = true; continue; }
         if (event === "status") {
           const payload = JSON.parse(rawData) as { phase?: "context" | "generating" };
-          if (payload.phase) {
+          if (payload.phase === "context" || payload.phase === "generating") {
             setLoadingPhase(payload.phase);
           }
           continue;
@@ -587,7 +594,7 @@ export function AiWorkspaceView() {
           if (meta.caseMemory !== undefined) {
             streamCaseMemory = meta.caseMemory;
           }
-          metaReceived = true;
+
           if (meta.needsClientSelection && meta.pendingClientCandidates) {
             setPendingClientCandidates(meta.pendingClientCandidates);
             setNeedsClientSelection(true);
@@ -595,7 +602,6 @@ export function AiWorkspaceView() {
             setPendingClientCandidates([]);
             setNeedsClientSelection(false);
           }
-          setLoading(false);
           continue;
         }
 
@@ -603,7 +609,7 @@ export function AiWorkspaceView() {
           const payload = JSON.parse(rawData) as { content?: string };
           if (payload.content) {
             reply += payload.content;
-            setLoading(false);
+
             setHistory([
               ...nextHistory,
               { role: "assistant", content: reply },
@@ -614,9 +620,8 @@ export function AiWorkspaceView() {
 
         if (event === "error") {
           const payload = JSON.parse(rawData) as { message?: string };
-          reply =
-            payload.message ??
-            "Ошибка при обращении к AI. Попробуйте ещё раз.";
+          terminalReceived = true;
+          reply += (reply ? "\n\n---\n" : "") + (payload.message ?? "Ответ AI не завершён. Повторите запрос.");
           setHistory([
             ...nextHistory,
             { role: "assistant", content: reply },
@@ -625,9 +630,16 @@ export function AiWorkspaceView() {
       }
     }
 
-    if (!metaReceived && !reply) {
-      reply = "Не удалось получить ответ. Попробуйте ещё раз.";
+    if (!terminalReceived) throw new Error("Ответ AI получен не полностью. Повторите запрос.");
+    } catch {
+      const notice = requestAbortRef.current?.signal.aborted
+        ? "Генерация остановлена. Ответ не завершён."
+        : "Ответ AI получен не полностью. Повторите запрос.";
+      reply += (reply ? "\n\n---\n" : "") + notice;
       setHistory([...nextHistory, { role: "assistant", content: reply }]);
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
     }
 
     const finalHistory: ChatEntry[] = [
@@ -671,223 +683,87 @@ export function AiWorkspaceView() {
   }
 
   async function send(userMessage: string) {
-
     const trimmed = userMessage.trim();
-
-    if (!trimmed || loading) return;
-
-
-
-    let chatId = activeChatId;
-
-    if (!chatId) {
-
-      const res = await fetch("/api/ai-workspace/chats", { method: "POST" });
-
-      const data = (await res.json()) as { chat?: WorkspaceChatSession };
-
-      chatId = data.chat?.id ?? null;
-
-      if (!chatId) return;
-
-      setActiveChatId(chatId);
-
-    }
-
-
-
+    if (!trimmed || requestAbortRef.current) return;
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     setLoading(true);
     setLoadingPhase("context");
-
-    setMessage("");
-
-    const nextHistory: ChatEntry[] = [
-
-      ...history,
-
-      { role: "user", content: trimmed },
-
-    ];
-
-    setHistory(nextHistory);
-
-    void persistChat(chatId, nextHistory);
-
-
-
+    let chatId = activeChatId;
+    const nextHistory: ChatEntry[] = [...history, { role: "user", content: trimmed }];
     try {
-
-      const listContinuation = resolveClientListContinuationFromHistory(
-        history,
-        trimmed,
-      );
-
+      if (!chatId) {
+        const res = await fetch("/api/ai-workspace/chats", { method: "POST", signal: controller.signal });
+        const data = await res.json() as { chat?: WorkspaceChatSession };
+        if (!res.ok || !data.chat) throw new Error("Не удалось создать чат.");
+        chatId = data.chat.id;
+        setActiveChatId(chatId);
+      }
+      setMessage("");
+      setHistory(nextHistory);
+      void persistChat(chatId, nextHistory);
+      const listContinuation = resolveClientListContinuationFromHistory(history, trimmed);
       const res = await fetch("/api/ai-workspace", {
-
         method: "POST",
-
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-
         body: JSON.stringify({
-
           message: trimmed,
-
-          history: selectRecentHistoryTurns(
-            history,
-            WORKSPACE_RECENT_HISTORY_TURNS,
-          ).map((turn) => ({
-            role: turn.role,
-            content: turn.content,
-          })),
-
-          mode: responseMode,
-
-          chatId,
-
+          history: selectRecentHistoryTurns(history, WORKSPACE_RECENT_HISTORY_TURNS).map(turn => ({ role: turn.role, content: turn.content })),
+          mode: responseMode, chatId,
           conversationSummary: conversationSummary ?? undefined,
-
           caseMemory: caseMemory ?? undefined,
-
-          pendingClientCandidates:
-            pendingClientCandidates.length > 0
-              ? pendingClientCandidates
-              : undefined,
-
+          pendingClientCandidates: pendingClientCandidates.length ? pendingClientCandidates : undefined,
           clientListContinuation: listContinuation ?? undefined,
-
         }),
-
       });
-
-
-
-      if (!res.ok) throw new Error("fetch failed");
-
-
-
-      const contentType = res.headers.get("content-type") ?? "";
-
-      if (contentType.includes("text/event-stream")) {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { reply?: string };
+        throw new Error(data.reply || "Не удалось получить ответ AI. Повторите позже.");
+      }
+      if (res.headers.get("content-type")?.includes("text/event-stream")) {
         await consumeSseResponse(res, chatId, nextHistory);
         await refreshChatList();
         return;
       }
-
-
-
-      const data = (await res.json()) as {
-
-        reply?: string;
-
-        sources?: string[];
-
-        demo?: boolean;
-
-        pendingClientCandidates?: ClientContext[];
-
-        needsClientSelection?: boolean;
-
+      const data = await res.json() as {
+        reply?: string; sources?: string[]; demo?: boolean;
+        pendingClientCandidates?: ClientContext[]; needsClientSelection?: boolean;
         clientListContinuation?: ClientListContinuationState | null;
-
-        conversationSummary?: string | null;
-
-        summaryThroughMessageCount?: number | null;
-
+        conversationSummary?: string | null; summaryThroughMessageCount?: number | null;
         caseMemory?: WorkspaceCaseMemory | null;
-
       };
-
-
-
-      const reply =
-
-        data.reply ?? "Не удалось получить ответ. Попробуйте ещё раз.";
-
       setSources(data.sources ?? []);
-
       setDemo(Boolean(data.demo));
-
-      if (data.needsClientSelection && data.pendingClientCandidates) {
-        setPendingClientCandidates(data.pendingClientCandidates);
-        setNeedsClientSelection(true);
-      } else {
-        setPendingClientCandidates([]);
-        setNeedsClientSelection(false);
-      }
-
-      if (data.conversationSummary !== undefined) {
-        setConversationSummary(data.conversationSummary);
-      }
-      if (
-        data.summaryThroughMessageCount !== undefined &&
-        data.summaryThroughMessageCount !== null
-      ) {
-        setSummaryThroughMessageCount(data.summaryThroughMessageCount);
-      }
-      if (data.caseMemory !== undefined) {
-        setCaseMemory(data.caseMemory);
-      }
-
-      const continuation = data.clientListContinuation ?? null;
-
-      const finalHistory: ChatEntry[] = [
-
-        ...nextHistory,
-
-        {
-          role: "assistant",
-          content: reply,
-          ...(continuation ? { clientListContinuation: continuation } : {}),
-        },
-
-      ];
-
+      setPendingClientCandidates(data.needsClientSelection ? data.pendingClientCandidates ?? [] : []);
+      setNeedsClientSelection(Boolean(data.needsClientSelection));
+      if (data.conversationSummary !== undefined) setConversationSummary(data.conversationSummary);
+      if (data.summaryThroughMessageCount != null) setSummaryThroughMessageCount(data.summaryThroughMessageCount);
+      if (data.caseMemory !== undefined) setCaseMemory(data.caseMemory);
+      const finalHistory: ChatEntry[] = [...nextHistory, {
+        role: "assistant", content: data.reply || "AI не вернул ответ.",
+        ...(data.clientListContinuation ? { clientListContinuation: data.clientListContinuation } : {}),
+      }];
       setHistory(finalHistory);
-
       await persistChat(chatId, finalHistory);
-
       await refreshChatList();
-
-    } catch {
-
-      const finalHistory: ChatEntry[] = [
-
-        ...nextHistory,
-
-        {
-
-          role: "assistant",
-
-          content:
-
-            "Ошибка при обращении к AI. Проверьте, что сервер запущен, и обновите страницу.",
-
-        },
-
-      ];
-
+    } catch (error) {
+      const content = controller.signal.aborted
+        ? "Генерация остановлена. Ответ не завершён."
+        : error instanceof Error ? error.message : "Не удалось получить ответ AI.";
+      const finalHistory: ChatEntry[] = [...nextHistory, { role: "assistant", content }];
       setHistory(finalHistory);
-
-      await persistChat(chatId, finalHistory);
-
+      if (chatId) await persistChat(chatId, finalHistory);
     } finally {
-
+      requestAbortRef.current = null;
       setLoading(false);
       setLoadingPhase(null);
-
-      requestAnimationFrame(() => {
-
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-
-      });
-
+      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
     }
-
   }
 
-
-
   async function removeChat(chatId: string) {
+    if (requestAbortRef.current) return;
 
     if (!confirm("Удалить этот чат?")) return;
 
@@ -1497,13 +1373,14 @@ export function AiWorkspaceView() {
 
                 className={styles.sendBtn}
 
-                disabled={loading || !message.trim()}
+                disabled={!loading && !message.trim()}
 
-                onClick={() => void send(message)}
+                aria-label={loading ? "Остановить генерацию" : "Отправить"}
+                onClick={() => loading ? requestAbortRef.current?.abort() : void send(message)}
 
               >
 
-                <i className="fa-solid fa-paper-plane" aria-hidden />
+                {loading ? "Стоп" : <i className="fa-solid fa-paper-plane" aria-hidden />}
 
               </Button>
             </div>

@@ -1,3 +1,6 @@
+import { streamTask } from "@/lib/ai/stream-task";
+import { AiCompletionError } from "@/lib/ai/errors";
+import { throwIfAiAborted } from "@/lib/ai/request-scope";
 import {
   AUTHORITATIVE_EVIDENCE_BANNER,
   buildAttributionLabels,
@@ -5,7 +8,7 @@ import {
   formatClientProvenanceBlock,
   applyPostAnswerGroundingGuards,
 } from "@/lib/ai/answer-grounding";
-import { getAiRuntimeConfig, getAiSetupHint, isAiConfigured } from "@/lib/ai/config";
+import { getAiRuntimeConfig } from "@/lib/ai/config";
 import { decideKbGrounding } from "@/lib/ai/kb-grounding";
 import {
   createChatCompletionResult,
@@ -1234,6 +1237,7 @@ async function attachRefreshedConversationMemory(params: {
   summaryThroughMessageCount?: number;
   caseMemory?: WorkspaceCaseMemory | null;
 }> {
+  throwIfAiAborted();
   const userId = params.userId?.trim();
   const chatId = params.chatId?.trim();
   if (!userId || !chatId || !params.assistantReply.trim()) return {};
@@ -1389,22 +1393,8 @@ async function executeAgentPrepared(params: {
       prepared.trace.openRouterOk = loop.lastCompletion.ok;
     }
 
-    if (!loop.answer) {
-      prepared.trace.notes.push(`agent_stop:${loop.stopReason}`);
-      prepared.trace.responseOk = false;
-      logWorkspaceAiTrace(prepared.trace);
-      return {
-        result: {
-          reply:
-            "Не удалось получить ответ. Уточните запрос или повторите позже.",
-          sources: loop.finalSourceSet,
-          demo: false,
-          requestId: prepared.requestId,
-          pendingClientCandidates: prepared.pendingClientCandidates,
-          needsClientSelection: prepared.needsClientSelection,
-        },
-        statusEvents: loop.statusEvents,
-      };
+    if (loop.stopReason !== "final_answer" || !loop.answer) {
+      throw new AiCompletionError(loop.lastCompletion?.error || (loop.stopReason === "timeout" ? "AI_TIMEOUT" : "MODEL_STREAM_INTERRUPTED"));
     }
 
     const guarded = applyPostAnswerGroundingGuards({
@@ -1454,16 +1444,7 @@ async function executeAgentPrepared(params: {
     prepared.trace.notes.push("agent_loop_error");
     prepared.trace.fallbackActivated = true;
     logWorkspaceAiTrace(prepared.trace);
-    return {
-      result: {
-        reply:
-          "Сбой режима агента. Повторите запрос (legacy можно включить AI_WORKSPACE_AGENT_TOOLS=off).",
-        sources: [],
-        demo: false,
-        requestId: prepared.requestId,
-      },
-      statusEvents: [],
-    };
+    throw error;
   }
 }
 
@@ -1493,6 +1474,7 @@ export async function runWorkspaceAi(
     actor,
   );
 
+  throwIfAiAborted();
   if (prepared.kind === "empty") {
     return {
       reply:
@@ -1563,6 +1545,7 @@ export async function runWorkspaceAi(
       legacy.trace.openRouterOk = completion.ok;
       legacy.trace.astraCalled = true;
       legacy.trace.latencyMs.total = Date.now() - totalStarted;
+      if (!completion.ok) throw new AiCompletionError(completion.error);
       if (completion.content) {
         const guarded = applyPostAnswerGroundingGuards({
           answer: completion.content,
@@ -1614,7 +1597,7 @@ export async function runWorkspaceAi(
   prepared.trace.astraCalled = true;
   prepared.trace.latencyMs.total = Date.now() - totalStarted;
 
-  if (completion.content) {
+  if (completion.ok && completion.content) {
     const guarded = applyPostAnswerGroundingGuards({
       answer: completion.content,
       contextBlock: prepared.contextBlock,
@@ -1653,14 +1636,7 @@ export async function runWorkspaceAi(
   prepared.trace.notes.push(completion.error ?? "OPENROUTER_ERROR");
   logWorkspaceAiTrace(prepared.trace);
 
-  return {
-    reply: buildDemoReply(prepared.trimmed, prepared.context),
-    sources: prepared.sources,
-    demo: true,
-    requestId: prepared.requestId,
-    pendingClientCandidates: prepared.pendingClientCandidates,
-    needsClientSelection: prepared.needsClientSelection,
-  };
+  throw new AiCompletionError(completion.error);
 }
 
 export async function* runWorkspaceAiStream(
@@ -1691,6 +1667,7 @@ export async function* runWorkspaceAiStream(
     actor,
   );
 
+  throwIfAiAborted();
   if (prepared.kind === "empty") {
     yield {
       sources: [],
@@ -1724,41 +1701,26 @@ export async function* runWorkspaceAiStream(
 
   if (prepared.kind === "agent") {
     yield { status: "generating" };
-    const deltas: string[] = [];
-    const agentOutcome = await executeAgentPrepared({
-      prepared,
-      memoryContext,
-      userMessage,
-      history,
-      stream: true,
-      onFinalDelta: async (delta) => {
-        deltas.push(delta);
-      },
-    });
 
-    if (agentOutcome) {
-      for (const event of agentOutcome.statusEvents) {
-        if (event.type === "tool_started") {
-          yield {
-            status: "tool_started",
-            tool: event.tool,
-            label: event.label,
-          };
-        } else if (event.type === "tool_completed") {
-          yield {
-            status: "tool_completed",
-            tool: event.tool,
-            ok: event.ok,
-            resultCount: event.resultCount,
-          };
-        } else if (event.type === "tool_failed") {
-          yield {
-            status: "tool_failed",
-            tool: event.tool,
-            errorCode: event.errorCode,
-          };
-        }
+    let agentOutcome: Awaited<ReturnType<typeof executeAgentPrepared>> = null;
+    for await (const item of streamTask<
+      Awaited<ReturnType<typeof executeAgentPrepared>>,
+      AgentToolStatusEvent
+    >(emit => executeAgentPrepared({
+      prepared, memoryContext, userMessage, history, stream: true,
+      onStatus: emit,
+    }))) {
+      if ("result" in item) { agentOutcome = item.result; continue; }
+      const event = item.event;
+      if (event.type === "tool_started") {
+        yield { status: "tool_started", tool: event.tool, label: event.label };
+      } else if (event.type === "tool_completed") {
+        yield { status: "tool_completed", tool: event.tool, ok: event.ok, resultCount: event.resultCount };
+      } else {
+        yield { status: "tool_failed", tool: event.tool, errorCode: event.errorCode };
       }
+    }
+    if (agentOutcome) {
       const agentResult = agentOutcome.result;
       yield {
         sources: agentResult.sources,
@@ -1770,11 +1732,8 @@ export async function* runWorkspaceAiStream(
         summaryThroughMessageCount: agentResult.summaryThroughMessageCount,
         caseMemory: agentResult.caseMemory,
       };
-      if (deltas.length > 0) {
-        for (const d of deltas) yield d;
-      } else {
-        yield agentResult.reply;
-      }
+      // Expose the guarded final answer, never intermediate tool-round text.
+      yield agentResult.reply;
       return;
     }
 
@@ -1820,6 +1779,7 @@ export async function* runWorkspaceAiStream(
         yield event.content;
         continue;
       }
+      if (!event.result.ok) throw new AiCompletionError(event.result.error);
       legacy.trace.notes.push("agent_fallback_legacy_stream");
       legacy.trace.astraCalled = true;
       legacy.trace.openRouterOk = event.result.ok;
@@ -1827,7 +1787,7 @@ export async function* runWorkspaceAiStream(
       logWorkspaceAiTrace(legacy.trace);
     }
     if (!streamed.trim()) {
-      yield buildDemoReply(legacy.trimmed, legacy.context);
+      throw new AiCompletionError("MODEL_EMPTY_RESPONSE");
     }
     return;
   }
@@ -1880,7 +1840,10 @@ export async function* runWorkspaceAiStream(
         event.result.error === "MODEL_EMPTY_RESPONSE"
           ? "MODEL_EMPTY_RESPONSE"
           : "OPENROUTER_ERROR";
-      prepared.trace.notes.push(event.result.error ?? "OPENROUTER_ERROR");
+      prepared.trace.notes.push(event.result.error ?? "AI_REQUEST_FAILED");
+      prepared.trace.responseOk = false;
+      logWorkspaceAiTrace(prepared.trace);
+      throw new AiCompletionError(event.result.error);
     } else {
       prepared.trace.responseOk = true;
     }
@@ -1933,7 +1896,7 @@ export async function* runWorkspaceAiStream(
       demo: true,
       requestId: prepared.requestId,
     };
-    yield buildDemoReply(prepared.trimmed, prepared.context);
+    throw new AiCompletionError("MODEL_EMPTY_RESPONSE");
   }
 }
 
@@ -2117,109 +2080,3 @@ const STOP_WORDS = new Set([
   "что",
   "где",
 ]);
-
-function extractNameTokens(query: string): string[] {
-  const lower = query.toLowerCase();
-  const afterClient = lower.match(
-    /(?:клиент[а-я]*|у)\s+([а-яё\-]+(?:\s+[а-яё\-]+)?)/iu,
-  );
-  const focus = afterClient?.[1] ?? lower;
-
-  return focus
-    .split(/[^\p{L}\p{N}]+/u)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 3 && !STOP_WORDS.has(t));
-}
-
-function findClientLines(clientsText: string, query: string): string[] {
-  const nameTokens = extractNameTokens(query);
-
-  if (clientsText.includes("---") && nameTokens.length > 0) {
-    const blocks = clientsText
-      .split("---")
-      .map((b) => b.trim())
-      .filter(Boolean);
-    const byName = blocks.filter((block) => {
-      const hay = block.toLowerCase();
-      return nameTokens.some((t) => hay.includes(t));
-    });
-    if (byName.length > 0) return byName.slice(0, 2);
-  }
-
-  const lines = clientsText.split("\n").filter((line) => line.startsWith("- "));
-  if (lines.length === 0) return [];
-
-  if (nameTokens.length > 0) {
-    const byName = lines.filter((line) => {
-      const hay = line.toLowerCase();
-      return nameTokens.some((t) => hay.includes(t));
-    });
-    if (byName.length > 0) return byName.slice(0, 3);
-  }
-
-  const tokens = query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((t) => t.length >= 4 && !STOP_WORDS.has(t));
-
-  return lines
-    .filter((line) => {
-      const hay = line.toLowerCase();
-      return tokens.some((t) => hay.includes(t));
-    })
-    .slice(0, 3);
-}
-
-function summarizeClientMatch(block: string): string {
-  const nameLine = block
-    .split("\n")
-    .find((line) => /имя|name|клиент/i.test(line) || line.startsWith("- "));
-  const compact = block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 4)
-    .join(" · ");
-  return nameLine?.trim() || compact || block.slice(0, 200);
-}
-
-function buildDemoReply(
-  message: string,
-  context: Awaited<ReturnType<typeof buildWorkspaceContext>>,
-): string {
-  const lower = message.toLowerCase();
-  const aiConfigured = isAiConfigured();
-  const modelHint = aiConfigured
-    ? `Сейчас модель недоступна — подождите ~10 сек и повторите. Модель: **${getAiRuntimeConfig()?.model ?? getWorkspaceAiConfig().model ?? "?"}**.`
-    : `Добавьте **${getAiSetupHint()}**.`;
-
-  const clientMatches = findClientLines(context.clientsText, message);
-  if (
-    clientMatches.length > 0 &&
-    (lower.includes("букинг") ||
-      lower.includes("адрес") ||
-      lower.includes("клиент"))
-  ) {
-    const summary = clientMatches
-      .map((block) => summarizeClientMatch(block))
-      .join("\n\n");
-    return `${aiConfigured ? "Пока AI недоступен — кратко по таблице:\n\n" : ""}${summary}\n\n${modelHint}`;
-  }
-
-  if (lower.includes("сколько") && lower.includes("клиент")) {
-    return `В таблице «Клиенты» сейчас **${context.meta.clientsTotal}** записей.\n\n${modelHint}`;
-  }
-
-  if (lower.includes("анкет") || lower.includes("formgrid")) {
-    return `В анкетах Formgrid **${context.meta.formgridRows}** строк. Откройте раздел «Эмиграция» или уточните, какую анкету разобрать.\n\n${modelHint}`;
-  }
-
-  if (
-    lower.includes("статус") &&
-    (lower.includes("emigrant") || lower.includes("кабинет") || lower.includes("дело"))
-  ) {
-    return `В Emigrant Croatia Desk сейчас **${context.meta.emigrantDeskTotal}** клиентов со статусами дел. Уточните имя клиента.\n\n${modelHint}`;
-  }
-
-  return `Контекст собран (Клиенты: ${context.meta.clientsTotal}, Emigrant Desk: ${context.meta.emigrantDeskTotal}, Formgrid: ${context.meta.formgridRows}), но ответ от AI не получен.\n\n${modelHint}`;
-}

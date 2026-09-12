@@ -8,12 +8,6 @@ const NAV_DASHBOARD: NavItem = {
   icon: "fa-solid fa-gauge-high",
 };
 
-const NAV_CLIENTS: NavItem = {
-  href: "/clients",
-  label: "Клиенты",
-  icon: "fa-solid fa-users",
-};
-
 const NAV_CRM_LEADS: NavItem = {
   href: "/crm/leads",
   label: "Новые лиды",
@@ -160,7 +154,6 @@ const NAV_WEBSITE: NavItem = {
 
 /** Emigrant product sections grouped in the sidebar (shared). */
 export const EMIGRANT_NAV_CHILDREN: NavItem[] = [
-  NAV_CLIENTS,
   NAV_CRM_LEADS,
   NAV_NEW_FORMGRID_CLIENTS,
   NAV_CLIENT_INVITATIONS,

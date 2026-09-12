@@ -1,15 +1,6 @@
-import { AppShell } from "@/components/layout/AppShell";
-import { ClientsList } from "@/components/clients/ClientsList";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { redirect } from "next/navigation";
 
+/** Old Google Sheets CRM list — replaced by portal intake. */
 export default function ClientsPage() {
-  return (
-    <AppShell sectionTitle="Клиенты">
-      <SectionHeader
-        title="Клиенты"
-        subtitle="Данные из Google Sheets — без дублирования в локальную БД"
-      />
-      <ClientsList />
-    </AppShell>
-  );
+  redirect("/clients/intake");
 }

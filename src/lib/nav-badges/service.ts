@@ -1,6 +1,7 @@
 import "server-only";
 
 import { listSubmittedForStaff } from "@/lib/client-portal/questionnaire-service";
+import { isCaseArchived } from "@/lib/client-portal/case-archive";
 import {
   countUnreadNotificationsByTypes,
   markNotificationsReadByTypes,
@@ -70,7 +71,9 @@ export async function getNavBadgesForUser(
     getNavSectionLastSeen(userId, "/spiora/clients"),
   ]);
 
-  const intakeNew = intakeItems.filter((item) => !item.staffOpenedAt).length;
+  const intakeNew = intakeItems.filter(
+    (item) => !item.staffOpenedAt && !isCaseArchived(item.answers),
+  ).length;
 
   const badges: NavBadgesMap = {};
   const set = (href: NavBadgeHref, count: number) => {

@@ -146,6 +146,73 @@
   color: #6b8cff;
 }
 
+.viewTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.viewTab,
+.viewTabActive {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.viewTabActive {
+  border-color: rgba(36, 0, 255, 0.65);
+  background: rgba(36, 0, 255, 0.22);
+  color: #fff;
+}
+
+.viewTabCount {
+  min-width: 1.25rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.archiveBtn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.archiveBtn:hover:not(:disabled) {
+  border-color: rgba(203, 213, 225, 0.55);
+  color: #fff;
+}
+
+.archiveBtn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .refresh,
 .back,
 .saveBtn,

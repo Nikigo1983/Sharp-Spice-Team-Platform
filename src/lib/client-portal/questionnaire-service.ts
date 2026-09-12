@@ -35,6 +35,10 @@ import {
   isLegacyCrmImport,
 } from "./legacy-crm";
 import {
+  isCaseArchived,
+  writeCaseArchive,
+} from "./case-archive";
+import {
   appendStaffDocument,
   appendStaffNote,
   findStaffDocument,
@@ -302,6 +306,32 @@ export async function updateSubmittedStaffFields(
     revision: current.revision + 1,
   });
 }
+
+export async function updateCaseArchiveState(
+  id: string,
+  input: {
+    archived: boolean;
+    archivedByUserId: string;
+    archivedByName: string;
+  },
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const now = new Date().toISOString();
+  return upsertQuestionnaire({
+    ...current,
+    answers: writeCaseArchive(current.answers, {
+      archived: input.archived,
+      archivedAt: input.archived ? now : null,
+      archivedByName: input.archived ? input.archivedByName : null,
+      archivedByUserId: input.archived ? input.archivedByUserId : null,
+    }),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+}
+
+export { isCaseArchived };
 
 export async function addStaffCaseNote(
   id: string,

@@ -29,6 +29,7 @@ type ListItem = {
   submittedAt: string | null;
   isNew?: boolean;
   isLegacy?: boolean;
+  isArchived?: boolean;
   staffFields?: QuestionnaireStaffFields;
 };
 
@@ -163,22 +164,33 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
+  const [selectedArchived, setSelectedArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [listView, setListView] = useState<"active" | "archive">("active");
+  const [counts, setCounts] = useState({ active: 0, archive: 0 });
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/client-cases", { cache: "no-store" });
+      const res = await fetch(
+        `/api/client-cases?view=${encodeURIComponent(listView)}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) {
         setError("Не удалось загрузить заявки.");
         return;
       }
-      const data = (await res.json()) as { items: ListItem[] };
+      const data = (await res.json()) as {
+        items: ListItem[];
+        counts?: { active: number; archive: number };
+      };
       const nextItems = data.items ?? [];
       setItems(nextItems);
+      if (data.counts) setCounts(data.counts);
       const nextDrafts: Record<string, QuestionnaireStaffFields> = {};
       for (const item of nextItems) {
         nextDrafts[item.id] = {
@@ -190,11 +202,42 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listView]);
 
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  async function setArchived(id: string, archived: boolean) {
+    setArchivingId(id);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, archived }),
+      });
+      if (!res.ok) {
+        setError(
+          archived
+            ? "Не удалось отправить в архив."
+            : "Не удалось вернуть из архива.",
+        );
+        return;
+      }
+      setStatus(
+        archived ? "Клиент перемещён в архив." : "Клиент возвращён в заявки.",
+      );
+      await loadList();
+      if (selectedId === id) {
+        setSelectedId(null);
+        setCaseView("menu");
+      }
+    } finally {
+      setArchivingId(null);
+    }
+  }
 
   const filterOptions = useMemo(() => {
     const draftsList = items.map(
@@ -342,6 +385,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setSelectedId(item.id);
     setCaseView("menu");
     setClientLabel(clientName(item));
+    setSelectedArchived(Boolean(item.isArchived));
     setError(null);
     setStatus(null);
     setNoteDraft("");
@@ -359,6 +403,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       documents?: StaffDocument[];
       processStatus?: ProcessStatusState | null;
       processStatusOptions?: string[];
+      isArchived?: boolean;
     };
     setSchemaTitle(data.schemaTitle);
     setReview(data.review ?? []);
@@ -367,6 +412,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setProcessStatus(data.processStatus ?? null);
     setProcessStatusDraft(data.processStatus?.value ?? "");
     setProcessStatusOptions(data.processStatusOptions ?? []);
+    setSelectedArchived(Boolean(data.isArchived ?? item.isArchived));
     setItems((prev) =>
       prev.map((row) =>
         row.id === item.id ? { ...row, isNew: false } : row,
@@ -385,6 +431,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setProcessStatusOptions([]);
     setNoteDraft("");
     setClientLabel("");
+    setSelectedArchived(false);
     setStatus(null);
   }
 
@@ -548,6 +595,18 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           ) : (
             backToMenu
           )}
+          <button
+            type="button"
+            className={styles.archiveBtn}
+            disabled={archivingId === selectedId}
+            onClick={() => void setArchived(selectedId, !selectedArchived)}
+          >
+            {archivingId === selectedId
+              ? "…"
+              : selectedArchived
+                ? "Вернуть из архива"
+                : "В архив"}
+          </button>
           <Link href="/dashboard" className={styles.homeLink}>
             Вернуться на главную
           </Link>
@@ -564,6 +623,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                   : caseView === "documents"
                     ? "Документы по клиенту"
                     : "Комментарии"}
+          {caseView === "menu" && selectedArchived ? (
+            <span className={styles.legacyBadge}>Архив</span>
+          ) : null}
         </h1>
         {clientLabel && caseView !== "menu" ? (
           <p className={styles.lead}>{clientLabel}</p>
@@ -859,9 +921,36 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             Заявки клиентского портала Emigrant
           </h1>
           <p className={styles.lead}>
-            Анкеты клиентов. Редактируйте колонки в таблице и нажмите
-            «Сохранить». Имя открывает разделы карточки клиента.
+            {listView === "archive"
+              ? "Архив: клиенты с завершёнными процессами. Карточка и все данные сохраняются."
+              : "Анкеты клиентов. Редактируйте колонки в таблице и нажмите «Сохранить». Имя открывает разделы карточки клиента."}
           </p>
+          <div className={styles.viewTabs} role="tablist" aria-label="Разделы заявок">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={listView === "active"}
+              className={
+                listView === "active" ? styles.viewTabActive : styles.viewTab
+              }
+              onClick={() => setListView("active")}
+            >
+              Заявки
+              <span className={styles.viewTabCount}>{counts.active}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={listView === "archive"}
+              className={
+                listView === "archive" ? styles.viewTabActive : styles.viewTab
+              }
+              onClick={() => setListView("archive")}
+            >
+              Архив клиентов
+              <span className={styles.viewTabCount}>{counts.archive}</span>
+            </button>
+          </div>
         </div>
         <div className={styles.headerActions}>
           <Link href="/dashboard" className={styles.homeLink}>
@@ -994,7 +1083,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       {loading ? <p className={styles.muted}>Загрузка…</p> : null}
 
       {!loading && items.length === 0 ? (
-        <p className={styles.muted}>Пока нет отправленных анкет.</p>
+        <p className={styles.muted}>
+          {listView === "archive"
+            ? "В архиве пока нет клиентов."
+            : "Пока нет отправленных анкет."}
+        </p>
       ) : null}
 
       {!loading && items.length > 0 && filteredItems.length === 0 ? (
@@ -1056,14 +1149,30 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       </td>
                     ))}
                     <td>
-                      <button
-                        type="button"
-                        className={styles.saveBtn}
-                        disabled={savingId === item.id}
-                        onClick={() => void saveRow(item.id)}
-                      >
-                        {savingId === item.id ? "…" : "Сохранить"}
-                      </button>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={styles.saveBtn}
+                          disabled={savingId === item.id}
+                          onClick={() => void saveRow(item.id)}
+                        >
+                          {savingId === item.id ? "…" : "Сохранить"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.archiveBtn}
+                          disabled={archivingId === item.id}
+                          onClick={() =>
+                            void setArchived(item.id, listView !== "archive")
+                          }
+                        >
+                          {archivingId === item.id
+                            ? "…"
+                            : listView === "archive"
+                              ? "Вернуть"
+                              : "В архив"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

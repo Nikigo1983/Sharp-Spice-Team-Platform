@@ -236,7 +236,8 @@ export function buildLegacyAnswersFromClient(
   };
 
   const staff = {
-    contractNumber: clean(row.contract),
+    // Legacy sheet "Договор" is not a contract number — keep list column empty.
+    contractNumber: "",
     contractAmount: "",
     company: "",
     curator,

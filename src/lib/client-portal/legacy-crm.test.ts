@@ -37,6 +37,11 @@ describe("legacy crm import mapping", () => {
       (answers.__staff as { curator: string }).curator,
       "Вероника",
     );
+    assert.equal((answers.__staff as { contractNumber: string }).contractNumber, "");
+    assert.equal(
+      (answers.__legacySheet as Record<string, string>)["Договор"],
+      "дог.оказания услуг",
+    );
     assert.equal(
       (answers.__legacySheet as Record<string, string>)["Номер паспорта"],
       "КВ2719292",

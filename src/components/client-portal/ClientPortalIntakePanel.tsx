@@ -646,17 +646,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
-  async function uploadDocuments(files: FileList | null) {
-    if (!selectedId || !files?.length) return;
+  async function uploadDocuments(files: File[]) {
+    if (!selectedId || files.length === 0) return;
     setUploadingDoc(true);
     setError(null);
     setStatus(null);
-    const selected = Array.from(files);
     let uploaded = 0;
     let latest: StaffDocument[] | null = null;
     let failMessage: string | null = null;
     try {
-      for (const file of selected) {
+      for (const file of files) {
         const form = new FormData();
         form.set("questionnaireId", selectedId);
         form.set("file", file);
@@ -664,10 +663,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           method: "POST",
           body: form,
         });
-        const data = (await res.json()) as {
-          documents?: StaffDocument[];
-          error?: string;
-        };
+        let data: { documents?: StaffDocument[]; error?: string } = {};
+        try {
+          data = (await res.json()) as {
+            documents?: StaffDocument[];
+            error?: string;
+          };
+        } catch {
+          failMessage = `Не удалось загрузить «${file.name}» (ответ сервера).`;
+          break;
+        }
         if (!res.ok) {
           failMessage =
             data.error === "FILE_TOO_LARGE"
@@ -684,7 +689,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       if (failMessage) {
         setError(
           uploaded > 0
-            ? `Загружено ${uploaded} из ${selected.length}. ${failMessage}`
+            ? `Загружено ${uploaded} из ${files.length}. ${failMessage}`
             : failMessage,
         );
         if (uploaded > 0) {
@@ -701,6 +706,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           ? "Документ загружен"
           : `Загружено документов: ${uploaded}`,
       );
+    } catch {
+      setError("Не удалось загрузить документы. Проверьте соединение и попробуйте снова.");
     } finally {
       setUploadingDoc(false);
     }
@@ -1044,9 +1051,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                 disabled={uploadingDoc}
                 onChange={(event) => {
-                  const files = event.target.files;
+                  const selected = Array.from(event.target.files ?? []);
                   event.target.value = "";
-                  void uploadDocuments(files);
+                  void uploadDocuments(selected);
                 }}
               />
               {uploadingDoc ? "Загрузка…" : "Добавить документы"}

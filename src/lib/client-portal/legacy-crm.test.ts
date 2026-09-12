@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   LEGACY_CRM_SOURCE,
+  applyLegacySheetEdits,
   buildLegacyAnswersFromClient,
   buildLegacyReviewRows,
   isLegacyCrmImport,
@@ -84,7 +85,7 @@ describe("legacy crm import mapping", () => {
     assert.ok(
       rows.some(
         (r) =>
-          r.label === "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ" && r.value === "—",
+          r.label === "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ" && r.value === "",
       ),
     );
     assert.ok(!rows.some((r) => r.label.toLowerCase().includes("пароль")));
@@ -95,5 +96,35 @@ describe("legacy crm import mapping", () => {
   it("parses dd.mm.yyyy submitted dates", () => {
     assert.equal(parseSubmittedAtIso("01.04.2026")?.startsWith("2026-04-01"), true);
     assert.equal(parseSubmittedAtIso(""), null);
+  });
+
+  it("applies sheet edits and keeps staff mirrors in sync", () => {
+    const answers = buildLegacyAnswersFromClient({
+      name: "Test",
+      passportNumber: "AB1",
+      referentName: "Old",
+      contract: "тип",
+    });
+    const next = applyLegacySheetEdits(answers, {
+      Фамилия: "Новое Имя",
+      "Имя референта": "Новый куратор",
+      "Адрес букинга": "Zagreb 1",
+      Договор: "обновлённый договор",
+    });
+    assert.equal(
+      (next.__legacySheet as Record<string, string>)["Фамилия"],
+      "Новое Имя",
+    );
+    assert.equal((next.__staff as { curator: string }).curator, "Новый куратор");
+    assert.equal(
+      (next.__staff as { bookingAddress: string }).bookingAddress,
+      "Zagreb 1",
+    );
+    assert.equal((next.__staff as { contractNumber: string }).contractNumber, "");
+    assert.equal(
+      (next.__legacySheet as Record<string, string>)["Договор"],
+      "обновлённый договор",
+    );
+    assert.equal(next.full_name_cyrillic, "Новое Имя");
   });
 });

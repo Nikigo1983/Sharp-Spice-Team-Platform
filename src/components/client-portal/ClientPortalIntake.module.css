@@ -476,6 +476,31 @@
   margin-top: 1rem;
 }
 
+.reviewToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.reviewInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.reviewInput:focus {
+  outline: none;
+  border-color: rgba(36, 0, 255, 0.7);
+}
+
 .row {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;

@@ -331,12 +331,91 @@ export function buildLegacyReviewRows(
     rows.push({
       section: "",
       label: key,
-      value: value || "—",
+      value,
       questionId: `${LEGACY_SHEET_KEY}.${key}`,
     });
   }
 
   return rows;
+}
+
+/**
+ * Apply staff edits to `__legacySheet` and keep identity / staff mirrors in sync.
+ * Keys are sheet column labels (Фамилия, …). Password columns are ignored.
+ */
+export function applyLegacySheetEdits(
+  answers: Record<string, unknown>,
+  fields: Record<string, string>,
+): Record<string, unknown> {
+  const currentSheet =
+    answers[LEGACY_SHEET_KEY] &&
+    typeof answers[LEGACY_SHEET_KEY] === "object" &&
+    !Array.isArray(answers[LEGACY_SHEET_KEY])
+      ? { ...(answers[LEGACY_SHEET_KEY] as Record<string, string>) }
+      : {};
+
+  for (const [rawKey, rawValue] of Object.entries(fields)) {
+    const key = canonicalHeader(rawKey);
+    if (!key || isPasswordSheetHeader(key)) continue;
+    currentSheet[key] = clean(rawValue);
+  }
+
+  // Ensure canonical keys exist
+  for (const key of EXTERNAL_COLUMN_ORDER) {
+    if (!(key in currentSheet)) currentSheet[key] = "";
+  }
+
+  const fullName = clean(currentSheet["Фамилия"]);
+  const latin = clean(currentSheet["Латиница"]);
+  const email = clean(currentSheet["электронная почта"]);
+  const passport = clean(currentSheet["Номер паспорта"]);
+  const submittedAt = clean(currentSheet["Дата подачи"]);
+
+  const identity: LegacyCrmIdentity = {
+    fullNameCyrillic: fullName,
+    fullNameLatin: latin,
+    passportNumber: passport,
+    email,
+    submittedAt,
+    status: clean(
+      (answers[LEGACY_IDENTITY_KEY] as LegacyCrmIdentity | undefined)?.status,
+    ),
+    direction:
+      clean(
+        (answers[LEGACY_IDENTITY_KEY] as LegacyCrmIdentity | undefined)
+          ?.direction,
+      ) || "Хорватия",
+  };
+
+  const existingStaff =
+    answers[LEGACY_STAFF_KEY] &&
+    typeof answers[LEGACY_STAFF_KEY] === "object" &&
+    !Array.isArray(answers[LEGACY_STAFF_KEY])
+      ? (answers[LEGACY_STAFF_KEY] as Record<string, string>)
+      : {};
+
+  const staff = {
+    ...existingStaff,
+    contractNumber: clean(existingStaff.contractNumber),
+    contractAmount: clean(existingStaff.contractAmount),
+    company: clean(existingStaff.company),
+    curator: clean(currentSheet["Имя референта"]),
+    expectedApproval: clean(currentSheet["Дата предпологаемого одобрения"]),
+    bookingAddress: clean(currentSheet["Адрес букинга"]),
+    bookingDate: clean(currentSheet["Дата букинга (от и до)"]),
+    trpApprovalDate: clean(currentSheet["Дата одобрения ВНЖ"]),
+    trpCardIssueDate: clean(currentSheet["Дата выдачи карточки ВНЖ"]),
+    partner: clean(currentSheet["Партнер от кого клиент"]),
+  };
+
+  return {
+    ...answers,
+    full_name_cyrillic: fullName,
+    full_name_latin: latin,
+    [LEGACY_IDENTITY_KEY]: identity,
+    [LEGACY_SHEET_KEY]: currentSheet,
+    [LEGACY_STAFF_KEY]: staff,
+  };
 }
 
 export function parseSubmittedAtIso(value: string | undefined): string | null {

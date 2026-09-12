@@ -33,6 +33,8 @@ import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields"
 import {
   buildLegacyReviewRows,
   isLegacyCrmImport,
+  applyLegacySheetEdits,
+  readLegacyIdentity,
 } from "./legacy-crm";
 import {
   isCaseArchived,
@@ -326,6 +328,55 @@ export async function updateCaseArchiveState(
       archivedByName: input.archived ? input.archivedByName : null,
       archivedByUserId: input.archived ? input.archivedByUserId : null,
     }),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+}
+
+export async function updateLegacyCaseSheetFields(
+  id: string,
+  fields: Record<string, string>,
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  if (!isLegacyCrmImport(current.answers)) {
+    throw new Error("NOT_LEGACY");
+  }
+  const now = new Date().toISOString();
+  const answers = applyLegacySheetEdits(current.answers, fields);
+  const identity = readLegacyIdentity(answers);
+  const firstName =
+    (identity?.fullNameCyrillic || "").trim().split(/\s+/)[0] ||
+    current.firstName;
+  const email =
+    (identity?.email || "").trim() ||
+    current.email;
+
+  return upsertQuestionnaire({
+    ...current,
+    firstName,
+    email,
+    answers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+}
+
+export async function updateSubmittedAnswerFields(
+  id: string,
+  fields: Record<string, string>,
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const now = new Date().toISOString();
+  const answers = { ...current.answers };
+  for (const [key, value] of Object.entries(fields)) {
+    if (!key || key.startsWith("__")) continue;
+    answers[key] = value;
+  }
+  return upsertQuestionnaire({
+    ...current,
+    answers,
     updatedAt: now,
     revision: current.revision + 1,
   });

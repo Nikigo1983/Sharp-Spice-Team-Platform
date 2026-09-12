@@ -165,6 +165,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
+  const [selectedIsLegacy, setSelectedIsLegacy] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState<Record<string, string>>({});
+  const [savingReview, setSavingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -404,15 +407,25 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       processStatus?: ProcessStatusState | null;
       processStatusOptions?: string[];
       isArchived?: boolean;
+      isLegacy?: boolean;
     };
     setSchemaTitle(data.schemaTitle);
-    setReview(data.review ?? []);
+    const nextReview = data.review ?? [];
+    setReview(nextReview);
+    const draft: Record<string, string> = {};
+    for (const row of nextReview) {
+      if (row.questionId && !row.fileId) {
+        draft[row.questionId] = row.value === "—" ? "" : row.value;
+      }
+    }
+    setReviewDraft(draft);
     setNotes(data.notes ?? []);
     setDocuments(data.documents ?? []);
     setProcessStatus(data.processStatus ?? null);
     setProcessStatusDraft(data.processStatus?.value ?? "");
     setProcessStatusOptions(data.processStatusOptions ?? []);
     setSelectedArchived(Boolean(data.isArchived ?? item.isArchived));
+    setSelectedIsLegacy(Boolean(data.isLegacy ?? item.isLegacy));
     setItems((prev) =>
       prev.map((row) =>
         row.id === item.id ? { ...row, isNew: false } : row,
@@ -424,6 +437,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setSelectedId(null);
     setCaseView("menu");
     setReview([]);
+    setReviewDraft({});
     setNotes([]);
     setDocuments([]);
     setProcessStatus(null);
@@ -432,6 +446,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setNoteDraft("");
     setClientLabel("");
     setSelectedArchived(false);
+    setSelectedIsLegacy(false);
     setStatus(null);
   }
 
@@ -442,6 +457,85 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     deepLinkHandled.current = true;
     void openCase(item);
   }, [initialCaseId, items, loading]);
+
+  async function saveReviewEdits() {
+    if (!selectedId) return;
+    setSavingReview(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const body: Record<string, unknown> = { id: selectedId };
+      if (selectedIsLegacy) {
+        const legacySheet: Record<string, string> = {};
+        for (const row of review) {
+          if (!row.questionId?.startsWith("__legacySheet.")) continue;
+          const label = row.questionId.slice("__legacySheet.".length);
+          legacySheet[label] = reviewDraft[row.questionId] ?? "";
+        }
+        body.legacySheet = legacySheet;
+      } else {
+        const answerFields: Record<string, string> = {};
+        for (const row of review) {
+          if (!row.questionId || row.fileId) continue;
+          if (row.questionId.startsWith("__")) continue;
+          answerFields[row.questionId] = reviewDraft[row.questionId] ?? "";
+        }
+        body.answerFields = answerFields;
+      }
+
+      const res = await fetch("/api/client-cases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as {
+        review?: ReviewRow[];
+        item?: ListItem;
+        error?: string;
+      };
+      if (!res.ok) {
+        setError("Не удалось сохранить изменения карточки.");
+        return;
+      }
+      const nextReview = data.review ?? review;
+      setReview(nextReview);
+      const draft: Record<string, string> = {};
+      for (const row of nextReview) {
+        if (row.questionId && !row.fileId) {
+          draft[row.questionId] = row.value === "—" ? "" : row.value;
+        }
+      }
+      setReviewDraft(draft);
+      if (data.item) {
+        setClientLabel(clientName(data.item));
+        setItems((prev) => {
+          const exists = prev.some((row) => row.id === data.item!.id);
+          if (!exists) return prev;
+          return prev.map((row) =>
+            row.id === data.item!.id
+              ? {
+                  ...row,
+                  ...data.item,
+                  staffFields: data.item!.staffFields ?? row.staffFields,
+                }
+              : row,
+          );
+        });
+        if (data.item.staffFields) {
+          setDrafts((prev) => ({
+            ...prev,
+            [data.item!.id]: {
+              ...EMPTY_STAFF_FIELDS,
+              ...data.item!.staffFields,
+            },
+          }));
+        }
+      }
+      setStatus("Изменения карточки сохранены.");
+    } finally {
+      setSavingReview(false);
+    }
+  }
 
   async function saveProcessStatus() {
     if (!selectedId || !processStatusDraft.trim()) return;
@@ -756,6 +850,19 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
 
         {caseView === "questionnaire" ? (
           <div className={styles.review}>
+            <div className={styles.reviewToolbar}>
+              <p className={styles.staffBlockHint}>
+                Можно изменить поля и нажать «Сохранить».
+              </p>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                disabled={savingReview}
+                onClick={() => void saveReviewEdits()}
+              >
+                {savingReview ? "Сохранение…" : "Сохранить"}
+              </button>
+            </div>
             {review.map((row, index) => (
               <div key={`${row.label}-${index}`} className={styles.row}>
                 <div className={styles.rowMeta}>
@@ -791,6 +898,18 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         </a>
                       </div>
                     </div>
+                  ) : row.questionId ? (
+                    <input
+                      className={styles.reviewInput}
+                      value={reviewDraft[row.questionId] ?? ""}
+                      onChange={(event) =>
+                        setReviewDraft((prev) => ({
+                          ...prev,
+                          [row.questionId!]: event.target.value,
+                        }))
+                      }
+                      aria-label={row.label}
+                    />
                   ) : (
                     row.value || "—"
                   )}

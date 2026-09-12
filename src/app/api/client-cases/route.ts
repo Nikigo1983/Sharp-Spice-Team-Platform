@@ -11,6 +11,8 @@ import {
   readStaffDocuments,
   readStaffNotes,
   updateCaseArchiveState,
+  updateLegacyCaseSheetFields,
+  updateSubmittedAnswerFields,
   updateSubmittedStaffFields,
 } from "@/lib/client-portal/questionnaire-service";
 import {
@@ -132,6 +134,8 @@ export async function PATCH(request: Request) {
     id?: string;
     staffFields?: Partial<QuestionnaireStaffFields>;
     archived?: boolean;
+    legacySheet?: Record<string, string>;
+    answerFields?: Record<string, string>;
   };
 
   if (!body.id) {
@@ -148,6 +152,26 @@ export async function PATCH(request: Request) {
       return NextResponse.json({
         item: toListItem(record),
         staffFields: readStaffFields(record.answers),
+      });
+    }
+
+    if (body.legacySheet && typeof body.legacySheet === "object") {
+      const record = await updateLegacyCaseSheetFields(body.id, body.legacySheet);
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        review: buildReviewRows(record.answers, "ru"),
+        isLegacy: true,
+      });
+    }
+
+    if (body.answerFields && typeof body.answerFields === "object") {
+      const record = await updateSubmittedAnswerFields(body.id, body.answerFields);
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        review: buildReviewRows(record.answers, "ru"),
+        isLegacy: isLegacyCrmImport(record.answers),
       });
     }
 
@@ -170,7 +194,12 @@ export async function PATCH(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SAVE_FAILED";
-    const status = message === "NOT_FOUND" ? 404 : 400;
+    const status =
+      message === "NOT_FOUND"
+        ? 404
+        : message === "NOT_LEGACY"
+          ? 400
+          : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

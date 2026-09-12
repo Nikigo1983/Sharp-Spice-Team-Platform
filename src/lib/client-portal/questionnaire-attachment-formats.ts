@@ -1,5 +1,5 @@
 /**
- * Allowed formats and size limits for questionnaire document uploads.
+ * Allowed formats and size limits for questionnaire / staff case document uploads.
  */
 
 export const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -10,7 +10,21 @@ const EXT_TO_MIME: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
+
+/** Staff case documents (portal intake) — PDF, images, Word, Excel. */
+export const STAFF_CASE_DOCUMENT_ACCEPT =
+  ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+export const STAFF_CASE_DOCUMENT_HINT =
+  "Можно выбрать несколько файлов сразу. PDF, Word, Excel или изображение до 10 МБ каждый. Файлы видны только сотрудникам.";
+
+export const STAFF_CASE_DOCUMENT_TYPES_LABEL =
+  "PDF, Word, Excel и изображения (JPG, PNG, WEBP)";
 
 export function extFromFileName(fileName: string): string {
   const base = fileName.trim().split(/[/\\]/).pop() ?? "";
@@ -61,7 +75,10 @@ export function isAllowedAttachment(input: {
   const mimeFromExt = ext ? EXT_TO_MIME[ext] : undefined;
   const rawMime = input.contentType.toLowerCase().split(";")[0]?.trim() ?? "";
   const mimeType =
-    (mimeFromExt && rawMime.startsWith("application/octet-stream")
+    (mimeFromExt &&
+    (!rawMime ||
+      rawMime === "application/octet-stream" ||
+      rawMime === "application/zip")
       ? mimeFromExt
       : rawMime) ||
     mimeFromExt ||
@@ -76,6 +93,6 @@ export function isAllowedAttachment(input: {
 
   return {
     ok: true,
-    mimeType: mimeType || mimeFromExt || "application/octet-stream",
+    mimeType: mimeFromExt || mimeType || "application/octet-stream",
   };
 }

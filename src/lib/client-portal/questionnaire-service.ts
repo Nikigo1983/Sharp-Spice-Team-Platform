@@ -28,7 +28,7 @@ import {
   deleteQuestionnaireAttachmentFile,
   saveQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
-import { isAllowedAttachment } from "./questionnaire-attachment-formats";
+import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT } from "./questionnaire-attachment-formats";
 import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields";
 import {
   buildLegacyReviewRows,
@@ -426,7 +426,7 @@ export async function addStaffCaseDocument(
     fileName: input.fileName,
     contentType: input.contentType,
     sizeBytes: input.data.length,
-    accept: ".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp",
+    accept: STAFF_CASE_DOCUMENT_ACCEPT,
     maxSizeMb: 10,
   });
   if (!allowed.ok) {

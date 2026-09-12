@@ -17,6 +17,11 @@ import {
   STAFF_FIELD_COLUMNS,
   type QuestionnaireStaffFields,
 } from "@/lib/client-portal/staff-fields";
+import {
+  STAFF_CASE_DOCUMENT_ACCEPT,
+  STAFF_CASE_DOCUMENT_HINT,
+  STAFF_CASE_DOCUMENT_TYPES_LABEL,
+} from "@/lib/client-portal/questionnaire-attachment-formats";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -678,7 +683,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             data.error === "FILE_TOO_LARGE"
               ? `«${file.name}»: файл слишком большой (макс. 10 МБ).`
               : data.error === "UNSUPPORTED_FILE_TYPE"
-                ? `«${file.name}»: допустимы PDF и изображения (JPG, PNG, WEBP).`
+                ? `«${file.name}»: допустимы ${STAFF_CASE_DOCUMENT_TYPES_LABEL}.`
                 : `Не удалось загрузить «${file.name}».`;
           break;
         }
@@ -999,8 +1004,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <span className={styles.section}>Документы сотрудника</span>
               <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
               <p className={styles.staffBlockHint}>
-                Можно выбрать несколько файлов сразу. PDF или изображение до 10
-                МБ каждый. Файлы видны только сотрудникам.
+                {STAFF_CASE_DOCUMENT_HINT}
               </p>
             </div>
             {documents.length === 0 ? (
@@ -1048,7 +1052,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                accept={STAFF_CASE_DOCUMENT_ACCEPT}
                 disabled={uploadingDoc}
                 onChange={(event) => {
                   const selected = Array.from(event.target.files ?? []);

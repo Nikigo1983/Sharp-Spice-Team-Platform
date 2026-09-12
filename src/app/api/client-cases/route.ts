@@ -88,10 +88,16 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = await listSubmittedForStaff();
-  return NextResponse.json({
-    items: items.map(toListItem),
-  });
+  const items = (await listSubmittedForStaff())
+    .map(toListItem)
+    .sort((a, b) =>
+      (a.displayName || a.firstName || a.email).localeCompare(
+        b.displayName || b.firstName || b.email,
+        "ru",
+        { sensitivity: "base", numeric: true },
+      ),
+    );
+  return NextResponse.json({ items });
 }
 
 export async function PATCH(request: Request) {

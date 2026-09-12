@@ -209,31 +209,38 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
 
   const filteredItems = useMemo(
     () =>
-      items.filter((item) => {
-        const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
-        if (!rowMatchesQuery(item, draft, query)) return false;
-        if (curator && draft.curator.trim() !== curator) return false;
-        if (partner && draft.partner.trim() !== partner) return false;
-        if (contractNumber && draft.contractNumber.trim() !== contractNumber) {
-          return false;
-        }
-        if (
-          !dateInRange(
-            item.submittedAt,
-            submittedFrom || undefined,
-            submittedTo || undefined,
-          )
-        ) {
-          return false;
-        }
-        if (!matchesPresenceFilter(draft.contractAmount, hasAmount)) {
-          return false;
-        }
-        if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
-          return false;
-        }
-        return true;
-      }),
+      items
+        .filter((item) => {
+          const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
+          if (!rowMatchesQuery(item, draft, query)) return false;
+          if (curator && draft.curator.trim() !== curator) return false;
+          if (partner && draft.partner.trim() !== partner) return false;
+          if (contractNumber && draft.contractNumber.trim() !== contractNumber) {
+            return false;
+          }
+          if (
+            !dateInRange(
+              item.submittedAt,
+              submittedFrom || undefined,
+              submittedTo || undefined,
+            )
+          ) {
+            return false;
+          }
+          if (!matchesPresenceFilter(draft.contractAmount, hasAmount)) {
+            return false;
+          }
+          if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
+            return false;
+          }
+          return true;
+        })
+        .sort((a, b) =>
+          clientName(a).localeCompare(clientName(b), "ru", {
+            sensitivity: "base",
+            numeric: true,
+          }),
+        ),
     [
       items,
       drafts,

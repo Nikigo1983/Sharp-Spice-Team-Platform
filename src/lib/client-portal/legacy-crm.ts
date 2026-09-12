@@ -297,15 +297,13 @@ export function buildLegacyAnswersFromClient(
 
 export function buildLegacyReviewRows(
   answers: Record<string, unknown>,
-  locale: "ru" | "en" = "ru",
+  _locale: "ru" | "en" = "ru",
 ): Array<{
   section: string;
   label: string;
   value: string;
   questionId: string;
 }> {
-  const sectionSheet =
-    locale === "ru" ? "Данные из Google-таблицы (CRM)" : "Legacy CRM sheet";
   const rows: Array<{
     section: string;
     label: string;
@@ -331,7 +329,7 @@ export function buildLegacyReviewRows(
     seen.add(key);
     const value = clean(sheetObj[key]);
     rows.push({
-      section: sectionSheet,
+      section: "",
       label: key,
       value: value || "—",
       questionId: `${LEGACY_SHEET_KEY}.${key}`,

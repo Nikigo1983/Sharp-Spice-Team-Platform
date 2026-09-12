@@ -115,6 +115,7 @@ function rowsToClients(rows) {
     const row = rows[i];
     const sheetColumns = {};
     headers.forEach((h, idx) => {
+      if (String(h).toLowerCase().includes("пароль")) return;
       sheetColumns[h] = row[idx] ?? "";
     });
     const name = (row[0] || "").trim();
@@ -133,7 +134,7 @@ function rowsToClients(rows) {
       approvalAt: (row[9] || "").trim(),
       notes: (row[10] || "").trim(),
       residenceCardIssuedAt: (row[11] || "").trim(),
-      appPassword: (row[12] || "").trim(),
+      appPassword: "",
       partnerName: (row[13] || "").trim(),
       contract: (row[14] || "").trim(),
       status: "В работе",
@@ -203,11 +204,11 @@ async function main() {
       existingAnswers: existingQ?.answers ?? {},
     });
 
-    // Strip app password from stored sheet snapshot for safety
+    // Never store app password from the sheet
     if (answers.__legacySheet && typeof answers.__legacySheet === "object") {
       for (const key of Object.keys(answers.__legacySheet)) {
-        if (key.toLowerCase().includes("пароль")) {
-          answers.__legacySheet[key] = "";
+        if (String(key).toLowerCase().includes("пароль")) {
+          delete answers.__legacySheet[key];
         }
       }
     }

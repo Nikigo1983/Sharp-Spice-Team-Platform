@@ -55,7 +55,8 @@ export type LegacyCrmClientRow = {
   sheetColumns?: Record<string, string>;
 };
 
-const EXTERNAL_COLUMN_ORDER = [
+/** Canonical External columns (password excluded from storage/UI). */
+export const EXTERNAL_COLUMN_ORDER = [
   "Фамилия",
   "Латиница",
   "Номер паспорта",
@@ -68,13 +69,58 @@ const EXTERNAL_COLUMN_ORDER = [
   "Дата одобрения ВНЖ",
   "Заметки",
   "Дата выдачи карточки ВНЖ",
-  "Пароль для приложения",
   "Партнер от кого клиент",
   "Договор",
+  "ТИП ЗАНЯТОСТИ",
+  "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ",
+  "СПРАВКА О НЕСУДИМОСТИ",
+  "ПОДПИСЬ КЛИЕНТА",
+  "медстраховка",
 ] as const;
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+}
+
+/** Normalize sheet header for matching (collapse spaces, lower-case). */
+export function normalizeSheetHeader(header: string): string {
+  return clean(header).replace(/\s+/g, " ").toLowerCase();
+}
+
+export function isPasswordSheetHeader(header: string): boolean {
+  return normalizeSheetHeader(header).includes("пароль");
+}
+
+/** Map messy sheet headers to canonical labels where possible. */
+function canonicalHeader(header: string): string {
+  const n = normalizeSheetHeader(header);
+  if (!n) return clean(header);
+  if (n.includes("дата букинга")) return "Дата букинга (от и до)";
+  if (n.includes("предполог") && n.includes("одобрен")) {
+    return "Дата предпологаемого одобрения";
+  }
+  if (n.includes("электронная почта") || n === "email" || n === "e-mail") {
+    return "электронная почта";
+  }
+  if (n.includes("номер паспорта") || n === "паспорт") return "Номер паспорта";
+  if (n === "фамилия") return "Фамилия";
+  if (n === "латиница") return "Латиница";
+  if (n === "дата подачи") return "Дата подачи";
+  if (n === "имя референта") return "Имя референта";
+  if (n === "адрес букинга") return "Адрес букинга";
+  if (n.includes("дата одобрения внж")) return "Дата одобрения ВНЖ";
+  if (n === "заметки") return "Заметки";
+  if (n.includes("дата выдачи карточки")) return "Дата выдачи карточки ВНЖ";
+  if (n.includes("партнер") || n.includes("портнер")) return "Партнер от кого клиент";
+  if (n === "договор") return "Договор";
+  if (n.includes("тип занятости")) return "ТИП ЗАНЯТОСТИ";
+  if (n.includes("свидетельств") && n.includes("компани")) {
+    return "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ";
+  }
+  if (n.includes("несудимости")) return "СПРАВКА О НЕСУДИМОСТИ";
+  if (n.includes("подпись")) return "ПОДПИСЬ КЛИЕНТА";
+  if (n.includes("медстрах")) return "медстраховка";
+  return clean(header).replace(/\s+/g, " ");
 }
 
 /** Stable short fingerprint for idempotent ids (no crypto dependency). */
@@ -128,34 +174,43 @@ export function readLegacyIdentity(
 }
 
 function buildSheetColumns(row: LegacyCrmClientRow): Record<string, string> {
+  const out: Record<string, string> = {};
+
   if (row.sheetColumns && Object.keys(row.sheetColumns).length > 0) {
-    const out: Record<string, string> = {};
     for (const [key, value] of Object.entries(row.sheetColumns)) {
-      out[key] = clean(value);
+      if (isPasswordSheetHeader(key)) continue;
+      const label = canonicalHeader(key);
+      if (!label || isPasswordSheetHeader(label)) continue;
+      out[label] = clean(value);
     }
-    return out;
+  } else {
+    Object.assign(out, {
+      Фамилия: clean(row.name),
+      Латиница: clean(row.citizenship),
+      "Номер паспорта": clean(row.passportNumber),
+      "электронная почта": clean(row.email),
+      "Дата подачи": clean(row.submittedAt),
+      "Дата предпологаемого одобрения": clean(row.expectedApprovalAt),
+      "Имя референта": clean(row.referentName || row.manager),
+      "Адрес букинга": clean(row.bookingAddress),
+      "Дата букинга (от и до)": clean(row.bookingRange),
+      "Дата одобрения ВНЖ": clean(row.approvalAt),
+      Заметки: clean(row.notes),
+      "Дата выдачи карточки ВНЖ": clean(row.residenceCardIssuedAt),
+      "Партнер от кого клиент": clean(row.partnerName),
+      Договор: clean(row.contract),
+    });
   }
 
-  const mapped: Record<string, string> = {
-    Фамилия: clean(row.name),
-    Латиница: clean(row.citizenship),
-    "Номер паспорта": clean(row.passportNumber),
-    "электронная почта": clean(row.email),
-    "Дата подачи": clean(row.submittedAt),
-    "Дата предпологаемого одобрения": clean(row.expectedApprovalAt),
-    "Имя референта": clean(row.referentName || row.manager),
-    "Адрес букинга": clean(row.bookingAddress),
-    "Дата букинга (от и до)": clean(row.bookingRange),
-    "Дата одобрения ВНЖ": clean(row.approvalAt),
-    Заметки: clean(row.notes),
-    "Дата выдачи карточки ВНЖ": clean(row.residenceCardIssuedAt),
-    "Пароль для приложения": clean(row.appPassword),
-    "Партнер от кого клиент": clean(row.partnerName),
-    Договор: clean(row.contract),
-  };
+  // Ensure canonical order keys exist even if empty; never keep password.
   const ordered: Record<string, string> = {};
   for (const key of EXTERNAL_COLUMN_ORDER) {
-    ordered[key] = mapped[key] ?? "";
+    ordered[key] = out[key] ?? "";
+  }
+  for (const [key, value] of Object.entries(out)) {
+    if (!(key in ordered) && !isPasswordSheetHeader(key)) {
+      ordered[key] = value;
+    }
   }
   return ordered;
 }
@@ -248,8 +303,8 @@ export function buildLegacyReviewRows(
   value: string;
   questionId: string;
 }> {
-  const sectionIdentity = locale === "ru" ? "Данные клиента" : "Client data";
-  const sectionSheet = locale === "ru" ? "Старая база (CRM)" : "Legacy CRM";
+  const sectionSheet =
+    locale === "ru" ? "Данные из Google-таблицы (CRM)" : "Legacy CRM sheet";
   const rows: Array<{
     section: string;
     label: string;
@@ -257,51 +312,29 @@ export function buildLegacyReviewRows(
     questionId: string;
   }> = [];
 
-  const identity = readLegacyIdentity(answers);
-  if (identity) {
-    const identityFields: Array<[string, string, string]> = [
-      ["fullNameCyrillic", locale === "ru" ? "ФИО" : "Full name", identity.fullNameCyrillic],
-      ["fullNameLatin", locale === "ru" ? "Латиница" : "Latin name", identity.fullNameLatin],
-      ["passportNumber", locale === "ru" ? "Паспорт" : "Passport", identity.passportNumber],
-      ["email", "Email", identity.email],
-      ["submittedAt", locale === "ru" ? "Дата подачи" : "Submitted", identity.submittedAt],
-      ["status", locale === "ru" ? "Статус" : "Status", identity.status],
-      ["direction", locale === "ru" ? "Направление" : "Direction", identity.direction],
-    ];
-    for (const [id, label, value] of identityFields) {
-      if (!value) continue;
-      rows.push({
-        section: sectionIdentity,
-        label,
-        value,
-        questionId: `${LEGACY_IDENTITY_KEY}.${id}`,
-      });
-    }
-  }
-
   const sheet = answers[LEGACY_SHEET_KEY];
-  if (sheet && typeof sheet === "object" && !Array.isArray(sheet)) {
-    const entries = Object.entries(sheet as Record<string, unknown>);
-    // Prefer known External order, then any extras
-    const orderedKeys = [
-      ...EXTERNAL_COLUMN_ORDER,
-      ...entries.map(([k]) => k).filter((k) => !(EXTERNAL_COLUMN_ORDER as readonly string[]).includes(k)),
-    ];
-    const seen = new Set<string>();
-    for (const key of orderedKeys) {
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const value = clean((sheet as Record<string, unknown>)[key]);
-      // Never show app password in staff review UI
-      if (key.toLowerCase().includes("пароль")) continue;
-      if (!value) continue;
-      rows.push({
-        section: sectionSheet,
-        label: key,
-        value,
-        questionId: `${LEGACY_SHEET_KEY}.${key}`,
-      });
-    }
+  const sheetObj =
+    sheet && typeof sheet === "object" && !Array.isArray(sheet)
+      ? (sheet as Record<string, unknown>)
+      : {};
+
+  const orderedKeys = [
+    ...EXTERNAL_COLUMN_ORDER,
+    ...Object.keys(sheetObj).filter(
+      (k) => !(EXTERNAL_COLUMN_ORDER as readonly string[]).includes(k),
+    ),
+  ];
+  const seen = new Set<string>();
+  for (const key of orderedKeys) {
+    if (seen.has(key) || isPasswordSheetHeader(key)) continue;
+    seen.add(key);
+    const value = clean(sheetObj[key]);
+    rows.push({
+      section: sectionSheet,
+      label: key,
+      value: value || "—",
+      questionId: `${LEGACY_SHEET_KEY}.${key}`,
+    });
   }
 
   return rows;

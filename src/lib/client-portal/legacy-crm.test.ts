@@ -51,7 +51,7 @@ describe("legacy crm import mapping", () => {
     );
   });
 
-  it("hides app password in review rows", () => {
+  it("shows all CRM columns including empty, hides password", () => {
     const answers = buildLegacyAnswersFromClient({
       name: "Test",
       passportNumber: "AB1",
@@ -60,12 +60,31 @@ describe("legacy crm import mapping", () => {
         Фамилия: "Test",
         "Пароль для приложения": "secret-pass",
         Договор: "дог",
+        "ТИП ЗАНЯТОСТИ": "ИП",
+        "Дата букинга                (от и до)": "01.01-02.01",
+        "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ": "",
+        "СПРАВКА О НЕСУДИМОСТИ": "",
+        "ПОДПИСЬ КЛИЕНТА": "",
+        медстраховка: "да",
       },
     });
+    const sheet = answers.__legacySheet as Record<string, string>;
+    assert.equal(sheet["ТИП ЗАНЯТОСТИ"], "ИП");
+    assert.equal(sheet["Дата букинга (от и до)"], "01.01-02.01");
+    assert.equal(sheet["медстраховка"], "да");
+    assert.equal(sheet["Пароль для приложения"], undefined);
     const rows = buildLegacyReviewRows(answers, "ru");
-    assert.ok(rows.some((r) => r.label === "Договор"));
+    assert.ok(rows.some((r) => r.label === "Договор" && r.value === "дог"));
+    assert.ok(rows.some((r) => r.label === "ТИП ЗАНЯТОСТИ" && r.value === "ИП"));
+    assert.ok(
+      rows.some(
+        (r) =>
+          r.label === "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ" && r.value === "—",
+      ),
+    );
     assert.ok(!rows.some((r) => r.label.toLowerCase().includes("пароль")));
     assert.ok(!rows.some((r) => r.value === "secret-pass"));
+    assert.equal(rows.length, 19);
   });
 
   it("parses dd.mm.yyyy submitted dates", () => {

@@ -1,3 +1,4 @@
+import { createAiDeadline, currentAiSignal, withAiRequestScope, throwIfAiAborted } from "@/lib/ai/request-scope";
 /**
  * Bounded Astra ↔ tools orchestration loop.
  */
@@ -121,7 +122,7 @@ function appendToolResultMessages(
   }
 }
 
-export async function runWorkspaceAgentToolLoop(params: {
+async function runToolLoop(params: {
   messages: ChatMessage[];
   context: WorkspaceToolContext;
   completionOptions?: Omit<ChatCompletionOptions, "tools" | "tool_choice">;
@@ -188,6 +189,7 @@ export async function runWorkspaceAgentToolLoop(params: {
   };
 
   while (astraRounds < limits.maxToolRounds) {
+    throwIfAiAborted();
     if (Date.now() - wallStarted > limits.maxWallClockMs) {
       return finish({
         answer:
@@ -224,6 +226,7 @@ export async function runWorkspaceAgentToolLoop(params: {
         error: "MODEL_EMPTY_RESPONSE",
       };
       if (
+        completion.ok &&
         !completion.toolCalls?.length &&
         completion.content &&
         params.onFinalDelta
@@ -242,7 +245,7 @@ export async function runWorkspaceAgentToolLoop(params: {
       lastCompletion = { ...completion, usage: aggregatedUsage };
     }
 
-    if (!completion.ok && !completion.toolCalls?.length) {
+    if (!completion.ok) {
       return finish({
         answer: null,
         stopReason: "model_error",
@@ -280,6 +283,7 @@ export async function runWorkspaceAgentToolLoop(params: {
       });
     }
 
+    throwIfAiAborted();
     appendAssistantToolCallMessage(messages, toolCalls, completion.content);
 
     const batch = toolCalls.slice(0, limits.maxToolCallsPerTurn - totalCalls);
@@ -363,4 +367,10 @@ export async function runWorkspaceAgentToolLoop(params: {
     finalSourceSet: [...sourceSet],
     lastCompletion,
   });
+}
+
+export async function runWorkspaceAgentToolLoop(params: Parameters<typeof runToolLoop>[0]): Promise<AgentLoopResult> {
+  const deadline = createAiDeadline(currentAiSignal(), params.limits?.maxWallClockMs ?? DEFAULT_TOOL_LOOP_LIMITS.maxWallClockMs);
+  try { return await withAiRequestScope(deadline.signal, () => runToolLoop(params)); }
+  finally { deadline.dispose(); }
 }

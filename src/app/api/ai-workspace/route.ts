@@ -1,3 +1,8 @@
+import { aiErrorCode, aiErrorMessage, aiErrorStatus } from "@/lib/ai/errors";
+import { createAiDeadline, withAiRequestScope } from "@/lib/ai/request-scope";
+
+export const runtime = "nodejs";
+export const maxDuration = 180;
 import { NextResponse } from "next/server";
 import {
   runWorkspaceAi,
@@ -26,7 +31,7 @@ function parseMode(value: unknown) {
   return "brief" as const;
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -72,8 +77,12 @@ export async function POST(request: Request) {
 
   if (stream) {
     const encoder = new TextEncoder();
+    const disconnect = new AbortController();
+    const deadline = createAiDeadline(AbortSignal.any([request.signal, disconnect.signal]));
+    let cancelled = false;
     const readable = new ReadableStream({
       async start(controller) {
+        return withAiRequestScope(deadline.signal, async () => {
         try {
           for await (const chunk of runWorkspaceAiStream(
             message,
@@ -86,6 +95,7 @@ export async function POST(request: Request) {
             memoryContext,
             caseMemory,
           )) {
+            deadline.signal.throwIfAborted();
             if (typeof chunk === "string") {
               controller.enqueue(
                 encoder.encode(
@@ -131,22 +141,28 @@ export async function POST(request: Request) {
             );
           }
 
+          deadline.signal.throwIfAborted();
           controller.enqueue(encoder.encode(`event: done\ndata: {}\n\n`));
         } catch (error) {
-          console.error(`[api/ai-workspace][${requestId}] stream`, error);
+          if (cancelled || request.signal.aborted) return;
+          const code = aiErrorCode(deadline.signal.aborted ? deadline.signal.reason : error);
+          console.error(`[api/ai-workspace][${requestId}] ${code}`);
           controller.enqueue(
             encoder.encode(
               `event: error\ndata: ${JSON.stringify({
                 requestId,
-                message:
-                  "Внутренняя ошибка при обработке запроса. Попробуйте снова.",
+                code,
+                message: aiErrorMessage(code),
               })}\n\n`,
             ),
           );
         } finally {
-          controller.close();
+          deadline.dispose();
+          if (!cancelled) controller.close();
         }
+        });
       },
+      cancel() { cancelled = true; disconnect.abort(); deadline.dispose(); },
     });
 
     return new Response(readable, {
@@ -159,8 +175,9 @@ export async function POST(request: Request) {
     });
   }
 
+  const deadline = createAiDeadline(request.signal);
   try {
-    const result = await runWorkspaceAi(
+    const result = await withAiRequestScope(deadline.signal, () => runWorkspaceAi(
       message,
       history,
       mode,
@@ -170,7 +187,8 @@ export async function POST(request: Request) {
       conversationSummary,
       memoryContext,
       caseMemory,
-    );
+    ));
+    deadline.signal.throwIfAborted();
     return NextResponse.json(
       {
         ...result,
@@ -186,21 +204,17 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
-    console.error(`[api/ai-workspace][${requestId}]`, error);
-    return NextResponse.json(
-      {
-        reply:
-          "Внутренняя ошибка при обработке запроса. Перезапустите сервер и попробуйте снова.",
-        sources: [],
-        demo: true,
-        requestId,
-      },
-      {
-        status: 200,
-        headers: {
-          "X-AI-Request-Id": requestId,
-        },
-      },
-    );
+    const code = aiErrorCode(deadline.signal.aborted ? deadline.signal.reason : error);
+    console.error(`[api/ai-workspace][${requestId}] ${code}`);
+    return NextResponse.json({ error: code, reply: aiErrorMessage(code), requestId }, {
+      status: aiErrorStatus(code), headers: { "X-AI-Request-Id": requestId },
+    });
+  } finally { deadline.dispose(); }
+}
+
+export async function POST(request: Request) {
+  try { return await handlePost(request); } catch (error) {
+    const code = aiErrorCode(error);
+    return NextResponse.json({ error: code, reply: aiErrorMessage(code) }, { status: aiErrorStatus(code) });
   }
 }

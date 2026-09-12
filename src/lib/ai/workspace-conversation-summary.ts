@@ -44,7 +44,7 @@ async function extractCaseMemoryFromTurns(params: {
       maxTokens: 500,
     },
   );
-  return parseCaseMemoryFromModelText(completion.content);
+  return completion.ok ? parseCaseMemoryFromModelText(completion.content) : null;
 }
 
 /**
@@ -129,7 +129,7 @@ export async function maybeRefreshWorkspaceConversationMemory(params: {
           maxTokens: 700,
         },
       );
-      const summary = sanitizeConversationSummary(completion.content);
+      const summary = completion.ok ? sanitizeConversationSummary(completion.content) : null;
       if (summary) {
         next = {
           ...next,

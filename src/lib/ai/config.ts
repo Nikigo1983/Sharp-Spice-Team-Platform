@@ -1,44 +1,21 @@
-import { getOpenRouterDefaultModel } from "@/lib/ai/models";
-
+import { getOpenRouterDefaultModel, getSelectedAiProvider } from "@/lib/ai/models";
 export type AiProvider = "openrouter" | "openai";
+export type AiRuntimeConfig = { provider: AiProvider; apiKey: string; completionsUrl: string; model: string };
 
-export type AiRuntimeConfig = {
-  provider: AiProvider;
-  apiKey: string;
-  completionsUrl: string;
-  model: string;
-};
-
-/** OpenRouter first, then direct OpenAI. */
+/** AI_PROVIDER is explicit; absent preserves the existing OpenRouter-first setup. */
 export function getAiRuntimeConfig(): AiRuntimeConfig | null {
-  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (openRouterKey) {
-    return {
-      provider: "openrouter",
-      apiKey: openRouterKey,
-      completionsUrl: "https://openrouter.ai/api/v1/chat/completions",
-      model: getOpenRouterDefaultModel(),
-    };
-  }
-
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
-  if (openaiKey) {
-    return {
-      provider: "openai",
-      apiKey: openaiKey,
-      completionsUrl: "https://api.openai.com/v1/chat/completions",
-      // Direct OpenAI path: no Astra OpenRouter slug; keep explicit env or safe default.
-      model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
-    };
-  }
-
-  return null;
+  const provider = getSelectedAiProvider();
+  const apiKey = (provider === "openai" ? process.env.OPENAI_API_KEY : process.env.OPENROUTER_API_KEY)?.trim();
+  if (!apiKey) return null;
+  return {
+    provider, apiKey,
+    completionsUrl: provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions",
+    model: provider === "openai" ? process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini" : getOpenRouterDefaultModel(),
+  };
 }
-
 export function isAiConfigured(): boolean {
-  return getAiRuntimeConfig() !== null;
+  try { return getAiRuntimeConfig() !== null; } catch { return false; }
 }
-
 export function getAiSetupHint(): string {
-  return "OPENROUTER_API_KEY (рекомендуется) или OPENAI_API_KEY в .env.local";
+  return "AI_PROVIDER=openrouter и OPENROUTER_API_KEY либо AI_PROVIDER=openai и OPENAI_API_KEY";
 }

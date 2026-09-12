@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import styles from "./ClientAiPanel.module.css";
@@ -37,12 +37,16 @@ export function ClientAiPanel({
 }: ClientAiPanelProps) {
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState("");
+  const requestRef = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function sendAi(
     userMessage: string,
     mode: "chat" | "summary" = "chat",
   ) {
+    if (requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setReply("");
     try {
@@ -50,16 +54,18 @@ export function ClientAiPanel({
         `/api/clients/${encodeURIComponent(clientId)}/ai`,
         {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage, mode }),
         },
       );
       const data = (await res.json()) as { reply?: string; error?: string };
+      if (requestRef.current !== controller) return;
       setReply(data.reply ?? data.error ?? "Не удалось получить ответ AI.");
     } catch {
-      setReply("Ошибка соединения с AI.");
+      if (requestRef.current === controller) setReply(controller.signal.aborted ? "Генерация остановлена." : "Ошибка соединения с AI.");
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) { requestRef.current = null; setLoading(false); }
     }
   }
 
@@ -67,6 +73,7 @@ export function ClientAiPanel({
     if (state.open && state.mode === "summary") {
       void sendAi("", "summary");
     }
+    return () => { requestRef.current?.abort(); requestRef.current = null; setLoading(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.open, state.mode, clientId]);
 
@@ -126,10 +133,10 @@ export function ClientAiPanel({
           />
           <Button
             type="button"
-            disabled={loading || !message.trim()}
-            onClick={() => void sendAi(message, "chat")}
+            disabled={!loading && !message.trim()}
+            onClick={() => loading ? requestRef.current?.abort() : void sendAi(message, "chat")}
           >
-            {loading ? "…" : "Отправить"}
+            {loading ? "Стоп" : "Отправить"}
           </Button>
         </div>
 

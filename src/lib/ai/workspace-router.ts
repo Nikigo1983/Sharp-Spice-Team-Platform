@@ -129,7 +129,7 @@ async function classifyWithRouterModel(
       model,
     },
   );
-  if (!result.content) {
+  if (!result.ok || !result.content) {
     return {
       ok: false,
       reason: "ROUTER_MODEL_ERROR",

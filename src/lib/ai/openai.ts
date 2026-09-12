@@ -1,12 +1,13 @@
 import { getAiRuntimeConfig } from "@/lib/ai/config";
-import { getOpenRouterDefaultModel, isGpt6AstraModel } from "@/lib/ai/models";
+import { isGpt6AstraModel, normalizeProviderModel } from "@/lib/ai/models";
+import { AiCompletionError, aiErrorCode } from "@/lib/ai/errors";
+import { createAiDeadline, currentAiSignal } from "@/lib/ai/request-scope";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   assertOpenRouterPayloadSafe,
-  redactForLogging,
-  redactSensitiveText,
   sanitizeChatMessagesForProvider,
 } from "@/lib/ai/context-redaction";
-import { fetchWithTlsFallback } from "@/lib/google-fetch";
+
 
 export type ChatMessageRole = "system" | "user" | "assistant" | "tool";
 
@@ -42,6 +43,8 @@ export type ChatToolChoice =
   | { type: "function"; function: { name: string } };
 
 export type ChatCompletionOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
   temperature?: number;
   maxTokens?: number;
   model?: string;
@@ -76,6 +79,8 @@ function parseRetryAfterMs(response: Response, errBody: string): number {
     if (!Number.isNaN(seconds) && seconds > 0) {
       return Math.min(seconds * 1000, 30_000);
     }
+    const retryAt = Date.parse(header);
+    if (Number.isFinite(retryAt)) return Math.max(0, Math.min(retryAt - Date.now(), 30_000));
   }
 
   try {
@@ -94,9 +99,6 @@ function parseRetryAfterMs(response: Response, errBody: string): number {
   return 5000;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function buildRequestHeaders(
   config: NonNullable<ReturnType<typeof getAiRuntimeConfig>>,
@@ -122,7 +124,7 @@ function resolveModel(
   config: NonNullable<ReturnType<typeof getAiRuntimeConfig>>,
   options?: ChatCompletionOptions,
 ): string {
-  return options?.model?.trim() || config.model || getOpenRouterDefaultModel();
+  return normalizeProviderModel(config.provider, options?.model?.trim() || config.model);
 }
 
 function buildRequestBody(
@@ -144,12 +146,12 @@ function buildRequestBody(
   // GPT-6 Astra via OpenRouter: max_tokens supported; temperature is not listed
   // in supported_parameters — omit to avoid rejecting/ignoring unsafe params.
   // Never send reasoning / include_reasoning (do not expose chain-of-thought).
-  if (!isGpt6AstraModel(model)) {
+  if (!isGpt6AstraModel(model) && !/^(o[1-9]|gpt-[5-9])/.test(model)) {
     payload.temperature = options?.temperature ?? 0.35;
   }
 
   if (options?.maxTokens && options.maxTokens > 0) {
-    payload.max_tokens = options.maxTokens;
+    payload[config.provider === "openai" ? "max_completion_tokens" : "max_tokens"] = options.maxTokens;
   }
 
   if (options?.tools && options.tools.length > 0) {
@@ -159,6 +161,7 @@ function buildRequestBody(
     }
   }
 
+  if (stream) payload.stream_options = { include_usage: true };
   return JSON.stringify(payload);
 }
 
@@ -221,309 +224,178 @@ function parseUsage(raw: unknown): ChatCompletionUsage {
   };
 }
 
-export async function createChatCompletionResult(
-  messages: ChatMessage[],
-  options?: ChatCompletionOptions,
-): Promise<ChatCompletionResult> {
-  const config = getAiRuntimeConfig();
-  const started = Date.now();
-  if (!config) {
-    return {
-      content: null,
-      ok: false,
-      requestedModel: options?.model?.trim() || "NOT_CONFIGURED",
-      returnedModel: "NOT_AVAILABLE",
-      usage: {
-        inputTokens: "NOT_AVAILABLE",
-        outputTokens: "NOT_AVAILABLE",
-      },
-      latencyMs: Date.now() - started,
-      error: "AI_NOT_CONFIGURED",
-    };
-  }
 
-  const requestedModel = resolveModel(config, options);
-  const headers = buildRequestHeaders(config);
-  const body = buildRequestBody(config, messages, options, false);
-  const maxAttempts = 2;
+function failure(started: number, requestedModel: string, code: string): ChatCompletionResult {
+  return { content: null, ok: false, requestedModel, returnedModel: "NOT_AVAILABLE",
+    usage: parseUsage(null), latencyMs: Date.now() - started, error: code };
+}
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const response = await fetchWithTlsFallback(config.completionsUrl, {
-        method: "POST",
-        headers,
-        body,
-      });
+function finishError(reason: string | null, hasContent: boolean, hasTools: boolean): string | undefined {
+  if (reason === "length") return "MODEL_LENGTH_LIMIT";
+  if (reason === "content_filter") return "MODEL_CONTENT_FILTER";
+  if (reason !== "stop" && reason !== "tool_calls") return "MODEL_STREAM_INTERRUPTED";
+  if (reason === "tool_calls" && !hasTools) return "MODEL_INVALID_RESPONSE";
+  if (!hasContent && !hasTools) return "MODEL_EMPTY_RESPONSE";
+}
 
-      if (response.ok) {
-        const data = (await response.json()) as {
-          model?: string;
-          usage?: unknown;
-          choices?: {
-            finish_reason?: string | null;
-            message?: {
-              content?: string | null;
-              tool_calls?: unknown;
-            };
-          }[];
-        };
-        const message = data.choices?.[0]?.message;
-        const toolCalls = parseToolCalls(message?.tool_calls);
-        const rawContent = message?.content;
-        const content =
-          typeof rawContent === "string" && rawContent.trim()
-            ? rawContent.trim()
-            : null;
-        const ok = Boolean(content) || Boolean(toolCalls?.length);
-        return {
-          content,
-          ok,
-          requestedModel,
-          returnedModel:
-            typeof data.model === "string" && data.model.trim()
-              ? data.model.trim()
-              : "NOT_AVAILABLE",
-          usage: parseUsage(data.usage),
-          latencyMs: Date.now() - started,
-          error: ok ? undefined : "MODEL_EMPTY_RESPONSE",
-          toolCalls,
-          finishReason: data.choices?.[0]?.finish_reason ?? null,
-        };
-      }
+function requestDeadline(options?: ChatCompletionOptions) {
+  const parents = [options?.signal, currentAiSignal()].filter((s): s is AbortSignal => Boolean(s));
+  return createAiDeadline(parents.length ? AbortSignal.any(parents) : undefined, options?.timeoutMs);
+}
 
-      const errBody = await response.text();
-      console.error(
-        `[ai/${config.provider}] error`,
-        response.status,
-        redactSensitiveText(errBody),
-      );
+function requestError(error: unknown, signal: AbortSignal): string {
+  return aiErrorCode(signal.aborted ? signal.reason : error);
+}
 
-      if (response.status === 429 && attempt < maxAttempts) {
-        const waitMs = parseRetryAfterMs(response, errBody);
-        console.warn(
-          `[ai/${config.provider}] rate limited, retry ${attempt}/${maxAttempts} in ${waitMs}ms`,
-        );
-        await sleep(waitMs);
-        continue;
-      }
-
-      return {
-        content: null,
-        ok: false,
-        requestedModel,
-        returnedModel: "NOT_AVAILABLE",
-        usage: {
-          inputTokens: "NOT_AVAILABLE",
-          outputTokens: "NOT_AVAILABLE",
-        },
-        latencyMs: Date.now() - started,
-        error: `OPENROUTER_HTTP_${response.status}`,
-      };
-    } catch (error) {
-      console.error(`[ai/${config.provider}] request failed`, redactForLogging(error));
-      if (attempt < maxAttempts) {
-        await sleep(2000);
-        continue;
-      }
-      return {
-        content: null,
-        ok: false,
-        requestedModel,
-        returnedModel: "NOT_AVAILABLE",
-        usage: {
-          inputTokens: "NOT_AVAILABLE",
-          outputTokens: "NOT_AVAILABLE",
-        },
-        latencyMs: Date.now() - started,
-        error: "OPENROUTER_REQUEST_FAILED",
-      };
+async function postCompletion(config: NonNullable<ReturnType<typeof getAiRuntimeConfig>>, body: string, signal: AbortSignal): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    signal.throwIfAborted();
+    // Native fetch validates certificates and returns as soon as headers arrive.
+    // Never retry a transport failure: the provider may already have billed it.
+    const response = await fetch(config.completionsUrl, {
+      method: "POST", headers: buildRequestHeaders(config), body, signal,
+      cache: "no-store", redirect: "error",
+    });
+    if (response.ok) return response;
+    const errBody = await response.text();
+    console.error(`[ai/${config.provider}] HTTP ${response.status}`);
+    if (attempt === 0 && [429, 502, 503, 504].includes(response.status)) {
+      await delay(parseRetryAfterMs(response, errBody), undefined, { signal });
+      continue;
     }
+    throw new AiCompletionError(`${config.provider.toUpperCase()}_HTTP_${response.status}`);
   }
-
-  return {
-    content: null,
-    ok: false,
-    requestedModel,
-    returnedModel: "NOT_AVAILABLE",
-    usage: {
-      inputTokens: "NOT_AVAILABLE",
-      outputTokens: "NOT_AVAILABLE",
-    },
-    latencyMs: Date.now() - started,
-    error: "OPENROUTER_ERROR",
-  };
 }
 
-export async function createChatCompletion(
-  messages: ChatMessage[],
-  options?: ChatCompletionOptions,
-): Promise<string | null> {
+export async function createChatCompletionResult(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<ChatCompletionResult> {
+  const started = Date.now();
+  const deadline = requestDeadline(options);
+  let requestedModel = options?.model ?? "NOT_CONFIGURED";
+  try {
+    deadline.signal.throwIfAborted();
+    const config = getAiRuntimeConfig();
+    if (!config) return failure(started, requestedModel, "AI_NOT_CONFIGURED");
+    requestedModel = resolveModel(config, options);
+    const response = await postCompletion(config, buildRequestBody(config, messages, options, false), deadline.signal);
+    const data = await response.json() as {
+      model?: string; usage?: unknown; error?: unknown;
+      choices?: { finish_reason?: string; message?: { content?: string; tool_calls?: unknown; refusal?: string } }[];
+    };
+    if (data.error || !Array.isArray(data.choices)) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+    const choice = data.choices[0];
+    const content = typeof choice?.message?.content === "string" ? choice.message.content.trim() || null : null;
+    const toolCalls = parseToolCalls(choice?.message?.tool_calls);
+    const finishReason = choice?.finish_reason ?? null;
+    const error = choice?.message?.refusal ? "MODEL_CONTENT_FILTER" : finishError(finishReason, Boolean(content), Boolean(toolCalls?.length));
+    return { content, ok: !error, requestedModel, returnedModel: data.model || "NOT_AVAILABLE",
+      usage: parseUsage(data.usage), latencyMs: Date.now() - started, error,
+      // An incomplete function call must never be executed.
+      toolCalls: error ? undefined : toolCalls, finishReason };
+  } catch (error) {
+    return failure(started, requestedModel, requestError(error, deadline.signal));
+  } finally { deadline.dispose(); }
+}
+
+export async function createChatCompletion(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string | null> {
   const result = await createChatCompletionResult(messages, options);
-  return result.content;
-}
-
-function extractStreamDelta(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-
-  const data = payload as {
-    choices?: { delta?: { content?: string }; message?: { content?: string } }[];
-  };
-
-  const choice = data.choices?.[0];
-  return choice?.delta?.content ?? choice?.message?.content ?? "";
+  return result.ok ? result.content : null;
 }
 
 export type StreamChatCompletionEvent =
   | { type: "delta"; content: string }
   | { type: "meta"; result: ChatCompletionResult };
 
-export async function* streamChatCompletionResult(
-  messages: ChatMessage[],
-  options?: ChatCompletionOptions,
-): AsyncGenerator<StreamChatCompletionEvent> {
-  const config = getAiRuntimeConfig();
-  const started = Date.now();
-  if (!config) {
-    yield {
-      type: "meta",
-      result: {
-        content: null,
-        ok: false,
-        requestedModel: options?.model?.trim() || "NOT_CONFIGURED",
-        returnedModel: "NOT_AVAILABLE",
-        usage: {
-          inputTokens: "NOT_AVAILABLE",
-          outputTokens: "NOT_AVAILABLE",
-        },
-        latencyMs: Date.now() - started,
-        error: "AI_NOT_CONFIGURED",
-      },
-    };
-    return;
-  }
-
-  const requestedModel = resolveModel(config, options);
-  const headers = buildRequestHeaders(config);
-  const body = buildRequestBody(config, messages, options, true);
-
-  const response = await fetchWithTlsFallback(config.completionsUrl, {
-    method: "POST",
-    headers,
-    body,
-  });
-
-  if (!response.ok || !response.body) {
-    const errBody = await response.text();
-    console.error(
-      `[ai/${config.provider}] stream error`,
-      response.status,
-      redactSensitiveText(errBody),
-    );
-    yield {
-      type: "meta",
-      result: {
-        content: null,
-        ok: false,
-        requestedModel,
-        returnedModel: "NOT_AVAILABLE",
-        usage: {
-          inputTokens: "NOT_AVAILABLE",
-          outputTokens: "NOT_AVAILABLE",
-        },
-        latencyMs: Date.now() - started,
-        error: `OPENROUTER_HTTP_${response.status}`,
-      },
-    };
-    return;
-  }
-
-  const { StreamToolCallAccumulator } = await import(
-    "@/lib/ai/workspace-tools/stream-tool-calls"
-  );
-  const toolAccumulator = new StreamToolCallAccumulator();
-  const suppressContentDeltas = Boolean(options?.tools?.length);
-
-  const reader = response.body.getReader();
+/** SSE framing independent of network chunk boundaries, including CRLF and EOF. */
+async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let assembled = "";
-  let returnedModel: string | "NOT_AVAILABLE" = "NOT_AVAILABLE";
-  let usage: ChatCompletionUsage = {
-    inputTokens: "NOT_AVAILABLE",
-    outputTokens: "NOT_AVAILABLE",
-  };
-  let finishReason: string | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-
-      try {
-        const parsed = JSON.parse(data) as {
-          model?: string;
-          usage?: unknown;
-          choices?: { finish_reason?: string | null }[];
-        };
-        if (typeof parsed.model === "string" && parsed.model.trim()) {
-          returnedModel = parsed.model.trim();
+  let lines: string[] = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      if (buffer.length > 1_000_000) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, "");
+        buffer = buffer.slice(newline + 1);
+        if (!line) {
+          if (lines.length) { yield lines.join("\n"); lines = []; }
+        } else if (line.startsWith("data:")) {
+          lines.push(line.slice(5).replace(/^ /, ""));
         }
-        if (parsed.usage) {
-          usage = parseUsage(parsed.usage);
-        }
-        const fr = parsed.choices?.[0]?.finish_reason;
-        if (typeof fr === "string") {
-          finishReason = fr;
-        }
-        toolAccumulator.ingestDelta(parsed);
-        const delta = extractStreamDelta(parsed);
-        if (delta) {
-          assembled += delta;
-          if (!suppressContentDeltas) {
-            yield { type: "delta", content: delta };
-          }
-        }
-      } catch {
-        // ignore malformed chunks
+      }
+      if (done) {
+        if (buffer.startsWith("data:")) lines.push(buffer.slice(5).trimStart());
+        if (lines.length) yield lines.join("\n");
+        break;
       }
     }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
-
-  const toolCalls = toolAccumulator.finalize();
-  const content = assembled.trim() ? assembled : null;
-  const ok = Boolean(content) || toolCalls.length > 0;
-
-  yield {
-    type: "meta",
-    result: {
-      content,
-      ok,
-      requestedModel,
-      returnedModel,
-      usage,
-      latencyMs: Date.now() - started,
-      error: ok ? undefined : "MODEL_EMPTY_RESPONSE",
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      finishReason,
-    },
-  };
 }
 
-export async function* streamChatCompletion(
-  messages: ChatMessage[],
-  options?: ChatCompletionOptions,
-): AsyncGenerator<string> {
+export async function* streamChatCompletionResult(messages: ChatMessage[], options?: ChatCompletionOptions): AsyncGenerator<StreamChatCompletionEvent> {
+  const started = Date.now();
+  const deadline = requestDeadline(options);
+  let requestedModel = options?.model ?? "NOT_CONFIGURED";
+  let assembled = "";
+  let returnedModel = "NOT_AVAILABLE";
+  let usage = parseUsage(null);
+  let finishReason: string | null = null;
+  try {
+    deadline.signal.throwIfAborted();
+    const config = getAiRuntimeConfig();
+    if (!config) throw new AiCompletionError("AI_NOT_CONFIGURED");
+    requestedModel = resolveModel(config, options);
+    const response = await postCompletion(config, buildRequestBody(config, messages, options, true), deadline.signal);
+    if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+    const { StreamToolCallAccumulator } = await import("@/lib/ai/workspace-tools/stream-tool-calls");
+    const accumulator = new StreamToolCallAccumulator();
+    let ended = false;
+    for await (const data of sseData(response.body)) {
+      deadline.signal.throwIfAborted();
+      if (data.trim() === "[DONE]") { ended = true; break; }
+      let parsed: {
+        model?: string; usage?: unknown; error?: unknown;
+        choices?: { finish_reason?: string; delta?: { content?: string; refusal?: string } }[];
+      };
+      try { parsed = JSON.parse(data); } catch { throw new AiCompletionError("MODEL_INVALID_RESPONSE"); }
+      if (!parsed || parsed.error) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+      if (parsed.model) returnedModel = parsed.model;
+      if (parsed.usage) usage = parseUsage(parsed.usage);
+      const choice = parsed.choices?.[0];
+      if (choice?.delta?.refusal) throw new AiCompletionError("MODEL_CONTENT_FILTER");
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      accumulator.ingestDelta(parsed);
+      const delta = choice?.delta?.content;
+      if (typeof delta === "string" && delta) {
+        assembled += delta;
+        // Tool rounds can contain intermediate text; only expose their final answer.
+        if (!options?.tools?.length) yield { type: "delta", content: delta };
+      }
+    }
+    const toolCalls = accumulator.finalize();
+    const error = !ended ? "MODEL_STREAM_INTERRUPTED" : finishError(finishReason, Boolean(assembled.trim()), toolCalls.length > 0);
+    yield { type: "meta", result: {
+      content: assembled.trim() ? assembled : null, ok: !error, requestedModel, returnedModel, usage,
+      latencyMs: Date.now() - started, error, finishReason,
+      toolCalls: error || !toolCalls.length ? undefined : toolCalls,
+    }};
+  } catch (error) {
+    yield { type: "meta", result: {
+      ...failure(started, requestedModel, requestError(error, deadline.signal)),
+      content: assembled || null, returnedModel, usage, finishReason,
+    }};
+  } finally { deadline.dispose(); }
+}
+
+export async function* streamChatCompletion(messages: ChatMessage[], options?: ChatCompletionOptions): AsyncGenerator<string> {
   for await (const event of streamChatCompletionResult(messages, options)) {
     if (event.type === "delta") yield event.content;
+    else if (!event.result.ok) throw new AiCompletionError(event.result.error);
   }
 }

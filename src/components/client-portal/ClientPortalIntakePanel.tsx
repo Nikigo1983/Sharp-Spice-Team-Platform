@@ -759,7 +759,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             {review.map((row, index) => (
               <div key={`${row.label}-${index}`} className={styles.row}>
                 <div className={styles.rowMeta}>
-                  <span className={styles.section}>{row.section}</span>
+                  {row.section ? (
+                    <span className={styles.section}>{row.section}</span>
+                  ) : null}
                   <span className={styles.label}>{row.label}</span>
                 </div>
                 <div className={styles.value}>

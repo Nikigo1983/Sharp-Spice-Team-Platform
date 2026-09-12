@@ -29,7 +29,6 @@ export const STAFF_FIELD_COLUMNS: Array<{
   key: keyof QuestionnaireStaffFields;
   label: string;
 }> = [
-  { key: "contractNumber", label: "Номер договора" },
   { key: "contractAmount", label: "Сумма договора" },
   { key: "company", label: "Компания" },
   { key: "curator", label: "Куратор" },

@@ -305,11 +305,26 @@
   cursor: wait;
 }
 
-.tableScroll {
-  overflow-x: auto;
+.tableScrollWrap {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: rgba(26, 26, 26, 0.55);
+  overflow: hidden;
+}
+
+.tableScrollTop {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tableScrollTopSpacer {
+  height: 1px;
+  pointer-events: none;
+}
+
+.tableScroll {
+  overflow-x: auto;
 }
 
 .table {

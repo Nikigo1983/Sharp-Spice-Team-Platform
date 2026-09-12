@@ -147,6 +147,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
   const deepLinkHandled = useRef(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const scrollSyncLock = useRef(false);
+  const [tableScrollWidth, setTableScrollWidth] = useState(1600);
   const [review, setReview] = useState<ReviewRow[]>([]);
   const [notes, setNotes] = useState<StaffNote[]>([]);
   const [documents, setDocuments] = useState<StaffDocument[]>([]);
@@ -300,6 +305,42 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       approvalStatus,
     ],
   );
+
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+
+    const updateWidth = () => {
+      setTableScrollWidth(table.scrollWidth || 1600);
+    };
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(table);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [filteredItems.length, loading, listView]);
+
+  function syncFromTopScroll() {
+    const top = topScrollRef.current;
+    const main = tableScrollRef.current;
+    if (!top || !main || scrollSyncLock.current) return;
+    scrollSyncLock.current = true;
+    main.scrollLeft = top.scrollLeft;
+    scrollSyncLock.current = false;
+  }
+
+  function syncFromTableScroll() {
+    const top = topScrollRef.current;
+    const main = tableScrollRef.current;
+    if (!top || !main || scrollSyncLock.current) return;
+    scrollSyncLock.current = true;
+    top.scrollLeft = main.scrollLeft;
+    scrollSyncLock.current = false;
+  }
 
   const clearListFilters = () => {
     setQuery("");
@@ -1216,21 +1257,37 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       ) : null}
 
       {!loading && filteredItems.length > 0 ? (
-        <div className={styles.tableScroll}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Клиент</th>
-                <th>Дата подачи</th>
-                {STAFF_FIELD_COLUMNS.map((col) => (
-                  <th key={col.key}>{col.label}</th>
-                ))}
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item, index) => {
+        <div className={styles.tableScrollWrap}>
+          <div
+            ref={topScrollRef}
+            className={styles.tableScrollTop}
+            onScroll={syncFromTopScroll}
+            aria-hidden
+          >
+            <div
+              className={styles.tableScrollTopSpacer}
+              style={{ width: tableScrollWidth }}
+            />
+          </div>
+          <div
+            ref={tableScrollRef}
+            className={styles.tableScroll}
+            onScroll={syncFromTableScroll}
+          >
+            <table ref={tableRef} className={styles.table}>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Клиент</th>
+                  <th>Дата подачи</th>
+                  {STAFF_FIELD_COLUMNS.map((col) => (
+                    <th key={col.key}>{col.label}</th>
+                  ))}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item, index) => {
                 const name = clientName(item);
                 const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
                 return (
@@ -1300,6 +1357,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       ) : null}
     </div>

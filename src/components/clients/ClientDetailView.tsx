@@ -3,6 +3,7 @@ import type { ClientDetail } from "@/lib/google-sheets/types";
 import { getClientSheetFields } from "@/lib/google-sheets/client-detail-fields";
 import { Card } from "@/components/ui/Card";
 import { ClientAiActions } from "./ClientAiPanel";
+import { ClientDocuments } from "./ClientDocuments";
 import { ClientNotes } from "./ClientNotes";
 import styles from "./ClientDetailView.module.css";
 
@@ -75,21 +76,10 @@ export function ClientDetailView({ detail }: ClientDetailViewProps) {
           </Card>
         ) : null}
 
-        {documents.length > 0 ? (
-          <Card className={styles.panel}>
-            <h2 className={styles.panelTitle}>Документы</h2>
-            <ul className={styles.itemList}>
-              {documents.map((d) => (
-                <li key={d.id} className={styles.item}>
-                  <span className={styles.itemTitle}>{d.name}</span>
-                  <span className={styles.itemMeta}>
-                    {d.category} · {d.uploadedAt}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
+        <Card className={styles.panel}>
+          <h2 className={styles.panelTitle}>Документы</h2>
+          <ClientDocuments clientId={client.id} initialDocuments={documents} />
+        </Card>
       </div>
 
       <ClientAiActions clientId={client.id} clientName={client.name} />

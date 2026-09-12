@@ -1,3 +1,4 @@
+import { getAiMirrorSource, getAiMirrorContext } from "@/lib/ai-data/reader";
 import { formatClientForAi } from "@/lib/ai/format-client";
 import {
   DEMO_CLIENTS,
@@ -6,6 +7,7 @@ import {
 } from "./demo-data";
 import { getGoogleSheetsClient, sheetsConfigured } from "./google-sheets-client";
 import { isGoogleSheetsPublicClientsConfigured } from "./auth";
+import { listClientUploadedDocuments } from "@/lib/clients/local-documents";
 import {
   appendLocalNote,
   listLocalNotesByClientId,
@@ -31,7 +33,11 @@ export async function listAllClients(filters: ClientFilters = {}): Promise<{
   let all: Client[];
   let source: ClientsListResult["source"];
 
-  if (sheetsConfigured()) {
+  const mirror = await getAiMirrorSource("clients");
+  if (mirror) {
+    all = mirror.payload.clients;
+    source = "supabase";
+  } else if (sheetsConfigured()) {
     all = await getGoogleSheetsClient().getClients();
     source = "google_sheets";
   } else {
@@ -62,33 +68,78 @@ export async function listClients(
   return { items, total, page, pageSize, source };
 }
 
+function markSheetDocuments(
+  documents: ClientDetail["documents"],
+): ClientDetail["documents"] {
+  return documents.map((doc) =>
+    doc.source ? doc : { ...doc, source: "sheet" as const },
+  );
+}
+
+async function mergeUploadedDocuments(
+  clientId: string,
+  sheetDocuments: ClientDetail["documents"],
+): Promise<ClientDetail["documents"]> {
+  const uploaded = await listClientUploadedDocuments(clientId);
+  return [...uploaded, ...markSheetDocuments(sheetDocuments)];
+}
+
 export async function getClientDetail(id: string): Promise<ClientDetail | null> {
+  const mirror = await getAiMirrorSource("clients");
+  if (mirror) {
+    const client = mirror.payload.clients.find(c => c.id === id);
+    if (!client) return null;
+    const context = await getAiMirrorContext();
+    const notes = [...mirror.payload.notes, ...context.notes].filter(
+      (r) => r.clientId === id,
+    );
+    const documents = await mergeUploadedDocuments(
+      id,
+      mirror.payload.documents.filter((r) => r.clientId === id),
+    );
+    return {
+      client,
+      source: "supabase",
+      surveys: mirror.payload.surveys.filter((r) => r.clientId === id),
+      documents,
+      notes,
+    };
+  }
   if (sheetsConfigured()) {
     const sheets = getGoogleSheetsClient();
     const client = await sheets.getClientById(id);
     if (!client) return null;
 
     if (isGoogleSheetsPublicClientsConfigured()) {
-      const notes = await listLocalNotesByClientId(id);
+      const [notes, documents] = await Promise.all([
+        listLocalNotesByClientId(id),
+        mergeUploadedDocuments(id, []),
+      ]);
       return {
         client,
         surveys: [],
-        documents: [],
+        documents,
         notes,
         source: "google_sheets",
       };
     }
 
-    const [surveys, documents, notes] = await Promise.all([
+    const [surveys, sheetDocuments, notes] = await Promise.all([
       sheets.getSurveysByClientId(id),
       sheets.getDocumentsByClientId(id),
       sheets.getNotesByClientId(id),
     ]);
+    const documents = await mergeUploadedDocuments(id, sheetDocuments);
 
     return { client, surveys, documents, notes, source: "google_sheets" };
   }
 
-  return getDemoClientDetail(id);
+  const demo = getDemoClientDetail(id);
+  if (!demo) return null;
+  return {
+    ...demo,
+    documents: await mergeUploadedDocuments(id, demo.documents),
+  };
 }
 
 export async function getFilterOptions(): Promise<{

@@ -31,6 +31,10 @@ import {
 import { isAllowedAttachment } from "./questionnaire-attachment-formats";
 import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields";
 import {
+  buildLegacyReviewRows,
+  isLegacyCrmImport,
+} from "./legacy-crm";
+import {
   appendStaffDocument,
   appendStaffNote,
   findStaffDocument,
@@ -488,6 +492,10 @@ export function buildReviewRows(
   questionId: string;
   fileId?: string;
 }> {
+  if (isLegacyCrmImport(answers)) {
+    return buildLegacyReviewRows(answers, locale);
+  }
+
   const rows: Array<{
     section: string;
     label: string;

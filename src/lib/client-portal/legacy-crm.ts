@@ -1,0 +1,322 @@
+/**
+ * Legacy CRM (Croatia External sheet) → client-portal questionnaire answers.
+ * Pure module — no server-only / path aliases (usable from Node scripts).
+ */
+
+export const LEGACY_CRM_SOURCE = "croatia_external" as const;
+
+export const LEGACY_IMPORT_KEY = "__import";
+export const LEGACY_SHEET_KEY = "__legacySheet";
+export const LEGACY_IDENTITY_KEY = "__identity";
+export const LEGACY_STAFF_KEY = "__staff";
+export const LEGACY_NOTES_KEY = "__staff_notes";
+
+export type LegacyCrmIdentity = {
+  fullNameCyrillic: string;
+  fullNameLatin: string;
+  passportNumber: string;
+  email: string;
+  submittedAt: string;
+  status: string;
+  direction: string;
+};
+
+export type LegacyCrmImportMeta = {
+  source: typeof LEGACY_CRM_SOURCE;
+  sheetRow: number | null;
+  importedAt: string;
+  fingerprint: string;
+};
+
+/** Row-shaped input from External sheet / Client model. */
+export type LegacyCrmClientRow = {
+  name: string;
+  citizenship?: string;
+  passportNumber?: string;
+  email?: string;
+  phone?: string;
+  submittedAt?: string;
+  expectedApprovalAt?: string;
+  referentName?: string;
+  manager?: string;
+  bookingAddress?: string;
+  bookingRange?: string;
+  approvalAt?: string;
+  notes?: string;
+  residenceCardIssuedAt?: string;
+  appPassword?: string;
+  partnerName?: string;
+  contract?: string;
+  status?: string;
+  direction?: string;
+  country?: string;
+  rowIndex?: number;
+  /** Full header→value map when available */
+  sheetColumns?: Record<string, string>;
+};
+
+const EXTERNAL_COLUMN_ORDER = [
+  "Фамилия",
+  "Латиница",
+  "Номер паспорта",
+  "электронная почта",
+  "Дата подачи",
+  "Дата предпологаемого одобрения",
+  "Имя референта",
+  "Адрес букинга",
+  "Дата букинга (от и до)",
+  "Дата одобрения ВНЖ",
+  "Заметки",
+  "Дата выдачи карточки ВНЖ",
+  "Пароль для приложения",
+  "Партнер от кого клиент",
+  "Договор",
+] as const;
+
+function clean(value: unknown): string {
+  return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+}
+
+/** Stable short fingerprint for idempotent ids (no crypto dependency). */
+export function legacyCrmFingerprint(row: LegacyCrmClientRow): string {
+  const passport = clean(row.passportNumber).toLowerCase();
+  const email = clean(row.email).toLowerCase();
+  const name = clean(row.name).toLowerCase();
+  const base =
+    passport ||
+    email ||
+    `${name}|${row.rowIndex ?? ""}|${clean(row.submittedAt)}`;
+  let hash = 2166136261;
+  for (let i = 0; i < base.length; i++) {
+    hash ^= base.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function legacyUserId(fingerprint: string): string {
+  return `legacy-user-${fingerprint}`;
+}
+
+export function legacyQuestionnaireId(fingerprint: string): string {
+  return `legacy-q-${fingerprint}`;
+}
+
+export function isLegacyCrmImport(
+  answers: Record<string, unknown> | null | undefined,
+): boolean {
+  const meta = answers?.[LEGACY_IMPORT_KEY];
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+  return (meta as { source?: string }).source === LEGACY_CRM_SOURCE;
+}
+
+export function readLegacyIdentity(
+  answers: Record<string, unknown> | null | undefined,
+): LegacyCrmIdentity | null {
+  const raw = answers?.[LEGACY_IDENTITY_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  return {
+    fullNameCyrillic: clean(obj.fullNameCyrillic),
+    fullNameLatin: clean(obj.fullNameLatin),
+    passportNumber: clean(obj.passportNumber),
+    email: clean(obj.email),
+    submittedAt: clean(obj.submittedAt),
+    status: clean(obj.status),
+    direction: clean(obj.direction),
+  };
+}
+
+function buildSheetColumns(row: LegacyCrmClientRow): Record<string, string> {
+  if (row.sheetColumns && Object.keys(row.sheetColumns).length > 0) {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(row.sheetColumns)) {
+      out[key] = clean(value);
+    }
+    return out;
+  }
+
+  const mapped: Record<string, string> = {
+    Фамилия: clean(row.name),
+    Латиница: clean(row.citizenship),
+    "Номер паспорта": clean(row.passportNumber),
+    "электронная почта": clean(row.email),
+    "Дата подачи": clean(row.submittedAt),
+    "Дата предпологаемого одобрения": clean(row.expectedApprovalAt),
+    "Имя референта": clean(row.referentName || row.manager),
+    "Адрес букинга": clean(row.bookingAddress),
+    "Дата букинга (от и до)": clean(row.bookingRange),
+    "Дата одобрения ВНЖ": clean(row.approvalAt),
+    Заметки: clean(row.notes),
+    "Дата выдачи карточки ВНЖ": clean(row.residenceCardIssuedAt),
+    "Пароль для приложения": clean(row.appPassword),
+    "Партнер от кого клиент": clean(row.partnerName),
+    Договор: clean(row.contract),
+  };
+  const ordered: Record<string, string> = {};
+  for (const key of EXTERNAL_COLUMN_ORDER) {
+    ordered[key] = mapped[key] ?? "";
+  }
+  return ordered;
+}
+
+export function buildLegacyAnswersFromClient(
+  row: LegacyCrmClientRow,
+  options?: { importedAt?: string; existingAnswers?: Record<string, unknown> },
+): Record<string, unknown> {
+  const importedAt = options?.importedAt ?? new Date().toISOString();
+  const fingerprint = legacyCrmFingerprint(row);
+  const sheetColumns = buildSheetColumns(row);
+  const curator = clean(row.referentName || row.manager);
+  const notes = clean(row.notes);
+
+  const identity: LegacyCrmIdentity = {
+    fullNameCyrillic: clean(row.name),
+    fullNameLatin: clean(row.citizenship),
+    passportNumber: clean(row.passportNumber),
+    email: clean(row.email),
+    submittedAt: clean(row.submittedAt),
+    status: clean(row.status),
+    direction: clean(row.direction || row.country) || "Хорватия",
+  };
+
+  const staff = {
+    contractNumber: clean(row.contract),
+    contractAmount: "",
+    company: "",
+    curator,
+    expectedApproval: clean(row.expectedApprovalAt),
+    bookingAddress: clean(row.bookingAddress),
+    bookingDate: clean(row.bookingRange),
+    trpApprovalDate: clean(row.approvalAt),
+    trpCardIssueDate: clean(row.residenceCardIssuedAt),
+    partner: clean(row.partnerName),
+  };
+
+  const importMeta: LegacyCrmImportMeta = {
+    source: LEGACY_CRM_SOURCE,
+    sheetRow: row.rowIndex ?? null,
+    importedAt,
+    fingerprint,
+  };
+
+  const existing = options?.existingAnswers ?? {};
+  const existingNotes = Array.isArray(existing[LEGACY_NOTES_KEY])
+    ? (existing[LEGACY_NOTES_KEY] as unknown[])
+    : [];
+
+  let staffNotes = existingNotes;
+  if (notes) {
+    const alreadyHasImportNote = existingNotes.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const text = clean((item as { text?: unknown }).text);
+      return text === notes || text.startsWith("[Импорт CRM]");
+    });
+    if (!alreadyHasImportNote) {
+      staffNotes = [
+        ...existingNotes,
+        {
+          id: `legacy-note-${fingerprint}`,
+          text: notes,
+          authorName: "Импорт CRM",
+          authorUserId: "system-legacy-import",
+          createdAt: importedAt,
+        },
+      ];
+    }
+  }
+
+  return {
+    ...existing,
+    // Identity mirrors common portal question ids used in intake list
+    full_name_cyrillic: identity.fullNameCyrillic,
+    full_name_latin: identity.fullNameLatin,
+    [LEGACY_IDENTITY_KEY]: identity,
+    [LEGACY_SHEET_KEY]: sheetColumns,
+    [LEGACY_STAFF_KEY]: staff,
+    [LEGACY_IMPORT_KEY]: importMeta,
+    [LEGACY_NOTES_KEY]: staffNotes,
+  };
+}
+
+export function buildLegacyReviewRows(
+  answers: Record<string, unknown>,
+  locale: "ru" | "en" = "ru",
+): Array<{
+  section: string;
+  label: string;
+  value: string;
+  questionId: string;
+}> {
+  const sectionIdentity = locale === "ru" ? "Данные клиента" : "Client data";
+  const sectionSheet = locale === "ru" ? "Старая база (CRM)" : "Legacy CRM";
+  const rows: Array<{
+    section: string;
+    label: string;
+    value: string;
+    questionId: string;
+  }> = [];
+
+  const identity = readLegacyIdentity(answers);
+  if (identity) {
+    const identityFields: Array<[string, string, string]> = [
+      ["fullNameCyrillic", locale === "ru" ? "ФИО" : "Full name", identity.fullNameCyrillic],
+      ["fullNameLatin", locale === "ru" ? "Латиница" : "Latin name", identity.fullNameLatin],
+      ["passportNumber", locale === "ru" ? "Паспорт" : "Passport", identity.passportNumber],
+      ["email", "Email", identity.email],
+      ["submittedAt", locale === "ru" ? "Дата подачи" : "Submitted", identity.submittedAt],
+      ["status", locale === "ru" ? "Статус" : "Status", identity.status],
+      ["direction", locale === "ru" ? "Направление" : "Direction", identity.direction],
+    ];
+    for (const [id, label, value] of identityFields) {
+      if (!value) continue;
+      rows.push({
+        section: sectionIdentity,
+        label,
+        value,
+        questionId: `${LEGACY_IDENTITY_KEY}.${id}`,
+      });
+    }
+  }
+
+  const sheet = answers[LEGACY_SHEET_KEY];
+  if (sheet && typeof sheet === "object" && !Array.isArray(sheet)) {
+    const entries = Object.entries(sheet as Record<string, unknown>);
+    // Prefer known External order, then any extras
+    const orderedKeys = [
+      ...EXTERNAL_COLUMN_ORDER,
+      ...entries.map(([k]) => k).filter((k) => !(EXTERNAL_COLUMN_ORDER as readonly string[]).includes(k)),
+    ];
+    const seen = new Set<string>();
+    for (const key of orderedKeys) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const value = clean((sheet as Record<string, unknown>)[key]);
+      // Never show app password in staff review UI
+      if (key.toLowerCase().includes("пароль")) continue;
+      if (!value) continue;
+      rows.push({
+        section: sectionSheet,
+        label: key,
+        value,
+        questionId: `${LEGACY_SHEET_KEY}.${key}`,
+      });
+    }
+  }
+
+  return rows;
+}
+
+export function parseSubmittedAtIso(value: string | undefined): string | null {
+  const raw = clean(value);
+  if (!raw || raw === "—") return null;
+  // DD.MM.YYYY
+  const m = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) {
+    const iso = `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}T12:00:00.000Z`;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}

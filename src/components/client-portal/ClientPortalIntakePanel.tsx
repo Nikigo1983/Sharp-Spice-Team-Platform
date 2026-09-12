@@ -28,6 +28,7 @@ type ListItem = {
   serviceType: string;
   submittedAt: string | null;
   isNew?: boolean;
+  isLegacy?: boolean;
   staffFields?: QuestionnaireStaffFields;
 };
 
@@ -1021,6 +1022,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         onClick={() => void openCase(item)}
                       >
                         {name}
+                        {item.isLegacy ? (
+                          <span className={styles.legacyBadge}>
+                            Из старой базы
+                          </span>
+                        ) : null}
                         {item.isNew ? (
                           <span className={styles.newBadge}>Новая</span>
                         ) : null}

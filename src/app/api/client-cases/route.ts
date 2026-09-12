@@ -16,11 +16,18 @@ import {
   readStaffFields,
   type QuestionnaireStaffFields,
 } from "@/lib/client-portal/staff-fields";
+import {
+  isLegacyCrmImport,
+  readLegacyIdentity,
+} from "@/lib/client-portal/legacy-crm";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
 
 function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
+  const identity = readLegacyIdentity(item.answers);
   const displayName =
+    identity?.fullNameCyrillic ||
+    identity?.fullNameLatin ||
     String(item.answers.full_name_cyrillic ?? "").trim() ||
     String(item.answers.full_name_latin ?? "").trim() ||
     [item.firstName, String(item.answers.last_name ?? "")]
@@ -30,18 +37,22 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     item.email;
   return {
     id: item.id,
-    email: item.email,
+    email: identity?.email || item.email,
     displayName,
     firstName: item.firstName,
     lastName: String(
-      item.answers.full_name_latin ??
-        item.answers.full_name_cyrillic ??
-        item.answers.last_name ??
+      identity?.fullNameLatin ||
+        item.answers.full_name_latin ||
+        item.answers.full_name_cyrillic ||
+        item.answers.last_name ||
         "",
     ),
-    serviceType: String(item.answers.citizenship_latin ?? ""),
+    serviceType: String(
+      identity?.direction || item.answers.citizenship_latin || "",
+    ),
     submittedAt: item.submittedAt,
     isNew: !item.staffOpenedAt,
+    isLegacy: isLegacyCrmImport(item.answers),
     staffFields: readStaffFields(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),
   };
@@ -63,7 +74,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
     return NextResponse.json({
-      schemaTitle: pickLabel(getPublishedSchema().title, "ru"),
+      schemaTitle: isLegacyCrmImport(record.answers)
+        ? "Старая база клиентов (CRM)"
+        : pickLabel(getPublishedSchema().title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),
@@ -71,6 +84,7 @@ export async function GET(request: Request) {
       processStatus: readProcessStatus(record.answers, record.status),
       processStatusOptions: PROCESS_STATUS_OPTIONS,
       review: buildReviewRows(record.answers, "ru"),
+      isLegacy: isLegacyCrmImport(record.answers),
     });
   }
 

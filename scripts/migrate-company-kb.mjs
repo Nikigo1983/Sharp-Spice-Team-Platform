@@ -220,6 +220,14 @@ async function ensureBucket(sb) {
   }
 }
 
+function scrubText(value) {
+  if (value == null) return value;
+  return String(value)
+    .replace(/\u0000/g, "")
+    .replace(/[\uD800-\uDFFF]/g, "")
+    .replace(/\\u0000/gi, "");
+}
+
 function mergeSnapshot(existing, folders, articles) {
   const now = new Date().toISOString();
   const snapshot =
@@ -293,7 +301,7 @@ function mergeSnapshot(existing, folders, articles) {
           id,
           libraryId: LIBRARY_ID,
           parentId,
-          name: item.name,
+          name: scrubText(item.name),
           sortOrder: snapshot.folders.filter((f) => f.parentId === parentId)
             .length,
           sourceDriveId: item.sourceDriveId,
@@ -322,12 +330,12 @@ function mergeSnapshot(existing, folders, articles) {
       const cur = snapshot.articles[existingIndex];
       snapshot.articles[existingIndex] = {
         ...cur,
-        title: item.title,
-        body: item.body,
+        title: scrubText(item.title),
+        body: scrubText(item.body),
         folderId,
         kind: item.kind || "text",
         storagePath: item.storagePath ?? cur.storagePath ?? null,
-        fileName: item.fileName ?? cur.fileName ?? null,
+        fileName: scrubText(item.fileName ?? cur.fileName ?? null),
         sizeBytes: item.sizeBytes ?? cur.sizeBytes ?? null,
         sourceMimeType: item.sourceMimeType,
         updatedAt: now,
@@ -339,12 +347,12 @@ function mergeSnapshot(existing, folders, articles) {
         id: randomUUID(),
         libraryId: LIBRARY_ID,
         folderId,
-        title: item.title,
-        body: item.body,
+        title: scrubText(item.title),
+        body: scrubText(item.body),
         status: "published",
         kind: item.kind || "text",
         storagePath: item.storagePath || null,
-        fileName: item.fileName || null,
+        fileName: scrubText(item.fileName || null),
         sizeBytes: item.sizeBytes ?? null,
         sourceDriveId: item.sourceDriveId,
         sourceMimeType: item.sourceMimeType,
@@ -423,10 +431,12 @@ async function main() {
       folders,
       articles,
     );
+    // Ensure JSON is Postgres-safe (no null bytes / lone surrogates).
+    const safeValue = JSON.parse(scrubText(JSON.stringify(snapshot)));
     const { error } = await sb.from("app_state").upsert(
       {
         key: APP_STATE_KEY,
-        value: snapshot,
+        value: safeValue,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "key" },
@@ -436,7 +446,7 @@ async function main() {
     articlesCreatedTotal += articlesCreated;
     updatedTotal += updated;
     console.log(
-      `Checkpoint [${label}]: folders=${snapshot.folders.length} articles=${snapshot.articles.length} filesStored=${filesStored}`,
+      `Checkpoint [${label}]: folders=${safeValue.folders.length} articles=${safeValue.articles.length} filesStored=${filesStored}`,
     );
   }
 

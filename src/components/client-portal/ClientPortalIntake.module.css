@@ -296,10 +296,9 @@
 }
 
 .addClientForm {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
-  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
   margin: 0 0 1rem;
   padding: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -308,22 +307,32 @@
 }
 
 .addClientHint {
-  grid-column: 1 / -1;
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.72);
 }
 
+.addClientFields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
 .addClientLabel {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-width: 0;
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
 .addClientInput {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.5rem;
   padding: 0.55rem 0.7rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
@@ -332,21 +341,56 @@
   font: inherit;
 }
 
+.addClientActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .addClientSubmit {
-  padding: 0.6rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.65rem 1.15rem;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #1f6b45, #2f9e66);
+  background: #1f6b45;
   color: #fff;
   font: inherit;
+  font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
+  width: auto;
+  max-width: 100%;
+}
+
+.addClientSubmit:hover:not(:disabled) {
+  background: #258554;
 }
 
 .addClientSubmit:disabled {
   opacity: 0.65;
   cursor: wait;
+}
+
+@media (max-width: 900px) {
+  .addClientFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .addClientFields {
+    grid-template-columns: 1fr;
+  }
+
+  .addClientSubmit {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 .createdBox {

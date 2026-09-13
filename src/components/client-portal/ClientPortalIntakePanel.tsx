@@ -582,6 +582,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setClientLabel("");
     setSelectedArchived(false);
     setSelectedIsLegacy(false);
+    setCreatedCredentials(null);
     setStatus(null);
   }
 
@@ -1317,58 +1318,62 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             заполните анкету за него. При необходимости клиент получит доступ в
             портал по email.
           </p>
-          <label className={styles.addClientLabel}>
-            Имя (для входа)
-            <input
-              className={styles.addClientInput}
-              value={addFirstName}
-              onChange={(event) => setAddFirstName(event.target.value)}
-              required
+          <div className={styles.addClientFields}>
+            <label className={styles.addClientLabel}>
+              Имя (для входа)
+              <input
+                className={styles.addClientInput}
+                value={addFirstName}
+                onChange={(event) => setAddFirstName(event.target.value)}
+                required
+                disabled={addingClient}
+                autoComplete="off"
+              />
+            </label>
+            <label className={styles.addClientLabel}>
+              ФИО (кириллица)
+              <input
+                className={styles.addClientInput}
+                value={addFullName}
+                onChange={(event) => setAddFullName(event.target.value)}
+                placeholder="Необязательно"
+                disabled={addingClient}
+                autoComplete="off"
+              />
+            </label>
+            <label className={styles.addClientLabel}>
+              Email
+              <input
+                className={styles.addClientInput}
+                type="email"
+                value={addEmail}
+                onChange={(event) => setAddEmail(event.target.value)}
+                required
+                disabled={addingClient}
+                autoComplete="off"
+              />
+            </label>
+            <label className={styles.addClientLabel}>
+              Телефон
+              <input
+                className={styles.addClientInput}
+                value={addPhone}
+                onChange={(event) => setAddPhone(event.target.value)}
+                placeholder="Необязательно"
+                disabled={addingClient}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <div className={styles.addClientActions}>
+            <button
+              type="submit"
+              className={styles.addClientSubmit}
               disabled={addingClient}
-              autoComplete="off"
-            />
-          </label>
-          <label className={styles.addClientLabel}>
-            ФИО (кириллица)
-            <input
-              className={styles.addClientInput}
-              value={addFullName}
-              onChange={(event) => setAddFullName(event.target.value)}
-              placeholder="Необязательно"
-              disabled={addingClient}
-              autoComplete="off"
-            />
-          </label>
-          <label className={styles.addClientLabel}>
-            Email
-            <input
-              className={styles.addClientInput}
-              type="email"
-              value={addEmail}
-              onChange={(event) => setAddEmail(event.target.value)}
-              required
-              disabled={addingClient}
-              autoComplete="off"
-            />
-          </label>
-          <label className={styles.addClientLabel}>
-            Телефон
-            <input
-              className={styles.addClientInput}
-              value={addPhone}
-              onChange={(event) => setAddPhone(event.target.value)}
-              placeholder="Необязательно"
-              disabled={addingClient}
-              autoComplete="off"
-            />
-          </label>
-          <button
-            type="submit"
-            className={styles.addClientSubmit}
-            disabled={addingClient}
-          >
-            {addingClient ? "Создание…" : "Создать и заполнить анкету"}
-          </button>
+            >
+              {addingClient ? "Создание…" : "Создать и заполнить анкету"}
+            </button>
+          </div>
         </form>
       ) : null}
 

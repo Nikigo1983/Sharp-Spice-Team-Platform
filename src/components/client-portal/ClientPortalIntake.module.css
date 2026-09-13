@@ -438,6 +438,28 @@
   background: rgba(18, 18, 22, 0.98);
 }
 
+.rowHighlighted td {
+  background: rgba(34, 120, 72, 0.28);
+}
+
+.rowHighlighted .stickyNum,
+.rowHighlighted .stickyName {
+  background: rgba(28, 92, 58, 0.96);
+}
+
+.rowHighlighted .cellInput {
+  background: rgba(12, 40, 28, 0.55);
+  border-color: rgba(110, 231, 183, 0.35);
+}
+
+.rowHighlighted .nameButton {
+  color: #ecfdf5;
+}
+
+.rowHighlighted .emailLine {
+  color: rgba(209, 250, 229, 0.72);
+}
+
 .nameButton {
   appearance: none;
   border: none;

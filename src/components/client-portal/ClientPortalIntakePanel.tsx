@@ -185,6 +185,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [counts, setCounts] = useState({ active: 0, archive: 0 });
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -1147,7 +1148,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <p className={styles.lead}>
             {listView === "archive"
               ? "Архив: клиенты с завершёнными процессами. Карточка и все данные сохраняются."
-              : "Анкеты клиентов. Редактируйте колонки в таблице и нажмите «Сохранить». Имя открывает разделы карточки клиента."}
+              : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить». Клик по имени подсвечивает строку, двойной клик открывает карточку."}
           </p>
           <div className={styles.viewTabs} role="tablist" aria-label="Разделы заявок">
             <button

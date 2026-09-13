@@ -213,6 +213,29 @@
   cursor: wait;
 }
 
+.deleteCaseBtn {
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.deleteCaseBtn:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.75);
+  background: rgba(248, 113, 113, 0.22);
+  color: #fff;
+}
+
+.deleteCaseBtn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .refresh,
 .back,
 .saveBtn,

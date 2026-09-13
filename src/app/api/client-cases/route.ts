@@ -10,6 +10,7 @@ import {
   readProcessStatus,
   readStaffDocuments,
   readStaffNotes,
+  deleteSubmittedCaseForStaff,
   updateCaseArchiveState,
   updateLegacyCaseSheetFields,
   updateSubmittedAnswerFields,
@@ -200,6 +201,28 @@ export async function PATCH(request: Request) {
         : message === "NOT_LEGACY"
           ? 400
           : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  try {
+    await deleteSubmittedCaseForStaff(id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "DELETE_FAILED";
+    const status = message === "NOT_FOUND" ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

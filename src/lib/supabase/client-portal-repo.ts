@@ -267,6 +267,24 @@ export async function sbUpsertQuestionnaire(
   return mapQuestionnaire(data as QuestionnaireRow);
 }
 
+export async function sbDeleteQuestionnaire(id: string): Promise<boolean> {
+  const { error, count } = await getSupabaseAdmin()
+    .from("client_portal_questionnaires")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+export async function sbDeleteUser(id: string): Promise<boolean> {
+  const { error, count } = await getSupabaseAdmin()
+    .from("client_portal_users")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 export async function sbListSubmittedQuestionnaires(): Promise<
   QuestionnaireRecord[]
 > {

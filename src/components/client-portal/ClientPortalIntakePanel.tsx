@@ -184,6 +184,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [listView, setListView] = useState<"active" | "archive">("active");
   const [counts, setCounts] = useState({ active: 0, archive: 0 });
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -249,6 +250,40 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       }
     } finally {
       setArchivingId(null);
+    }
+  }
+
+  async function deleteCase(id: string, label: string) {
+    const confirmed = window.confirm(
+      `Удалить клиента «${label}» безвозвратно?\n\nАнкета, документы и доступ в портал будут удалены. Это нельзя отменить.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch(
+        `/api/client-cases?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        setError("Не удалось удалить клиента.");
+        return;
+      }
+      setStatus("Клиент удалён.");
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await loadList();
+      if (selectedId === id) {
+        setSelectedId(null);
+        setCaseView("menu");
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -1366,7 +1401,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         <button
                           type="button"
                           className={styles.archiveBtn}
-                          disabled={archivingId === item.id}
+                          disabled={
+                            archivingId === item.id || deletingId === item.id
+                          }
                           onClick={() =>
                             void setArchived(item.id, listView !== "archive")
                           }
@@ -1376,6 +1413,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                             : listView === "archive"
                               ? "Вернуть"
                               : "В архив"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.deleteCaseBtn}
+                          disabled={
+                            deletingId === item.id || archivingId === item.id
+                          }
+                          onClick={() => void deleteCase(item.id, name)}
+                        >
+                          {deletingId === item.id ? "…" : "Удалить"}
                         </button>
                       </div>
                     </td>

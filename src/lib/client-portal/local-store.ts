@@ -85,6 +85,22 @@ export async function upsertClientPortalUser(
   return user;
 }
 
+export async function deleteClientPortalUser(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return sb.sbDeleteUser(id);
+  }
+  const users = await listClientPortalUsers();
+  const next = users.filter((user) => user.id !== id);
+  if (next.length === users.length) return false;
+  await saveClientPortalUsers(next);
+  const resets = await readJsonFile<ClientPortalPasswordReset[]>(RESETS_PATH, []);
+  await writeJsonFile(
+    RESETS_PATH,
+    resets.filter((item) => item.userId !== id),
+  );
+  return true;
+}
+
 export async function listClientPortalInvitations(): Promise<
   ClientPortalInvitation[]
 > {

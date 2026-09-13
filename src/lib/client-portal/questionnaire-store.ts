@@ -74,6 +74,17 @@ export async function upsertQuestionnaire(
   return record;
 }
 
+export async function deleteQuestionnaire(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return sb.sbDeleteQuestionnaire(id);
+  }
+  const records = await readAll();
+  const next = records.filter((item) => item.id !== id);
+  if (next.length === records.length) return false;
+  await writeAll(next);
+  return true;
+}
+
 export async function listSubmittedQuestionnaires(): Promise<
   QuestionnaireRecord[]
 > {

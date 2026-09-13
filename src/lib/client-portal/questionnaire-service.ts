@@ -19,11 +19,13 @@ import {
   validateRequiredAnswers,
 } from "./questionnaire-progress";
 import {
+  deleteQuestionnaire,
   findQuestionnaireById,
   findQuestionnaireByUserId,
   listSubmittedQuestionnaires,
   upsertQuestionnaire,
 } from "./questionnaire-store";
+import { deleteClientPortalUser } from "./local-store";
 import {
   deleteQuestionnaireAttachmentFile,
   saveQuestionnaireAttachmentFile,
@@ -331,6 +333,26 @@ export async function updateCaseArchiveState(
     updatedAt: now,
     revision: current.revision + 1,
   });
+}
+
+/** Permanently remove a submitted case, its files, and the portal user account. */
+export async function deleteSubmittedCaseForStaff(id: string): Promise<void> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+
+  const staffOwner = staffDocumentsOwnerKey(current.id);
+  for (const doc of readStaffDocuments(current.answers)) {
+    await deleteQuestionnaireAttachmentFile(
+      staffOwner,
+      doc.id,
+      doc.fileName,
+    );
+  }
+  await purgeFileAnswers(current.clientPortalUserId, current.answers);
+
+  const removed = await deleteQuestionnaire(current.id);
+  if (!removed) throw new Error("NOT_FOUND");
+  await deleteClientPortalUser(current.clientPortalUserId);
 }
 
 export async function updateLegacyCaseSheetFields(

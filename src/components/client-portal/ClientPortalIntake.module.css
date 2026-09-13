@@ -618,30 +618,6 @@
   color: rgba(209, 250, 229, 0.9);
 }
 
-.rowHighlighted .openCaseLink {
-  color: #bbf7d0;
-}
-
-.openCaseLink {
-  appearance: none;
-  display: inline-block;
-  margin-top: 0.35rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #a5b4fc;
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-}
-
-.openCaseLink:hover {
-  color: #c7d2fe;
-  text-decoration: underline;
-}
-
 .nameText {
   color: #fff;
   font-weight: 600;

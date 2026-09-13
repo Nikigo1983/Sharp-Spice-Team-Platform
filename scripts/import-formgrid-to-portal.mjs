@@ -1,9 +1,14 @@
 /**
- * Import Formgrid «Новые лиды» into Emigrant portal intake (Supabase).
+ * Import Formgrid «Новые клиенты из анкеты» into Emigrant portal intake (Supabase).
  *
  * Usage:
  *   node --experimental-strip-types scripts/import-formgrid-to-portal.mjs --dry-run
- *   node --experimental-strip-types scripts/import-formgrid-to-portal.mjs
+ *   node --experimental-strip-types scripts/import-formgrid-to-portal.mjs --create-only
+ *   node --experimental-strip-types scripts/import-formgrid-to-portal.mjs --create-only --dry-run
+ *
+ * Flags:
+ *   --dry-run       count only, no writes
+ *   --create-only   skip questionnaires that already exist (no updates)
  */
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -37,9 +42,45 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 const dryRun = process.argv.includes("--dry-run");
+const createOnly = process.argv.includes("--create-only");
+
+/** Exact FIO match after normalize (case/space insensitive). */
+const EXCLUDED_FULL_NAMES = ["белоусова вероника николаевна"];
 
 const DEFAULT_FORMGRID_SPREADSHEET_ID = "1S8Y0VCaAQ78wxg5Rxl8fcFMkwSsvr-X-cLrAlK4nF9Q";
 const DEFAULT_FORMGRID_GID = "0";
+const LEAD_REVIEW_APP_STATE_KEY = "formgrid_lead_reviews";
+const DISMISSED_STATUSES = new Set(["rejected", "duplicate"]);
+
+function normalizePersonName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isExcludedName(fullName) {
+  const n = normalizePersonName(fullName);
+  if (!n) return false;
+  return EXCLUDED_FULL_NAMES.some(
+    (ex) => n === ex || n.startsWith(`${ex} `) || n.includes(ex),
+  );
+}
+
+function buildFormgridRowKey(headers, row) {
+  const nameIdx = headers.findIndex((header) => /имя|name|фио/i.test(header));
+  const emailIdx = headers.findIndex((header) =>
+    /email|почта|e-mail/i.test(header),
+  );
+  const phoneIdx = headers.findIndex((header) => /тел|phone/i.test(header));
+  const parts = [
+    nameIdx >= 0 ? row[nameIdx] : "",
+    emailIdx >= 0 ? row[emailIdx] : "",
+    phoneIdx >= 0 ? row[phoneIdx] : "",
+    row.join("|"),
+  ];
+  return parts.join("::");
+}
 
 function parseCsvRows(text) {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -101,19 +142,42 @@ async function fetchFormgridRows() {
 }
 
 async function loadMapper() {
-  const mod = await import(
+  return import(
     pathToFileURL(resolve("src/lib/client-portal/formgrid-import.ts")).href
   );
-  return mod;
 }
 
-function rowsToLeads(rows, mapper) {
+async function loadDismissedRowKeys(sb) {
+  const { data, error } = await sb
+    .from("app_state")
+    .select("value")
+    .eq("key", LEAD_REVIEW_APP_STATE_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn("could not load lead-review dismiss store:", error.message);
+    return new Set();
+  }
+  const reviews = data?.value?.reviews;
+  if (!reviews || typeof reviews !== "object") return new Set();
+  const keys = new Set();
+  for (const review of Object.values(reviews)) {
+    if (review && DISMISSED_STATUSES.has(review.status) && review.rowKey) {
+      keys.add(review.rowKey);
+    }
+  }
+  return keys;
+}
+
+function rowsToLeads(rows, mapper, dismissedKeys) {
   if (rows.length < 2) return [];
   const headers = rows[0];
   const leads = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const sheetRow = i + 1; // 1-based including header; data row 2 = sheet row 2
+    const sheetRow = i + 1;
+    const rowKey = buildFormgridRowKey(headers, row);
+    if (dismissedKeys.has(rowKey)) continue;
+
     const sheetColumns = {};
     headers.forEach((h, idx) => {
       sheetColumns[String(h || `col_${idx}`)] = row[idx] ?? "";
@@ -130,6 +194,7 @@ function rowsToLeads(rows, mapper) {
       sheetColumns,
       fields,
       fingerprint,
+      rowKey,
     });
   }
   return leads;
@@ -146,8 +211,9 @@ function normalizeEmail(value) {
 }
 
 async function loadExistingIndexes(sb) {
-  const passports = new Map(); // passport -> questionnaire id
+  const passports = new Map();
   const emails = new Map();
+  const formgridIds = new Set();
   const pageSize = 1000;
   let from = 0;
   for (;;) {
@@ -158,7 +224,11 @@ async function loadExistingIndexes(sb) {
     if (error) throw error;
     const batch = data || [];
     for (const row of batch) {
-      const answers = row.answers && typeof row.answers === "object" ? row.answers : {};
+      if (String(row.id || "").startsWith("formgrid-q-")) {
+        formgridIds.add(row.id);
+      }
+      const answers =
+        row.answers && typeof row.answers === "object" ? row.answers : {};
       const passport = normalizePassport(answers.passport_number);
       if (passport) passports.set(passport, row.id);
       const email =
@@ -170,7 +240,7 @@ async function loadExistingIndexes(sb) {
     if (batch.length < pageSize) break;
     from += pageSize;
   }
-  return { passports, emails };
+  return { passports, emails, formgridIds };
 }
 
 async function main() {
@@ -182,14 +252,21 @@ async function main() {
 
   const mapper = await loadMapper();
   console.log(dryRun ? "Mode: DRY-RUN" : "Mode: WRITE");
+  console.log(createOnly ? "Create-only: yes" : "Create-only: no (upsert)");
   console.log("Fetching Formgrid sheet CSV…");
-  const rawRows = await fetchFormgridRows();
-  const leads = rowsToLeads(rawRows, mapper);
-  console.log(`Leads with data: ${leads.length} (sheet rows=${rawRows.length})`);
 
   const sb = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const dismissedKeys = await loadDismissedRowKeys(sb);
+  console.log(`Dismissed/rejected Formgrid rows: ${dismissedKeys.size}`);
+
+  const rawRows = await fetchFormgridRows();
+  const leads = rowsToLeads(rawRows, mapper, dismissedKeys);
+  console.log(
+    `Active leads with data: ${leads.length} (sheet rows=${rawRows.length})`,
+  );
 
   console.log("Loading existing questionnaires for dedupe…");
   const existing = await loadExistingIndexes(sb);
@@ -197,7 +274,10 @@ async function main() {
   let created = 0;
   let updated = 0;
   let skippedDup = 0;
+  let skippedExisting = 0;
+  let skippedExcluded = 0;
   let skippedErr = 0;
+  const createdNames = [];
   const importedAt = new Date().toISOString();
   const deadPasswordHash = await bcrypt.hash(
     `formgrid-disabled-${randomBytes(16).toString("hex")}`,
@@ -205,6 +285,12 @@ async function main() {
   );
 
   for (const lead of leads) {
+    if (isExcludedName(lead.fields.fullName)) {
+      skippedExcluded += 1;
+      console.log(`skip excluded: ${lead.fields.fullName}`);
+      continue;
+    }
+
     const questionnaireId = mapper.formgridQuestionnaireId(lead.fingerprint);
     const userId = mapper.formgridUserId(lead.fingerprint);
     const passport = normalizePassport(lead.fields.passport);
@@ -227,7 +313,7 @@ async function main() {
 
     if (dupByPassport || dupByEmail) {
       skippedDup += 1;
-      if (skippedDup <= 8) {
+      if (skippedDup <= 12) {
         console.log(
           `skip duplicate ${lead.fields.fullName || lead.leadId} → existing ${dupByPassport || dupByEmail}`,
         );
@@ -240,6 +326,11 @@ async function main() {
       .select("id, answers, revision, created_at, staff_opened_at")
       .eq("id", questionnaireId)
       .maybeSingle();
+
+    if (createOnly && (existingQ || existing.formgridIds.has(questionnaireId))) {
+      skippedExisting += 1;
+      continue;
+    }
 
     const answers = mapper.mapFormgridRowToAnswers(lead.sheetColumns, {
       leadId: lead.leadId,
@@ -260,7 +351,10 @@ async function main() {
 
     if (dryRun) {
       if (existingQ) updated += 1;
-      else created += 1;
+      else {
+        created += 1;
+        createdNames.push(lead.fields.fullName || lead.leadId);
+      }
       continue;
     }
 
@@ -302,33 +396,41 @@ async function main() {
       { onConflict: "id" },
     );
     if (qError) {
-      console.error("questionnaire upsert failed", lead.fingerprint, qError.message);
+      console.error(
+        "questionnaire upsert failed",
+        lead.fingerprint,
+        qError.message,
+      );
       skippedErr += 1;
       continue;
     }
 
     if (passport) existing.passports.set(passport, questionnaireId);
-    if (emailNorm && emailNorm.includes("@")) existing.emails.set(emailNorm, questionnaireId);
+    if (emailNorm && emailNorm.includes("@")) {
+      existing.emails.set(emailNorm, questionnaireId);
+    }
+    existing.formgridIds.add(questionnaireId);
 
     if (existingQ) updated += 1;
-    else created += 1;
+    else {
+      created += 1;
+      createdNames.push(lead.fields.fullName || lead.leadId);
+    }
   }
 
   console.log(
     JSON.stringify(
       {
         dryRun,
-        total: leads.length,
+        createOnly,
+        totalActive: leads.length,
         created,
         updated,
         skippedDup,
+        skippedExisting,
+        skippedExcluded,
         skippedErr,
-        sample: leads.slice(0, 3).map((l) => ({
-          name: l.fields.fullName,
-          email: l.fields.email,
-          fingerprint: l.fingerprint,
-          id: mapper.formgridQuestionnaireId(l.fingerprint),
-        })),
+        createdNames,
       },
       null,
       2,

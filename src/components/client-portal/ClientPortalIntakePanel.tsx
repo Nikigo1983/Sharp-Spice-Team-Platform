@@ -768,18 +768,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           ) : (
             backToMenu
           )}
-          <button
-            type="button"
-            className={styles.archiveBtn}
-            disabled={archivingId === selectedId}
-            onClick={() => void setArchived(selectedId, !selectedArchived)}
-          >
-            {archivingId === selectedId
-              ? "…"
-              : selectedArchived
-                ? "Вернуть из архива"
-                : "В архив"}
-          </button>
           <Link href="/dashboard" className={styles.homeLink}>
             Вернуться на главную
           </Link>

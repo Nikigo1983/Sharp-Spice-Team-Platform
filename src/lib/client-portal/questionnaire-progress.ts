@@ -76,7 +76,8 @@ export function validateRequiredAnswers(
 ): string[] {
   const errors: string[] = [];
   for (const question of allQuestions()) {
-    if (question.type === "information" || !question.required) continue;
+    if (question.type === "information" || question.type === "file") continue;
+    if (!question.required) continue;
     if (!isQuestionVisible(question, answers)) continue;
     if (!isAnswerFilled(question, answers[question.id])) {
       errors.push(pickLabel(question.label, locale));

@@ -502,14 +502,18 @@ export function PlatformKnowledgeBaseView({
 
       <p className={styles.hint}>
         {library === "company_knowledge"
-          ? "Корпоративная база на платформе (Supabase Storage): папки, тексты, PDF и фото."
+          ? "Корпоративная база на платформе (Supabase Storage). Здесь можно создавать папки; материалы обычно приходят импортом из Google Drive. Удалить можно любой файл или папку."
           : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
-        {folderId
-          ? ` Сейчас открыта папка «${listing?.folderName || "…"}» — новые папки и документы попадут сюда.`
-          : " Новые папки и документы можно создавать на любом уровне."}
+        {library === "company_knowledge"
+          ? folderId
+            ? ` Сейчас открыта папка «${listing?.folderName || "…"}».`
+            : ""
+          : folderId
+            ? ` Сейчас открыта папка «${listing?.folderName || "…"}» — новые папки и документы попадут сюда.`
+            : " Новые папки и документы можно создавать на любом уровне."}
       </p>
 
-      <div className={styles.createPanel}>
+      <div className={styles.createRow}>
         <form className={styles.createForm} onSubmit={createFolder}>
           <input
             className={styles.editorInput}
@@ -528,46 +532,50 @@ export function PlatformKnowledgeBaseView({
             {creatingFolder ? "Создание…" : "Создать папку"}
           </button>
         </form>
-        <form className={styles.createForm} onSubmit={createArticle}>
-          <input
-            className={styles.editorInput}
-            value={newArticleTitle}
-            onChange={(event) => setNewArticleTitle(event.target.value)}
-            placeholder="Новый текст"
-            required
-            disabled={creatingArticle}
-          />
-          <button
-            type="submit"
-            className={styles.linkBtn}
-            disabled={creatingArticle}
-          >
-            Добавить текст
-          </button>
-        </form>
-        <div className={styles.createForm}>
-          <input
-            ref={fileInputRef}
-            className={styles.fileInput}
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            disabled={uploadingFiles}
-            onChange={(event) => void uploadDocuments(event.target.files)}
-            aria-label="Добавить документ"
-          />
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            disabled={uploadingFiles}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {uploadingFiles ? "Загрузка…" : "Добавить документ"}
-          </button>
-          <span className={styles.uploadHint}>
-            PDF, Word, Excel, PowerPoint, фото, текст — до 40 МБ
-          </span>
-        </div>
+        {library !== "company_knowledge" ? (
+          <>
+            <form className={styles.createForm} onSubmit={createArticle}>
+              <input
+                className={styles.editorInput}
+                value={newArticleTitle}
+                onChange={(event) => setNewArticleTitle(event.target.value)}
+                placeholder="Новый текст"
+                required
+                disabled={creatingArticle}
+              />
+              <button
+                type="submit"
+                className={styles.linkBtn}
+                disabled={creatingArticle}
+              >
+                Добавить текст
+              </button>
+            </form>
+            <div className={styles.createForm}>
+              <input
+                ref={fileInputRef}
+                className={styles.fileInput}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                disabled={uploadingFiles}
+                onChange={(event) => void uploadDocuments(event.target.files)}
+                aria-label="Добавить документ"
+              />
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={uploadingFiles}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingFiles ? "Загрузка…" : "Добавить документ"}
+              </button>
+              <span className={styles.uploadHint}>
+                PDF, Word, Excel, PowerPoint, фото, текст — до 40 МБ
+              </span>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}
@@ -599,7 +607,9 @@ export function PlatformKnowledgeBaseView({
               ) : !listing || listing.items.length === 0 ? (
                 <tr>
                   <td colSpan={4} className={styles.empty}>
-                    Пока пусто. Создайте папку, добавьте текст или документ.
+                    {library === "company_knowledge"
+                      ? "Пока пусто. Создайте папку или запустите импорт из Google Drive."
+                      : "Пока пусто. Создайте папку, добавьте текст или документ."}
                   </td>
                 </tr>
               ) : (
@@ -647,14 +657,10 @@ export function PlatformKnowledgeBaseView({
                     <td>
                       <button
                         type="button"
-                        className={styles.openLink}
-                        onClick={() =>
-                          item.kind === "folder"
-                            ? openFolder(item)
-                            : void openArticle(item.id)
-                        }
+                        className={styles.dangerBtn}
+                        onClick={() => void removeListItem(item)}
                       >
-                        Открыть
+                        Удалить
                       </button>
                     </td>
                   </tr>

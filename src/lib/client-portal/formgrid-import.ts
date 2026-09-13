@@ -300,6 +300,48 @@ export function syntheticEmailFromFormgrid(leadId: string, email: string): strin
 }
 
 /** Prefer showing the original Formgrid sheet columns in staff review. */
+export function isExternalFileUrl(value: string): boolean {
+  const s = clean(value);
+  if (!/^https?:\/\//i.test(s)) return false;
+  try {
+    const u = new URL(s);
+    const path = u.pathname.toLowerCase();
+    return (
+      u.hostname.includes("formgrid.com") ||
+      path.endsWith(".pdf") ||
+      path.endsWith(".jpg") ||
+      path.endsWith(".jpeg") ||
+      path.endsWith(".png") ||
+      path.endsWith(".webp") ||
+      path.endsWith(".doc") ||
+      path.endsWith(".docx") ||
+      path.includes("/response-files/") ||
+      path.includes("/download")
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function fileNameFromExternalUrl(url: string, fallbackLabel: string): string {
+  try {
+    const u = new URL(url);
+    const last = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() || "");
+    if (last && last !== "download" && last !== "download.pdf") return last;
+    if (last === "download.pdf") {
+      const fromQuery = u.searchParams.get("filename") || u.searchParams.get("name");
+      if (fromQuery) return fromQuery;
+    }
+  } catch {
+    // ignore
+  }
+  const cleaned = clean(fallbackLabel)
+    .replace(/\s*\(только pdf\)\s*/i, "")
+    .replace(/\s*\(pdf only\)\s*/i, "")
+    .trim();
+  return cleaned || "Документ Formgrid";
+}
+
 export function buildFormgridReviewRows(
   answers: Record<string, unknown>,
   _locale: "ru" | "en" = "ru",
@@ -308,6 +350,7 @@ export function buildFormgridReviewRows(
   label: string;
   value: string;
   questionId: string;
+  externalUrl?: string;
 }> {
   const sheet = answers[FORMGRID_SHEET_KEY];
   const sheetObj =
@@ -315,12 +358,17 @@ export function buildFormgridReviewRows(
       ? (sheet as Record<string, unknown>)
       : {};
 
-  return Object.entries(sheetObj).map(([key, value]) => ({
-    section: "Formgrid",
-    label: key,
-    value: clean(value),
-    questionId: `${FORMGRID_SHEET_KEY}.${key}`,
-  }));
+  return Object.entries(sheetObj).map(([key, value]) => {
+    const text = clean(value);
+    const externalUrl = isExternalFileUrl(text) ? text : undefined;
+    return {
+      section: "Formgrid",
+      label: key,
+      value: externalUrl ? fileNameFromExternalUrl(text, key) : text,
+      questionId: `${FORMGRID_SHEET_KEY}.${key}`,
+      externalUrl,
+    };
+  });
 }
 
 export function parseFormgridSubmittedAtIso(raw: string | null | undefined): string | null {

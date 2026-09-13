@@ -46,6 +46,7 @@ type ReviewRow = {
   value: string;
   questionId?: string;
   fileId?: string;
+  externalUrl?: string;
 };
 
 type StaffNote = {
@@ -567,7 +568,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setReview(nextReview);
     const draft: Record<string, string> = {};
     for (const row of nextReview) {
-      if (row.questionId && !row.fileId) {
+      if (row.questionId && !row.fileId && !row.externalUrl) {
         draft[row.questionId] = row.value === "—" ? "" : row.value;
       }
     }
@@ -655,7 +656,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       setReview(nextReview);
       const draft: Record<string, string> = {};
       for (const row of nextReview) {
-        if (row.questionId && !row.fileId) {
+        if (row.questionId && !row.fileId && !row.externalUrl) {
           draft[row.questionId] = row.value === "—" ? "" : row.value;
         }
       }
@@ -1121,6 +1122,31 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                             selectedId,
                             "download",
                           )}
+                        >
+                          Скачать
+                        </a>
+                      </div>
+                    </div>
+                  ) : row.externalUrl ? (
+                    <div className={styles.fileBlock}>
+                      <span className={styles.fileName}>
+                        {row.value || "Документ Formgrid"}
+                      </span>
+                      <div className={styles.fileActions}>
+                        <a
+                          className={styles.fileBtn}
+                          href={row.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Открыть
+                        </a>
+                        <a
+                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                          href={row.externalUrl}
+                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
                           Скачать
                         </a>

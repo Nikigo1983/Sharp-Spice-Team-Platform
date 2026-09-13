@@ -710,6 +710,7 @@ export function buildReviewRows(
   value: string;
   questionId: string;
   fileId?: string;
+  externalUrl?: string;
 }> {
   if (isLegacyCrmImport(answers)) {
     return buildLegacyReviewRows(answers, locale);
@@ -724,6 +725,7 @@ export function buildReviewRows(
     value: string;
     questionId: string;
     fileId?: string;
+    externalUrl?: string;
   }> = [];
   for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
     for (const question of section.questions) {

@@ -5,11 +5,8 @@ import Link from "next/link";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CaseFinancePanel } from "@/components/finance/CaseFinancePanel";
 import {
-  dateInRange,
   matchesApprovalFilter,
-  matchesPresenceFilter,
   type ApprovalFilter,
-  type PresenceFilter,
 } from "@/lib/clients/list-filter-utils";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
 import {
@@ -143,10 +140,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [query, setQuery] = useState("");
   const [curator, setCurator] = useState("");
   const [partner, setPartner] = useState("");
-  const [contractNumber, setContractNumber] = useState("");
-  const [submittedFrom, setSubmittedFrom] = useState("");
-  const [submittedTo, setSubmittedTo] = useState("");
-  const [hasAmount, setHasAmount] = useState<PresenceFilter>("");
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -296,7 +289,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     return {
       curators: uniqueSortedValues(draftsList.map((d) => d.curator)),
       partners: uniqueSortedValues(draftsList.map((d) => d.partner)),
-      contracts: uniqueSortedValues(draftsList.map((d) => d.contractNumber)),
     };
   }, [items, drafts]);
 
@@ -308,21 +300,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!rowMatchesQuery(item, draft, query)) return false;
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
-          if (contractNumber && draft.contractNumber.trim() !== contractNumber) {
-            return false;
-          }
-          if (
-            !dateInRange(
-              item.submittedAt,
-              submittedFrom || undefined,
-              submittedTo || undefined,
-            )
-          ) {
-            return false;
-          }
-          if (!matchesPresenceFilter(draft.contractAmount, hasAmount)) {
-            return false;
-          }
           if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
             return false;
           }
@@ -334,18 +311,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             numeric: true,
           }),
         ),
-    [
-      items,
-      drafts,
-      query,
-      curator,
-      partner,
-      contractNumber,
-      submittedFrom,
-      submittedTo,
-      hasAmount,
-      approvalStatus,
-    ],
+    [items, drafts, query, curator, partner, approvalStatus],
   );
 
   useEffect(() => {

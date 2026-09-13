@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SessionUser } from "@/lib/auth/types";
+import { DASHBOARD_TEAM_CHAT_MAX_AGE_MS } from "./dashboard";
 import {
   getTeamChatAudioApiPath,
   MAX_TEAM_CHAT_AUDIO_BYTES,
@@ -634,9 +635,14 @@ export async function listLatestTeamChatForDashboard(
 ): Promise<TeamChatMessage[]> {
   const store = await loadMessagesStore();
   const safeLimit = Math.max(1, Math.min(20, limit));
+  const cutoff = Date.now() - DASHBOARD_TEAM_CHAT_MAX_AGE_MS;
   return store.messages
-    .slice(-safeLimit)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    .filter((message) => {
+      const createdAt = Date.parse(message.created_at);
+      return Number.isFinite(createdAt) && createdAt >= cutoff;
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, safeLimit);
 }
 
 export async function listPinnedTeamChatMessages(): Promise<TeamChatMessage[]> {

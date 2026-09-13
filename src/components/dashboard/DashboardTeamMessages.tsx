@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
 import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type { PresenceMap } from "@/lib/presence/types";
 import { formatTeamChatDateTime, formatVoiceDuration } from "@/lib/team-chat/format";
+import { DASHBOARD_TEAM_CHAT_MAX_AGE_MS } from "@/lib/team-chat/dashboard";
 import type { TeamChatMessage } from "@/lib/team-chat/types";
 import { Card } from "@/components/ui/Card";
 import styles from "./DashboardView.module.css";
@@ -13,8 +14,17 @@ type DashboardTeamMessagesProps = {
   messages: TeamChatMessage[];
 };
 
+function isWithinDashboardWindow(
+  createdAt: string,
+  nowMs: number,
+): boolean {
+  const ts = Date.parse(createdAt);
+  return Number.isFinite(ts) && nowMs - ts <= DASHBOARD_TEAM_CHAT_MAX_AGE_MS;
+}
+
 export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) {
   const [presence, setPresence] = useState<PresenceMap>({});
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     async function fetchPresence() {
@@ -35,9 +45,24 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const visible = useMemo(
+    () =>
+      messages
+        .filter((message) => isWithinDashboardWindow(message.created_at, nowMs))
+        .slice(0, 5),
+    [messages, nowMs],
+  );
+
   return (
     <ul className={styles.chatList}>
-      {messages.slice(0, 5).map((message) => (
+      {visible.map((message) => (
         <li key={message.id} className={styles.chatItem}>
           <Card className={styles.chatCard}>
             <div className={styles.chatMetaRow}>
@@ -73,9 +98,9 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
           </Card>
         </li>
       ))}
-      {messages.length === 0 ? (
+      {visible.length === 0 ? (
         <li className={styles.chatEmpty}>
-          <p>Пока нет сообщений.</p>
+          <p>Нет новых сообщений за последние 30 минут.</p>
         </li>
       ) : null}
     </ul>

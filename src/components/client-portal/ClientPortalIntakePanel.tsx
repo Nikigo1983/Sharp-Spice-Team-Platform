@@ -1269,7 +1269,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                   {STAFF_FIELD_COLUMNS.map((col) => (
                     <th key={col.key}>{col.label}</th>
                   ))}
-                  <th></th>
+                  <th className={styles.stickyActions}></th>
                 </tr>
               </thead>
               <tbody>
@@ -1336,7 +1336,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         />
                       </td>
                     ))}
-                    <td>
+                    <td className={styles.stickyActions}>
                       <div className={styles.rowActions}>
                         <button
                           type="button"

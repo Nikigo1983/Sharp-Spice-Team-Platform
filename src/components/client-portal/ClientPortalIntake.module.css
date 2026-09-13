@@ -189,6 +189,31 @@
   flex-direction: column;
   gap: 0.35rem;
   align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stickyActions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 7.5rem;
+  width: 7.5rem;
+  padding-left: 0.55rem !important;
+  padding-right: 0.85rem !important;
+  background: rgba(22, 24, 30, 0.98);
+  box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.75);
+  vertical-align: top;
+}
+
+.table th.stickyActions {
+  z-index: 5;
+  top: 0;
+  background: rgba(18, 18, 22, 0.98);
+}
+
+.rowHighlighted .stickyActions {
+  background: #185a3a !important;
 }
 
 .archiveBtn {
@@ -344,9 +369,21 @@
 .tableScroll {
   flex: 1 1 auto;
   min-height: 0;
-  /* Horizontal scroll only via the top bar — hide bottom scrollbar on all browsers. */
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
+  /* Prefer top bar for horizontal scroll; keep a thin vertical bar only. */
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.tableScroll::-webkit-scrollbar {
+  width: 10px;
+  height: 0;
+}
+
+.tableScroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
 }
 
 .tableScrollTop {
@@ -355,7 +392,6 @@
   overflow-y: hidden;
   background: rgba(18, 18, 22, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  /* Make the only horizontal scrollbar easy to grab. */
   min-height: 18px;
 }
 
@@ -365,10 +401,10 @@
 }
 
 .table {
-  width: 100%;
+  width: max-content;
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 1600px;
+  min-width: 1680px;
   font-size: 0.82rem;
 }
 

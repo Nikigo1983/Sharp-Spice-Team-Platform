@@ -18,11 +18,12 @@ export type NavBadgesMap = Partial<Record<NavBadgeHref, number>>;
 export const NAV_BADGE_NOTIFICATION_TYPES: Record<
   Extract<
     NavBadgeHref,
-    "/new-formgrid-clients" | "/tasks" | "/calendar"
+    "/new-formgrid-clients" | "/clients/intake" | "/tasks" | "/calendar"
   >,
   NotificationType[]
 > = {
-  "/new-formgrid-clients": ["client_new", "consultation_assigned"],
+  "/new-formgrid-clients": ["consultation_assigned"],
+  "/clients/intake": ["client_new"],
   "/tasks": [
     "task_new",
     "task_status",

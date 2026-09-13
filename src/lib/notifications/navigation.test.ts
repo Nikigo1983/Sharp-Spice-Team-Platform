@@ -113,4 +113,18 @@ describe("notification navigation", () => {
       true,
     );
   });
+
+  it("routes portal new clients to intake", () => {
+    assert.equal(getNotificationSection("client_new"), "intake");
+    assert.equal(getNotificationHref("client_new"), "/clients/intake");
+    assert.equal(
+      pathnameMatchesNotificationSection("/clients/intake", "intake"),
+      true,
+    );
+    assert.equal(getNotificationSection("consultation_assigned"), "formgrid");
+    assert.equal(
+      getNotificationHref("consultation_assigned"),
+      "/new-formgrid-clients",
+    );
+  });
 });

@@ -23,8 +23,11 @@ describe("nav-badges types", () => {
   it("keeps notification type maps for formgrid/tasks/calendar", () => {
     assert.ok(
       NAV_BADGE_NOTIFICATION_TYPES["/new-formgrid-clients"].includes(
-        "client_new",
+        "consultation_assigned",
       ),
+    );
+    assert.ok(
+      NAV_BADGE_NOTIFICATION_TYPES["/clients/intake"].includes("client_new"),
     );
     assert.ok(NAV_BADGE_NOTIFICATION_TYPES["/tasks"].includes("task_new"));
     assert.ok(

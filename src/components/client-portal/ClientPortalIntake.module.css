@@ -665,12 +665,26 @@
   align-items: center;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: rgba(244, 152, 26, 0.2);
-  color: #ffb74a;
+  background: #eab308;
+  color: #1a1a1a;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  margin-left: 0.35rem;
+}
+
+.formgridBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ecfdf5;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: 0.35rem;
 }
 
 .legacyBadge {

@@ -5,6 +5,7 @@ export type NotificationSection =
   | "team-chat"
   | "tasks"
   | "formgrid"
+  | "intake"
   | "calendar"
   | "meeting-recordings"
   | "clients";
@@ -63,6 +64,7 @@ export function getNotificationSection(
     case "task_revision":
       return "tasks";
     case "client_new":
+      return "intake";
     case "consultation_assigned":
       return "formgrid";
     case "calendar_reminder":
@@ -94,6 +96,7 @@ export function getNotificationHref(
     case "task_revision":
       return "/tasks";
     case "client_new":
+      return "/clients/intake";
     case "consultation_assigned":
       return "/new-formgrid-clients";
     case "calendar_reminder":
@@ -149,6 +152,11 @@ export function pathnameMatchesNotificationSection(
       return (
         pathname === "/new-formgrid-clients" ||
         pathname.startsWith("/new-formgrid-clients/")
+      );
+    case "intake":
+      return (
+        pathname === "/clients/intake" ||
+        pathname.startsWith("/clients/intake/")
       );
     case "calendar":
       return pathname === "/calendar" || pathname.startsWith("/calendar/");

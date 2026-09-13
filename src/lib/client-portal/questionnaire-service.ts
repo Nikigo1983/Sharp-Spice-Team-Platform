@@ -46,6 +46,7 @@ import {
   buildFormgridReviewRows,
   isFormgridImport,
 } from "./formgrid-import";
+import { notifyNewClient } from "@/lib/notifications/emit";
 import {
   isCaseArchived,
   writeCaseArchive,
@@ -275,6 +276,19 @@ export async function submitQuestionnaire(
     }),
   };
   await upsertQuestionnaire(next);
+  try {
+    const clientName =
+      String(next.answers.full_name_cyrillic ?? "").trim() ||
+      String(next.answers.full_name_latin ?? "").trim() ||
+      next.firstName ||
+      next.email;
+    await notifyNewClient({
+      clientName,
+      source: "Портал Emigrant",
+    });
+  } catch (error) {
+    console.error("[questionnaire] notifyNewClient failed", error);
+  }
   return next;
 }
 

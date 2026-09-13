@@ -1512,12 +1512,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                           </span>
                         ) : null}
                         {item.isFormgrid ? (
-                          <span className={styles.legacyBadge}>
+                          <span className={styles.formgridBadge}>
                             Formgrid
                           </span>
                         ) : null}
                         {item.isNew ? (
-                          <span className={styles.newBadge}>Новая</span>
+                          <span className={styles.newBadge}>Новый клиент</span>
                         ) : null}
                       </span>
                       <span className={styles.emailLine}>{item.email}</span>

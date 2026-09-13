@@ -42,6 +42,7 @@ export async function getNavBadgesForUser(
 ): Promise<NavBadgesMap> {
   const [
     formgrid,
+    intakeNotifs,
     tasks,
     calendar,
     teamChat,
@@ -54,6 +55,10 @@ export async function getNavBadgesForUser(
     countUnreadNotificationsByTypes(
       userId,
       NAV_BADGE_NOTIFICATION_TYPES["/new-formgrid-clients"],
+    ),
+    countUnreadNotificationsByTypes(
+      userId,
+      NAV_BADGE_NOTIFICATION_TYPES["/clients/intake"],
     ),
     countUnreadNotificationsByTypes(
       userId,
@@ -81,7 +86,7 @@ export async function getNavBadgesForUser(
   };
 
   set("/new-formgrid-clients", formgrid);
-  set("/clients/intake", intakeNew);
+  set("/clients/intake", Math.max(intakeNew, intakeNotifs));
   set(
     "/spiora/survey-responses",
     countCreatedAfter(surveyResponses, surveySeen),
@@ -105,6 +110,7 @@ export async function markNavBadgeSeen(
       await markTeamChatSeen(userId);
       return true;
     case "/new-formgrid-clients":
+    case "/clients/intake":
     case "/tasks":
     case "/calendar":
       await markNotificationsReadByTypes(
@@ -115,10 +121,6 @@ export async function markNavBadgeSeen(
     case "/spiora/survey-responses":
     case "/spiora/clients":
       await setNavSectionLastSeen(userId, href);
-      return true;
-    case "/clients/intake":
-      // Badge follows per-case staffOpenedAt; visiting the list does not
-      // bulk-open cases. Local UI zeros while on the page.
       return true;
     default:
       return false;

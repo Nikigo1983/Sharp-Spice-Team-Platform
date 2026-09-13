@@ -31,6 +31,7 @@ type ListItem = {
   submittedAt: string | null;
   isNew?: boolean;
   isLegacy?: boolean;
+  isFormgrid?: boolean;
   isArchived?: boolean;
   staffFields?: QuestionnaireStaffFields;
 };
@@ -1508,6 +1509,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         {item.isLegacy ? (
                           <span className={styles.legacyBadge}>
                             Из старой базы
+                          </span>
+                        ) : null}
+                        {item.isFormgrid ? (
+                          <span className={styles.legacyBadge}>
+                            Formgrid
                           </span>
                         ) : null}
                         {item.isNew ? (

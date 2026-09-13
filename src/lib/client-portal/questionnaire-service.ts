@@ -43,6 +43,10 @@ import {
   readLegacyIdentity,
 } from "./legacy-crm";
 import {
+  buildFormgridReviewRows,
+  isFormgridImport,
+} from "./formgrid-import";
+import {
   isCaseArchived,
   writeCaseArchive,
 } from "./case-archive";
@@ -690,6 +694,9 @@ export function buildReviewRows(
 }> {
   if (isLegacyCrmImport(answers)) {
     return buildLegacyReviewRows(answers, locale);
+  }
+  if (isFormgridImport(answers)) {
+    return buildFormgridReviewRows(answers, locale);
   }
 
   const rows: Array<{

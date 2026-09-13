@@ -26,6 +26,7 @@ import {
   isLegacyCrmImport,
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
+import { isFormgridImport } from "@/lib/client-portal/formgrid-import";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
 
@@ -59,6 +60,7 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     submittedAt: item.submittedAt,
     isNew: !item.staffOpenedAt && !isCaseArchived(item.answers),
     isLegacy: isLegacyCrmImport(item.answers),
+    isFormgrid: isFormgridImport(item.answers),
     isArchived: isCaseArchived(item.answers),
     staffFields: readStaffFields(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),
@@ -96,7 +98,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       schemaTitle: isLegacyCrmImport(record.answers)
         ? "Старая база клиентов (CRM)"
-        : pickLabel(getPublishedSchema().title, "ru"),
+        : isFormgridImport(record.answers)
+          ? "Анкета Formgrid (Новые лиды)"
+          : pickLabel(getPublishedSchema().title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),
@@ -105,6 +109,7 @@ export async function GET(request: Request) {
       processStatusOptions: PROCESS_STATUS_OPTIONS,
       review: buildReviewRows(record.answers, "ru"),
       isLegacy: isLegacyCrmImport(record.answers),
+      isFormgrid: isFormgridImport(record.answers),
       isArchived: isCaseArchived(record.answers),
     });
   }

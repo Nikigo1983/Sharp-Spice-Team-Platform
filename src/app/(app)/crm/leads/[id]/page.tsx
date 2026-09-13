@@ -1,23 +1,10 @@
-import { AppShell } from "@/components/layout/AppShell";
-import { LeadReviewDetailView } from "@/components/leads/LeadReviewDetailView";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { redirect } from "next/navigation";
 
 type CrmLeadDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
-export default async function CrmLeadDetailPage({
-  params,
-}: CrmLeadDetailPageProps) {
-  const { id } = await params;
-
-  return (
-    <AppShell sectionTitle="CRM · Проверка лида">
-      <SectionHeader
-        title="Проверка лида"
-        subtitle="Данные анкеты, дубликаты и действия менеджера"
-      />
-      <LeadReviewDetailView leadId={id} />
-    </AppShell>
-  );
+/** Formgrid lead detail — merged into portal intake. */
+export default async function CrmLeadDetailPage(_props: CrmLeadDetailPageProps) {
+  redirect("/clients/intake");
 }

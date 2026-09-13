@@ -1,6 +1,15 @@
-import { redirect } from "next/navigation";
+import { AppShell } from "@/components/layout/AppShell";
+import { LeadReviewQueueView } from "@/components/leads/LeadReviewQueueView";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
-/** Formgrid lead review queue — merged into portal intake. */
 export default function CrmLeadsPage() {
-  redirect("/clients/intake");
+  return (
+    <AppShell sectionTitle="CRM · Новые лиды">
+      <SectionHeader
+        title="Новые лиды"
+        subtitle="Lead Review Queue — проверка анкет Formgrid перед созданием клиента в CRM"
+      />
+      <LeadReviewQueueView />
+    </AppShell>
+  );
 }

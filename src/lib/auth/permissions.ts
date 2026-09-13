@@ -8,6 +8,12 @@ const NAV_DASHBOARD: NavItem = {
   icon: "fa-solid fa-gauge-high",
 };
 
+const NAV_CRM_LEADS: NavItem = {
+  href: "/crm/leads",
+  label: "Новые лиды",
+  icon: "fa-solid fa-inbox",
+};
+
 const NAV_NEW_FORMGRID_CLIENTS: NavItem = {
   href: "/new-formgrid-clients",
   label: "Новые клиенты из анкеты",
@@ -148,7 +154,7 @@ const NAV_WEBSITE: NavItem = {
 
 /** Emigrant product sections grouped in the sidebar (shared). */
 export const EMIGRANT_NAV_CHILDREN: NavItem[] = [
-  // «Новые лиды» (/crm/leads) retired — Formgrid leads live in Заявки портала
+  NAV_CRM_LEADS,
   NAV_NEW_FORMGRID_CLIENTS,
   NAV_CLIENT_INVITATIONS,
   NAV_CLIENT_INTAKE,

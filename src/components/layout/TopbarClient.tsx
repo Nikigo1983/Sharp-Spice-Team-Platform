@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import styles from "./Topbar.module.css";
@@ -21,9 +22,33 @@ export function TopbarClient({
   defaultSearchValue,
   onSearchChange,
 }: TopbarClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  function handleBack() {
+    if (typeof window === "undefined") return;
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    if (pathname !== "/dashboard") {
+      router.push("/dashboard");
+    }
+  }
+
   return (
     <header className={styles.topbar}>
       <div className={styles.leading}>
+        <button
+          type="button"
+          className={styles.backBtn}
+          onClick={handleBack}
+          title="Вернуться назад"
+          aria-label="Вернуться назад"
+        >
+          <i className="fa-solid fa-arrow-left" aria-hidden />
+          <span className={styles.backLabel}>Вернуться назад</span>
+        </button>
         <h2 className={styles.sectionTitle}>{sectionTitle}</h2>
       </div>
 

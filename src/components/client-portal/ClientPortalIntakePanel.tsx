@@ -1110,7 +1110,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <p className={styles.lead}>
             {listView === "archive"
               ? "Архив: клиенты с завершёнными процессами. Карточка и все данные сохраняются."
-              : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить». Клик по имени подсвечивает строку; «Открыть» — карточка клиента."}
+              : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить»."}
           </p>
           <div className={styles.viewTabs} role="tablist" aria-label="Разделы заявок">
             <button

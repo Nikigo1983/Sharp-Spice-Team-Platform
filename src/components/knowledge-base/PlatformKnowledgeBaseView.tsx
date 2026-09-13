@@ -513,66 +513,76 @@ export function PlatformKnowledgeBaseView({
           : ""}
       </p>
 
-      <div className={styles.createRow}>
-        <form className={styles.createForm} onSubmit={createFolder}>
-          <input
-            className={styles.editorInput}
-            value={newFolderName}
-            onChange={(event) => setNewFolderName(event.target.value)}
-            placeholder="Название новой папки"
-            required
-            disabled={creatingFolder}
-            aria-label="Название новой папки"
-          />
-          <button
-            type="submit"
-            className={styles.primaryBtn}
-            disabled={creatingFolder}
-          >
-            {creatingFolder ? "Создание…" : "Создать папку"}
-          </button>
+      <div className={styles.createPanel}>
+        <form className={styles.createAction} onSubmit={createFolder}>
+          <span className={styles.createActionLabel}>Папка</span>
+          <div className={styles.createActionBody}>
+            <input
+              className={styles.editorInput}
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              placeholder="Название новой папки"
+              required
+              disabled={creatingFolder}
+              aria-label="Название новой папки"
+            />
+            <button
+              type="submit"
+              className={styles.primaryBtn}
+              disabled={creatingFolder}
+            >
+              {creatingFolder ? "Создание…" : "Создать папку"}
+            </button>
+          </div>
         </form>
         {library !== "company_knowledge" || folderId ? (
           <>
-            <form className={styles.createForm} onSubmit={createArticle}>
-              <input
-                className={styles.editorInput}
-                value={newArticleTitle}
-                onChange={(event) => setNewArticleTitle(event.target.value)}
-                placeholder="Новый текст"
-                required
-                disabled={creatingArticle}
-              />
-              <button
-                type="submit"
-                className={styles.linkBtn}
-                disabled={creatingArticle}
-              >
-                Добавить текст
-              </button>
+            <form className={styles.createAction} onSubmit={createArticle}>
+              <span className={styles.createActionLabel}>Текст</span>
+              <div className={styles.createActionBody}>
+                <input
+                  className={styles.editorInput}
+                  value={newArticleTitle}
+                  onChange={(event) => setNewArticleTitle(event.target.value)}
+                  placeholder="Заголовок нового текста"
+                  required
+                  disabled={creatingArticle}
+                  aria-label="Заголовок нового текста"
+                />
+                <button
+                  type="submit"
+                  className={styles.linkBtn}
+                  disabled={creatingArticle}
+                >
+                  Добавить текст
+                </button>
+              </div>
             </form>
-            <div className={styles.createForm}>
-              <input
-                ref={fileInputRef}
-                className={styles.fileInput}
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                disabled={uploadingFiles}
-                onChange={(event) => void uploadDocuments(event.target.files)}
-                aria-label="Добавить документ"
-              />
-              <button
-                type="button"
-                className={styles.primaryBtn}
-                disabled={uploadingFiles}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploadingFiles ? "Загрузка…" : "Добавить документ"}
-              </button>
-              <span className={styles.uploadHint}>
-                PDF, Word, Excel, PowerPoint, фото, текст — до 40 МБ
-              </span>
+            <div className={styles.createAction}>
+              <span className={styles.createActionLabel}>Документ</span>
+              <div className={styles.createActionBody}>
+                <input
+                  ref={fileInputRef}
+                  className={styles.fileInput}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  disabled={uploadingFiles}
+                  onChange={(event) => void uploadDocuments(event.target.files)}
+                  aria-label="Добавить документ"
+                />
+                <p className={styles.uploadHint}>
+                  PDF, Word, Excel, PowerPoint, фото, текст — до 40 МБ
+                </p>
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  disabled={uploadingFiles}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploadingFiles ? "Загрузка…" : "Добавить документ"}
+                </button>
+              </div>
             </div>
           </>
         ) : null}

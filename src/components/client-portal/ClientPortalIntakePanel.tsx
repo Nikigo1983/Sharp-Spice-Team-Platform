@@ -179,7 +179,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
-  const nameClickTimerRef = useRef<number | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -354,10 +353,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setQuery("");
     setCurator("");
     setPartner("");
-    setContractNumber("");
-    setSubmittedFrom("");
-    setSubmittedTo("");
-    setHasAmount("");
     setApprovalStatus("");
   };
 
@@ -1115,7 +1110,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <p className={styles.lead}>
             {listView === "archive"
               ? "Архив: клиенты с завершёнными процессами. Карточка и все данные сохраняются."
-              : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить». Клик по имени подсвечивает строку, двойной клик открывает карточку."}
+              : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить». Клик по имени подсвечивает строку; «Открыть» — карточка клиента."}
           </p>
           <div className={styles.viewTabs} role="tablist" aria-label="Разделы заявок">
             <button
@@ -1168,24 +1163,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           aria-label="Поиск по таблице заявок"
         />
         <div className={styles.filters}>
-          <label className={styles.dateField}>
-            <span>Подача с</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={submittedFrom}
-              onChange={(e) => setSubmittedFrom(e.target.value)}
-            />
-          </label>
-          <label className={styles.dateField}>
-            <span>по</span>
-            <input
-              type="date"
-              className={styles.dateInput}
-              value={submittedTo}
-              onChange={(e) => setSubmittedTo(e.target.value)}
-            />
-          </label>
           <select
             className={styles.select}
             value={curator}
@@ -1211,29 +1188,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 {value}
               </option>
             ))}
-          </select>
-          <select
-            className={styles.select}
-            value={contractNumber}
-            onChange={(e) => setContractNumber(e.target.value)}
-            aria-label="Договор"
-          >
-            <option value="">Все договоры</option>
-            {filterOptions.contracts.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-          <select
-            className={styles.select}
-            value={hasAmount}
-            onChange={(e) => setHasAmount(e.target.value as PresenceFilter)}
-            aria-label="Стоимость / оплата"
-          >
-            <option value="">Стоимость: все</option>
-            <option value="yes">Есть сумма договора</option>
-            <option value="no">Без суммы</option>
           </select>
           <select
             className={styles.select}
@@ -1335,25 +1289,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       <button
                         type="button"
                         className={styles.nameButton}
-                        onClick={() => {
-                          if (nameClickTimerRef.current != null) {
-                            window.clearTimeout(nameClickTimerRef.current);
-                          }
-                          nameClickTimerRef.current = window.setTimeout(() => {
-                            nameClickTimerRef.current = null;
-                            setHighlightedRowId((prev) =>
-                              prev === item.id ? null : item.id,
-                            );
-                          }, 220);
-                        }}
-                        onDoubleClick={() => {
-                          if (nameClickTimerRef.current != null) {
-                            window.clearTimeout(nameClickTimerRef.current);
-                            nameClickTimerRef.current = null;
-                          }
-                          void openCase(item);
-                        }}
-                        title="Клик — подсветить строку. Двойной клик — открыть карточку."
+                        onClick={() =>
+                          setHighlightedRowId((prev) =>
+                            prev === item.id ? null : item.id,
+                          )
+                        }
+                        title="Подсветить строку"
                       >
                         {name}
                         {item.isLegacy ? (
@@ -1366,6 +1307,13 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         ) : null}
                       </button>
                       <span className={styles.emailLine}>{item.email}</span>
+                      <button
+                        type="button"
+                        className={styles.openCaseLink}
+                        onClick={() => void openCase(item)}
+                      >
+                        Открыть карточку →
+                      </button>
                     </td>
                     <td className={styles.dateCell}>
                       {formatSubmittedAt(item.submittedAt)}

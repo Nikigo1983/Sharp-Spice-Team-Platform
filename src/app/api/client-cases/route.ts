@@ -104,7 +104,7 @@ export async function GET(request: Request) {
       schemaTitle: isLegacyCrmImport(record.answers)
         ? "Старая база клиентов (CRM)"
         : isFormgridImport(record.answers)
-          ? "Анкета Formgrid (Новые лиды)"
+          ? "Анкета клиента"
           : resolveIntakeClientSource(record.answers) === "manual"
             ? "Клиент добавлен вручную"
             : pickLabel(getPublishedSchema().title, "ru"),

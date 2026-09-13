@@ -527,7 +527,7 @@ export function buildFormgridReviewRows(
     const stored = storedFiles[key];
     if (stored?.id) {
       return {
-        section: "Formgrid",
+        section: "",
         label: key,
         value: stored.fileName,
         questionId: `${FORMGRID_SHEET_KEY}.${key}`,
@@ -536,7 +536,7 @@ export function buildFormgridReviewRows(
     }
     const externalUrl = isExternalFileUrl(text) ? text : undefined;
     return {
-      section: "Formgrid",
+      section: "",
       label: key,
       value: externalUrl ? fileNameFromExternalUrl(text, key) : text,
       questionId: `${FORMGRID_SHEET_KEY}.${key}`,

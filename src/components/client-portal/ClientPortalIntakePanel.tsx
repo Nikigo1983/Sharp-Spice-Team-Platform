@@ -1291,17 +1291,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     <td className={`${styles.numCell} ${styles.stickyNum}`}>
                       {index + 1}
                     </td>
-                    <td className={`${styles.nameCell} ${styles.stickyName}`}>
-                      <button
-                        type="button"
-                        className={styles.nameButton}
-                        onClick={() =>
-                          setHighlightedRowId((prev) =>
-                            prev === item.id ? null : item.id,
-                          )
-                        }
-                        title="Подсветить строку"
-                      >
+                    <td
+                      className={`${styles.nameCell} ${styles.stickyName} ${styles.nameCellClickable}`}
+                      onClick={() =>
+                        setHighlightedRowId((prev) =>
+                          prev === item.id ? null : item.id,
+                        )
+                      }
+                      title="Подсветить строку"
+                    >
+                      <span className={styles.nameText}>
                         {name}
                         {item.isLegacy ? (
                           <span className={styles.legacyBadge}>
@@ -1311,12 +1310,15 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         {item.isNew ? (
                           <span className={styles.newBadge}>Новая</span>
                         ) : null}
-                      </button>
+                      </span>
                       <span className={styles.emailLine}>{item.email}</span>
                       <button
                         type="button"
                         className={styles.openCaseLink}
-                        onClick={() => void openCase(item)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void openCase(item);
+                        }}
                       >
                         Открыть карточку →
                       </button>

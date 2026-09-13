@@ -442,6 +442,14 @@
   max-width: 220px;
 }
 
+.nameCellClickable {
+  cursor: pointer;
+}
+
+.nameCellClickable:hover {
+  background: rgba(31, 107, 69, 0.28);
+}
+
 .stickyNum,
 .stickyName {
   position: sticky;
@@ -481,8 +489,12 @@
   border-color: rgba(134, 239, 172, 0.65);
 }
 
-.rowHighlighted .nameButton {
+.rowHighlighted .nameText {
   color: #ecfdf5;
+}
+
+.rowHighlighted .nameCellClickable:hover {
+  background: #185a3a;
 }
 
 .rowHighlighted .emailLine {
@@ -513,24 +525,14 @@
   text-decoration: underline;
 }
 
-.nameButton {
-  appearance: none;
-  border: none;
-  background: transparent;
+.nameText {
   color: #fff;
-  font: inherit;
   font-weight: 600;
-  cursor: pointer;
-  padding: 0;
   text-align: left;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
-}
-
-.nameButton:hover {
-  color: #a5b4fc;
 }
 
 .emailLine {

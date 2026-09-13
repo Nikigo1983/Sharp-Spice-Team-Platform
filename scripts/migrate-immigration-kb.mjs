@@ -166,6 +166,33 @@ async function extractText(file, token) {
     );
     return buf.toString("utf8").trim();
   }
+  if (
+    mime.includes("spreadsheetml") ||
+    mime.includes("ms-excel") ||
+    /\.(xlsx|xls)$/i.test(file.name || "")
+  ) {
+    if (Number(file.size || 0) > 12 * 1024 * 1024) {
+      return `[Таблица слишком большая: ${file.name}]`;
+    }
+    const buf = await driveBuffer(
+      `/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
+      token,
+    );
+    const XLSX = require("xlsx");
+    const workbook = XLSX.read(buf, { type: "buffer", cellDates: true });
+    const parts = [];
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+      const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false }).trim();
+      if (!csv) continue;
+      parts.push(
+        workbook.SheetNames.length > 1 ? `## ${sheetName}\n${csv}` : csv,
+      );
+    }
+    const text = parts.join("\n\n").trim();
+    return text || `[Таблица пуста: ${file.name}]`;
+  }
   if (mime.includes("pdf")) {
     if (Number(file.size || 0) > 8 * 1024 * 1024) {
       return `[PDF слишком большой: ${file.name}]`;

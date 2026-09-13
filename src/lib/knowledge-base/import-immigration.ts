@@ -11,6 +11,11 @@ import {
   isPdfMime,
   isPlainTextMime,
 } from "@/lib/google-drive/drive-content";
+import {
+  extractSpreadsheetText,
+  isSpreadsheetFileName,
+  isSpreadsheetMime,
+} from "./spreadsheet-text";
 import { upsertImportedKnowledge } from "./service";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -126,6 +131,27 @@ async function extractFileText(
       return (await extractPdfText(buffer))?.trim() || "";
     }
     return extractPlainText(buffer) || "";
+  }
+
+  if (
+    isSpreadsheetMime(file.mimeType) ||
+    isSpreadsheetFileName(file.name)
+  ) {
+    if (Number(file.size || 0) > 12 * 1024 * 1024) {
+      return `[Таблица слишком большая для импорта: ${file.name}]`;
+    }
+    const res = await fetchWithTlsFallback(
+      `${DRIVE_API}/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) return "";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    try {
+      return extractSpreadsheetText(buffer, file.name);
+    } catch (error) {
+      console.error("[knowledge-base] xlsx extract failed", file.name, error);
+      return `[Не удалось разобрать таблицу: ${file.name}]`;
+    }
   }
 
   return `[Тип файла не извлечён автоматически: ${file.mimeType}. Исходное имя: ${file.name}]`;

@@ -4,6 +4,37 @@
   gap: 1rem;
 }
 
+.shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tab,
+.tabActive {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tabActive {
+  border-color: rgba(145, 13, 13, 0.65);
+  background: rgba(145, 13, 13, 0.22);
+  color: #fff;
+  font-weight: 600;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -157,9 +188,15 @@
 }
 
 .openLink {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
   color: var(--gray-300);
   text-decoration: none;
   font-size: 0.8125rem;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .openLink:hover {
@@ -178,4 +215,104 @@
   font-size: 0.8125rem;
   color: var(--gray-300);
   line-height: 1.5;
+}
+
+.createRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.createForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  flex: 1 1 240px;
+}
+
+.editorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+}
+
+.editorLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--gray-300);
+}
+
+.editorInput {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  min-width: 0;
+  flex: 1;
+}
+
+.editorTextarea {
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 280px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: rgba(145, 13, 13, 0.85);
+  color: #fff;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  font-family: Inter, sans-serif;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
+.statusOk {
+  margin: 0;
+  color: #86efac;
+  font-size: 0.9rem;
+}
+
+.preview {
+  margin: 0.35rem 0 0 1.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }

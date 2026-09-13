@@ -7,7 +7,7 @@ export default function KnowledgeBasePage() {
     <AppShell sectionTitle="Knowledge Base">
       <SectionHeader
         title="Knowledge Base"
-        subtitle="База знаний из Google Drive — папки и файлы без загрузки на платформу"
+        subtitle="База знаний для клиентов на платформе + просмотр Google Drive"
       />
       <KnowledgeBaseView />
     </AppShell>

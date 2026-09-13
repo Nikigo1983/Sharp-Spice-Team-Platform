@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CaseFinancePanel } from "@/components/finance/CaseFinancePanel";
+import { LeadFieldValue } from "@/components/leads/LeadFieldValue";
+import { Card } from "@/components/ui/Card";
 import {
   matchesApprovalFilter,
   type ApprovalFilter,
@@ -422,6 +424,20 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         ),
     [items, drafts, query, curator, partner, approvalStatus, clientSource],
   );
+
+  const reviewSections = useMemo(() => {
+    const groups: Array<{ title: string; rows: ReviewRow[] }> = [];
+    for (const row of review) {
+      const title = row.section.trim();
+      const last = groups[groups.length - 1];
+      if (last && last.title === title) {
+        last.rows.push(row);
+      } else {
+        groups.push({ title, rows: [row] });
+      }
+    }
+    return groups;
+  }, [review]);
 
   useEffect(() => {
     const table = tableRef.current;
@@ -1090,98 +1106,124 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         ) : null}
 
         {caseView === "questionnaire" ? (
-          <div className={styles.review}>
-            <div className={styles.reviewToolbar}>
-              <p className={styles.staffBlockHint}>
-                Можно изменить поля и нажать «Сохранить».
-              </p>
-              <button
-                type="button"
-                className={styles.saveBtn}
-                disabled={savingReview}
-                onClick={() => void saveReviewEdits()}
-              >
-                {savingReview ? "Сохранение…" : "Сохранить"}
-              </button>
-            </div>
-            {review.map((row, index) => (
-              <div key={`${row.label}-${index}`} className={styles.row}>
-                <div className={styles.rowMeta}>
-                  {row.section ? (
-                    <span className={styles.section}>{row.section}</span>
-                  ) : null}
-                  <span className={styles.label}>{row.label}</span>
-                </div>
-                <div className={styles.value}>
-                  {row.fileId && selectedId ? (
-                    <div className={styles.fileBlock}>
-                      <span className={styles.fileName}>
-                        {row.value || "Файл"}
-                      </span>
-                      <div className={styles.fileActions}>
-                        <a
-                          className={styles.fileBtn}
-                          href={caseFileUrl(row.fileId, selectedId, "open")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Открыть
-                        </a>
-                        <a
-                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                          href={caseFileUrl(
-                            row.fileId,
-                            selectedId,
-                            "download",
-                          )}
-                        >
-                          Скачать
-                        </a>
-                      </div>
-                    </div>
-                  ) : row.externalUrl ? (
-                    <div className={styles.fileBlock}>
-                      <span className={styles.fileName}>
-                        {row.value || "Документ Formgrid"}
-                      </span>
-                      <div className={styles.fileActions}>
-                        <a
-                          className={styles.fileBtn}
-                          href={row.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Открыть
-                        </a>
-                        <a
-                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                          href={row.externalUrl}
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Скачать
-                        </a>
-                      </div>
-                    </div>
-                  ) : row.questionId ? (
-                    <input
-                      className={styles.reviewInput}
-                      value={reviewDraft[row.questionId] ?? ""}
-                      onChange={(event) =>
-                        setReviewDraft((prev) => ({
-                          ...prev,
-                          [row.questionId!]: event.target.value,
-                        }))
-                      }
-                      aria-label={row.label}
-                    />
-                  ) : (
-                    row.value || "—"
-                  )}
-                </div>
+          <div className={styles.detailLayout}>
+            <Card className={styles.panel}>
+              <div className={styles.reviewToolbar}>
+                <p className={styles.staffBlockHint}>
+                  Можно изменить поля и нажать «Сохранить».
+                </p>
+                <button
+                  type="button"
+                  className={styles.saveBtn}
+                  disabled={savingReview}
+                  onClick={() => void saveReviewEdits()}
+                >
+                  {savingReview ? "Сохранение…" : "Сохранить"}
+                </button>
               </div>
-            ))}
+
+              {reviewSections.length === 0 ? (
+                <p className={styles.muted}>Пока нет данных анкеты.</p>
+              ) : (
+                reviewSections.map((group, groupIndex) => {
+                  const title =
+                    group.title ||
+                    (groupIndex === 0 ? "Полная анкета" : "Дополнительно");
+                  const Heading = groupIndex === 0 ? "h2" : "h3";
+                  return (
+                    <div
+                      key={`${title}-${groupIndex}`}
+                      className={
+                        groupIndex > 0 ? styles.reviewSection : undefined
+                      }
+                    >
+                      <Heading className={styles.panelTitle}>{title}</Heading>
+                      <div className={styles.surveyList}>
+                        {group.rows.map((row, index) => (
+                          <div
+                            key={`${row.questionId ?? row.label}-${index}`}
+                            className={styles.fieldRow}
+                          >
+                            <span className={styles.fieldLabel}>
+                              {row.label}
+                            </span>
+                            <span className={styles.fieldValue}>
+                              {row.fileId && selectedId ? (
+                                <span className={styles.fileInline}>
+                                  <span>{row.value || "Файл"}</span>
+                                  <a
+                                    className={styles.fieldLink}
+                                    href={caseFileUrl(
+                                      row.fileId,
+                                      selectedId,
+                                      "open",
+                                    )}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Открыть
+                                  </a>
+                                  <a
+                                    className={styles.fieldLink}
+                                    href={caseFileUrl(
+                                      row.fileId,
+                                      selectedId,
+                                      "download",
+                                    )}
+                                  >
+                                    Скачать
+                                  </a>
+                                </span>
+                              ) : row.externalUrl ? (
+                                <span className={styles.fileInline}>
+                                  <span>
+                                    {row.value || "Документ Formgrid"}
+                                  </span>
+                                  <a
+                                    className={styles.fieldLink}
+                                    href={row.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Открыть
+                                  </a>
+                                  <a
+                                    className={styles.fieldLink}
+                                    href={row.externalUrl}
+                                    download
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Скачать
+                                  </a>
+                                </span>
+                              ) : row.questionId ? (
+                                <input
+                                  className={styles.reviewInput}
+                                  value={reviewDraft[row.questionId] ?? ""}
+                                  onChange={(event) =>
+                                    setReviewDraft((prev) => ({
+                                      ...prev,
+                                      [row.questionId!]: event.target.value,
+                                    }))
+                                  }
+                                  aria-label={row.label}
+                                />
+                              ) : (
+                                <LeadFieldValue
+                                  value={row.value}
+                                  fieldLabel={row.label}
+                                />
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </Card>
           </div>
         ) : null}
 

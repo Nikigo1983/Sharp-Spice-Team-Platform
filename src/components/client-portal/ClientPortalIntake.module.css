@@ -813,29 +813,95 @@
   margin-top: 1rem;
 }
 
+.detailLayout {
+  margin-top: 1rem;
+}
+
+.panel {
+  padding: 1rem;
+}
+
+.panelTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: var(--white);
+}
+
+.reviewSection {
+  margin-top: 1.25rem;
+}
+
+.fieldGrid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  align-items: start;
+}
+
+.fieldLabel {
+  color: var(--gray-300);
+}
+
+.fieldValue {
+  color: var(--gray-100);
+  word-break: break-word;
+}
+
+.fieldLink {
+  color: var(--accent-burgundy-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fieldLink:hover {
+  color: var(--white);
+}
+
+.surveyList {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fileInline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+}
+
 .reviewToolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
 
 .reviewInput {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(0, 0, 0, 0.25);
-  color: #fff;
-  border-radius: 8px;
-  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-soft);
+  background: rgba(15, 20, 28, 0.45);
+  color: var(--gray-100);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.55rem;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .reviewInput:focus {
   outline: none;
-  border-color: rgba(36, 0, 255, 0.7);
+  border-color: var(--accent-burgundy-light);
 }
 
 .row {

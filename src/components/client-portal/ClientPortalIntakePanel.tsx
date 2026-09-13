@@ -285,9 +285,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       setHighlightedRowId(data.item.id);
       setStatus(
         data.emailSent
-          ? "Клиент добавлен. Доступ в портал отправлен на email."
-          : "Клиент добавлен. Передайте логин и пароль клиенту вручную.",
+          ? "Клиент добавлен. Заполните анкету ниже — доступ в портал отправлен на email."
+          : "Клиент добавлен. Заполните анкету ниже — логин и пароль можно скопировать выше.",
       );
+      await openCase(data.item);
+      setCaseView("questionnaire");
     } catch {
       setError("Не удалось добавить клиента.");
     } finally {
@@ -881,6 +883,59 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         {caseView === "menu" && schemaTitle ? (
           <p className={styles.lead}>{schemaTitle}</p>
         ) : null}
+        {createdCredentials ? (
+          <div className={styles.createdBox} role="status">
+            <p className={styles.createdTitle}>
+              Доступ в портал для клиента (можно скопировать и закрыть)
+            </p>
+            {createdCredentials.emailWarning ? (
+              <p className={styles.createdWarning}>
+                {createdCredentials.emailWarning}
+              </p>
+            ) : null}
+            <p className={styles.createdMeta}>
+              Email: <strong>{createdCredentials.email}</strong>
+            </p>
+            <div className={styles.createdActions}>
+              <button
+                type="button"
+                className={styles.copyBtn}
+                onClick={() =>
+                  void copyCredential("login", createdCredentials.loginUrl)
+                }
+              >
+                {copiedCredential === "login"
+                  ? "Ссылка скопирована"
+                  : "Скопировать ссылку входа"}
+              </button>
+              <button
+                type="button"
+                className={styles.copyBtn}
+                onClick={() =>
+                  void copyCredential(
+                    "password",
+                    createdCredentials.temporaryPassword,
+                  )
+                }
+              >
+                {copiedCredential === "password"
+                  ? "Пароль скопирован"
+                  : "Скопировать пароль"}
+              </button>
+              <button
+                type="button"
+                className={styles.copyBtn}
+                onClick={() => setCreatedCredentials(null)}
+              >
+                Скрыть
+              </button>
+            </div>
+            <p className={styles.createdMeta}>
+              Временный пароль:{" "}
+              <code>{createdCredentials.temporaryPassword}</code>
+            </p>
+          </div>
+        ) : null}
         {error ? <p className={styles.error}>{error}</p> : null}
         {status ? <p className={styles.statusOk}>{status}</p> : null}
 
@@ -1257,6 +1312,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
 
       {showAddForm ? (
         <form className={styles.addClientForm} onSubmit={createManualClient}>
+          <p className={styles.addClientHint}>
+            Ещё один способ добавить клиента: создайте карточку вручную, затем
+            заполните анкету за него. При необходимости клиент получит доступ в
+            портал по email.
+          </p>
           <label className={styles.addClientLabel}>
             Имя (для входа)
             <input
@@ -1307,7 +1367,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             className={styles.addClientSubmit}
             disabled={addingClient}
           >
-            {addingClient ? "Создание…" : "Создать и выдать доступ"}
+            {addingClient ? "Создание…" : "Создать и заполнить анкету"}
           </button>
         </form>
       ) : null}

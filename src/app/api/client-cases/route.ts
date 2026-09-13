@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import {
   buildReviewRows,
+  createManualCaseForStaff,
   getPublishedSchema,
   getSubmittedForStaff,
   isCaseArchived,
@@ -123,6 +124,79 @@ export async function GET(request: Request) {
       archive: all.filter((item) => item.isArchived).length,
     },
   });
+}
+
+export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  const body = (await request.json()) as {
+    email?: string;
+    firstName?: string;
+    fullNameCyrillic?: string;
+    phone?: string;
+  };
+
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const firstName =
+    typeof body.firstName === "string" ? body.firstName.trim() : "";
+  if (!email || !firstName) {
+    return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const host =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    "";
+  const origin =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (host ? `${proto}://${host}` : "http://localhost:3000");
+
+  try {
+    const created = await createManualCaseForStaff({
+      email,
+      firstName,
+      fullNameCyrillic:
+        typeof body.fullNameCyrillic === "string"
+          ? body.fullNameCyrillic
+          : undefined,
+      phone: typeof body.phone === "string" ? body.phone : undefined,
+      createdByUserId: session.id,
+      createdByName: session.name,
+      origin,
+    });
+
+    return NextResponse.json({
+      item: toListItem(created.record),
+      temporaryPassword: created.temporaryPassword,
+      loginUrl: created.loginUrl,
+      emailSent: created.emailSent,
+      emailWarning: created.emailSent
+        ? undefined
+        : created.emailError === "EMAIL_NOT_CONFIGURED"
+          ? "Письмо не отправлено: на сервере не задан RESEND_API_KEY. Скопируйте пароль и передайте клиенту вручную."
+          : "Не удалось отправить письмо. Скопируйте пароль и передайте клиенту вручную.",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "CREATE_FAILED";
+    if (message === "EMAIL_TAKEN" || message === "CASE_EXISTS") {
+      return NextResponse.json(
+        { error: message, message: "Клиент с этим email уже есть в портале." },
+        { status: 409 },
+      );
+    }
+    if (message === "INVALID_INVITE" || message === "INVALID_BODY") {
+      return NextResponse.json(
+        { error: message, message: "Укажите имя и корректный email." },
+        { status: 400 },
+      );
+    }
+    console.error("[client-cases] POST create manual", error);
+    return NextResponse.json({ error: "CREATE_FAILED" }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request) {

@@ -279,6 +279,123 @@
   justify-content: center;
 }
 
+.addClientBtn {
+  border: 1px solid rgba(134, 239, 172, 0.45);
+  background: rgba(31, 107, 69, 0.35);
+  color: #ecfdf5;
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.addClientBtn:hover {
+  border-color: rgba(134, 239, 172, 0.75);
+  background: rgba(31, 107, 69, 0.5);
+}
+
+.addClientForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.55);
+}
+
+.addClientLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.addClientInput {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+}
+
+.addClientSubmit {
+  padding: 0.6rem 0.9rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1f6b45, #2f9e66);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.addClientSubmit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.createdBox {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(134, 239, 172, 0.35);
+  border-radius: 10px;
+  background: rgba(31, 107, 69, 0.18);
+}
+
+.createdTitle {
+  margin: 0 0 0.45rem;
+  color: #ecfdf5;
+  font-weight: 600;
+}
+
+.createdWarning {
+  margin: 0 0 0.45rem;
+  color: #fde68a;
+  font-size: 0.88rem;
+}
+
+.createdMeta {
+  margin: 0 0 0.65rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.9rem;
+}
+
+.createdActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.copyBtn {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.passwordReveal {
+  margin: 0;
+  color: rgba(236, 253, 245, 0.95);
+  font-size: 0.88rem;
+}
+
+.passwordReveal code {
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
 .homeLink:hover {
   border-color: rgba(36, 0, 255, 0.55);
   color: #fff;

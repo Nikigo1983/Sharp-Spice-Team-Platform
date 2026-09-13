@@ -179,6 +179,22 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addFirstName, setAddFirstName] = useState("");
+  const [addFullName, setAddFullName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addPhone, setAddPhone] = useState("");
+  const [addingClient, setAddingClient] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    email: string;
+    loginUrl: string;
+    temporaryPassword: string;
+    emailSent: boolean;
+    emailWarning?: string;
+  } | null>(null);
+  const [copiedCredential, setCopiedCredential] = useState<
+    "password" | "login" | null
+  >(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -215,6 +231,78 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  async function createManualClient(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setStatus(null);
+    setCreatedCredentials(null);
+    setAddingClient(true);
+    try {
+      const res = await fetch("/api/client-cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: addEmail,
+          firstName: addFirstName,
+          fullNameCyrillic: addFullName || undefined,
+          phone: addPhone || undefined,
+        }),
+      });
+      const data = (await res.json()) as {
+        item?: ListItem;
+        temporaryPassword?: string;
+        loginUrl?: string;
+        emailSent?: boolean;
+        emailWarning?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.item || !data.temporaryPassword || !data.loginUrl) {
+        setError(
+          data.message ||
+            (data.error === "EMAIL_TAKEN"
+              ? "Клиент с этим email уже есть в портале."
+              : "Не удалось добавить клиента."),
+        );
+        return;
+      }
+      setCreatedCredentials({
+        email: data.item.email,
+        loginUrl: data.loginUrl,
+        temporaryPassword: data.temporaryPassword,
+        emailSent: Boolean(data.emailSent),
+        emailWarning: data.emailWarning,
+      });
+      setAddFirstName("");
+      setAddFullName("");
+      setAddEmail("");
+      setAddPhone("");
+      setShowAddForm(false);
+      if (listView !== "active") setListView("active");
+      else await loadList();
+      setHighlightedRowId(data.item.id);
+      setStatus(
+        data.emailSent
+          ? "Клиент добавлен. Доступ в портал отправлен на email."
+          : "Клиент добавлен. Передайте логин и пароль клиенту вручную.",
+      );
+    } catch {
+      setError("Не удалось добавить клиента.");
+    } finally {
+      setAddingClient(false);
+    }
+  }
+
+  async function copyCredential(kind: "password" | "login", value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedCredential(kind);
+      window.setTimeout(() => setCopiedCredential(null), 2000);
+    } catch {
+      setError("Не удалось скопировать.");
+    }
+  }
 
   async function setArchived(id: string, archived: boolean) {
     setArchivingId(id);
@@ -1143,6 +1231,19 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <Link href="/dashboard" className={styles.homeLink}>
             Вернуться на главную
           </Link>
+          {listView === "active" ? (
+            <button
+              type="button"
+              className={styles.addClientBtn}
+              onClick={() => {
+                setShowAddForm((open) => !open);
+                setCreatedCredentials(null);
+                setError(null);
+              }}
+            >
+              {showAddForm ? "Отмена" : "Добавить клиента"}
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.refresh}
@@ -1152,6 +1253,112 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           </button>
         </div>
       </header>
+
+      {showAddForm ? (
+        <form className={styles.addClientForm} onSubmit={createManualClient}>
+          <label className={styles.addClientLabel}>
+            Имя (для входа)
+            <input
+              className={styles.addClientInput}
+              value={addFirstName}
+              onChange={(event) => setAddFirstName(event.target.value)}
+              required
+              disabled={addingClient}
+              autoComplete="off"
+            />
+          </label>
+          <label className={styles.addClientLabel}>
+            ФИО (кириллица)
+            <input
+              className={styles.addClientInput}
+              value={addFullName}
+              onChange={(event) => setAddFullName(event.target.value)}
+              placeholder="Необязательно"
+              disabled={addingClient}
+              autoComplete="off"
+            />
+          </label>
+          <label className={styles.addClientLabel}>
+            Email
+            <input
+              className={styles.addClientInput}
+              type="email"
+              value={addEmail}
+              onChange={(event) => setAddEmail(event.target.value)}
+              required
+              disabled={addingClient}
+              autoComplete="off"
+            />
+          </label>
+          <label className={styles.addClientLabel}>
+            Телефон
+            <input
+              className={styles.addClientInput}
+              value={addPhone}
+              onChange={(event) => setAddPhone(event.target.value)}
+              placeholder="Необязательно"
+              disabled={addingClient}
+              autoComplete="off"
+            />
+          </label>
+          <button
+            type="submit"
+            className={styles.addClientSubmit}
+            disabled={addingClient}
+          >
+            {addingClient ? "Создание…" : "Создать и выдать доступ"}
+          </button>
+        </form>
+      ) : null}
+
+      {createdCredentials ? (
+        <div className={styles.createdBox} role="status">
+          <p className={styles.createdTitle}>
+            {createdCredentials.emailSent
+              ? "Клиент добавлен, письмо с доступом отправлено."
+              : "Клиент добавлен."}
+          </p>
+          {createdCredentials.emailWarning ? (
+            <p className={styles.createdWarning}>
+              {createdCredentials.emailWarning}
+            </p>
+          ) : null}
+          <p className={styles.createdMeta}>
+            Email: <strong>{createdCredentials.email}</strong>
+          </p>
+          <div className={styles.createdActions}>
+            <button
+              type="button"
+              className={styles.copyBtn}
+              onClick={() =>
+                void copyCredential("login", createdCredentials.loginUrl)
+              }
+            >
+              {copiedCredential === "login"
+                ? "Ссылка скопирована"
+                : "Скопировать вход"}
+            </button>
+            <button
+              type="button"
+              className={styles.copyBtn}
+              onClick={() =>
+                void copyCredential(
+                  "password",
+                  createdCredentials.temporaryPassword,
+                )
+              }
+            >
+              {copiedCredential === "password"
+                ? "Пароль скопирован"
+                : "Скопировать временный пароль"}
+            </button>
+          </div>
+          <p className={styles.passwordReveal}>
+            Временный пароль:{" "}
+            <code>{createdCredentials.temporaryPassword}</code>
+          </p>
+        </div>
+      ) : null}
 
       <div className={styles.searchRow}>
         <input

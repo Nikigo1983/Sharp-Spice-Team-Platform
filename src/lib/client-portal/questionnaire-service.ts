@@ -25,7 +25,11 @@ import {
   listSubmittedQuestionnaires,
   upsertQuestionnaire,
 } from "./questionnaire-store";
-import { deleteClientPortalUser } from "./local-store";
+import { createClientInvitation } from "./auth-service";
+import {
+  deleteClientPortalUser,
+  findClientPortalUserByEmail,
+} from "./local-store";
 import {
   deleteQuestionnaireAttachmentFile,
   saveQuestionnaireAttachmentFile,
@@ -268,6 +272,95 @@ export async function submitQuestionnaire(
   };
   await upsertQuestionnaire(next);
   return next;
+}
+
+/**
+ * Manager creates a submitted intake case and provisions portal login
+ * (same invite email + temporary password as /client-invitations).
+ */
+export async function createManualCaseForStaff(input: {
+  email: string;
+  firstName: string;
+  fullNameCyrillic?: string;
+  phone?: string;
+  createdByUserId: string;
+  createdByName: string;
+  origin: string;
+}): Promise<{
+  record: QuestionnaireRecord;
+  temporaryPassword: string;
+  loginUrl: string;
+  emailSent: boolean;
+  emailError?: "EMAIL_NOT_CONFIGURED" | "EMAIL_SEND_FAILED";
+}> {
+  const firstName = input.firstName.trim();
+  const fullName =
+    input.fullNameCyrillic?.trim() || firstName;
+  const phone = input.phone?.trim() || "";
+
+  if (!firstName) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const invite = await createClientInvitation({
+    email: input.email,
+    firstName,
+    createdByUserId: input.createdByUserId,
+    origin: input.origin,
+  });
+
+  const user = await findClientPortalUserByEmail(invite.invitation.email);
+  if (!user) {
+    throw new Error("USER_MISSING");
+  }
+
+  const existing = await findQuestionnaireByUserId(user.id);
+  if (existing?.status === "submitted") {
+    throw new Error("CASE_EXISTS");
+  }
+
+  const now = new Date().toISOString();
+  const baseAnswers: QuestionnaireAnswers = {
+    full_name_cyrillic: fullName,
+  };
+  if (phone) {
+    baseAnswers.phone = phone;
+  }
+
+  const answers = writeProcessStatus(
+    hydrateAnswers(baseAnswers, user.email),
+    {
+      value: INITIAL_PROCESS_STATUS,
+      updatedAt: now,
+      updatedByUserId: input.createdByUserId,
+      updatedByName: input.createdByName,
+    },
+  );
+
+  const record: QuestionnaireRecord = {
+    id: existing?.id ?? randomUUID(),
+    clientPortalUserId: user.id,
+    invitationId: user.invitationId ?? invite.invitation.id,
+    email: user.email,
+    firstName: user.firstName,
+    status: "submitted",
+    answers,
+    revision: (existing?.revision ?? 0) + 1,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    submittedAt: now,
+    staffOpenedAt: null,
+  };
+
+  await upsertQuestionnaire(record);
+
+  return {
+    record,
+    temporaryPassword: invite.temporaryPassword,
+    loginUrl: invite.loginUrl,
+    emailSent: invite.emailSent,
+    emailError: invite.emailError,
+  };
 }
 
 export async function listSubmittedForStaff(): Promise<QuestionnaireRecord[]> {

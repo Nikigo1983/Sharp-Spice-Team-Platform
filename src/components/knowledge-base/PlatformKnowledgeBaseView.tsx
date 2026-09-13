@@ -502,15 +502,15 @@ export function PlatformKnowledgeBaseView({
 
       <p className={styles.hint}>
         {library === "company_knowledge"
-          ? "Корпоративная база на платформе (Supabase Storage). Здесь можно создавать папки; материалы обычно приходят импортом из Google Drive. Удалить можно любой файл или папку."
-          : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
-        {library === "company_knowledge"
           ? folderId
-            ? ` Сейчас открыта папка «${listing?.folderName || "…"}».`
-            : ""
-          : folderId
+            ? `Корпоративная база на платформе (Supabase Storage). Сейчас открыта папка «${listing?.folderName || "…"}» — сюда можно добавить текст или документ. Удалить можно любой файл или папку.`
+            : "Корпоративная база на платформе (Supabase Storage). На главной странице можно создавать папки; материалы обычно приходят импортом из Google Drive. Текст и файлы добавляйте уже внутри папок."
+          : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
+        {library !== "company_knowledge"
+          ? folderId
             ? ` Сейчас открыта папка «${listing?.folderName || "…"}» — новые папки и документы попадут сюда.`
-            : " Новые папки и документы можно создавать на любом уровне."}
+            : " Новые папки и документы можно создавать на любом уровне."
+          : ""}
       </p>
 
       <div className={styles.createRow}>
@@ -532,7 +532,7 @@ export function PlatformKnowledgeBaseView({
             {creatingFolder ? "Создание…" : "Создать папку"}
           </button>
         </form>
-        {library !== "company_knowledge" ? (
+        {library !== "company_knowledge" || folderId ? (
           <>
             <form className={styles.createForm} onSubmit={createArticle}>
               <input
@@ -608,7 +608,9 @@ export function PlatformKnowledgeBaseView({
                 <tr>
                   <td colSpan={4} className={styles.empty}>
                     {library === "company_knowledge"
-                      ? "Пока пусто. Создайте папку или запустите импорт из Google Drive."
+                      ? folderId
+                        ? "Пока пусто. Создайте папку, добавьте текст или документ."
+                        : "Пока пусто. Создайте папку или запустите импорт из Google Drive."
                       : "Пока пусто. Создайте папку, добавьте текст или документ."}
                   </td>
                 </tr>

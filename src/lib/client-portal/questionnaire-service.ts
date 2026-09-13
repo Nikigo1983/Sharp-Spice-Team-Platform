@@ -43,6 +43,7 @@ import {
   readLegacyIdentity,
 } from "./legacy-crm";
 import {
+  applyFormgridCrmOpsEdits,
   buildFormgridReviewRows,
   isFormgridImport,
   readFormgridStoredFiles,
@@ -496,6 +497,24 @@ export async function updateLegacyCaseSheetFields(
     firstName,
     email,
     answers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+}
+
+export async function updateFormgridCrmOpsFields(
+  id: string,
+  fields: Record<string, string>,
+): Promise<QuestionnaireRecord> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  if (!isFormgridImport(current.answers)) {
+    throw new Error("NOT_FORMGRID");
+  }
+  const now = new Date().toISOString();
+  return upsertQuestionnaire({
+    ...current,
+    answers: applyFormgridCrmOpsEdits(current.answers, fields),
     updatedAt: now,
     revision: current.revision + 1,
   });

@@ -176,6 +176,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
   const [selectedIsLegacy, setSelectedIsLegacy] = useState(false);
+  const [selectedIsFormgrid, setSelectedIsFormgrid] = useState(false);
   const [reviewDraft, setReviewDraft] = useState<Record<string, string>>({});
   const [savingReview, setSavingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -562,6 +563,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       processStatusOptions?: string[];
       isArchived?: boolean;
       isLegacy?: boolean;
+      isFormgrid?: boolean;
     };
     setSchemaTitle(data.schemaTitle);
     const nextReview = data.review ?? [];
@@ -580,6 +582,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setProcessStatusOptions(data.processStatusOptions ?? []);
     setSelectedArchived(Boolean(data.isArchived ?? item.isArchived));
     setSelectedIsLegacy(Boolean(data.isLegacy ?? item.isLegacy));
+    setSelectedIsFormgrid(Boolean(data.isFormgrid ?? item.isFormgrid));
     setItems((prev) =>
       prev.map((row) =>
         row.id === item.id ? { ...row, isNew: false } : row,
@@ -601,6 +604,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setClientLabel("");
     setSelectedArchived(false);
     setSelectedIsLegacy(false);
+    setSelectedIsFormgrid(false);
     setCreatedCredentials(null);
     setStatus(null);
   }
@@ -628,6 +632,14 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           legacySheet[label] = reviewDraft[row.questionId] ?? "";
         }
         body.legacySheet = legacySheet;
+      } else if (selectedIsFormgrid) {
+        const crmOpsSheet: Record<string, string> = {};
+        for (const row of review) {
+          if (!row.questionId?.startsWith("__crmOpsSheet.")) continue;
+          const label = row.questionId.slice("__crmOpsSheet.".length);
+          crmOpsSheet[label] = reviewDraft[row.questionId] ?? "";
+        }
+        body.crmOpsSheet = crmOpsSheet;
       } else {
         const answerFields: Record<string, string> = {};
         for (const row of review) {

@@ -8,6 +8,28 @@ export const FORMGRID_SOURCE = "formgrid" as const;
 export const FORMGRID_IMPORT_KEY = "__import";
 export const FORMGRID_SHEET_KEY = "__formgridSheet";
 export const FORMGRID_FILES_KEY = "__formgridFiles";
+/** Staff CRM process fields (same labels as External sheet / legacy intake). */
+export const FORMGRID_CRM_OPS_KEY = "__crmOpsSheet";
+
+export const FORMGRID_CRM_OPS_COLUMNS = [
+  "Дата подачи",
+  "Дата предпологаемого одобрения",
+  "Имя референта",
+  "Адрес букинга",
+  "Дата букинга (от и до)",
+  "Дата одобрения ВНЖ",
+  "Дата выдачи карточки ВНЖ",
+  "Партнер от кого клиент",
+  "Договор",
+  "ТИП ЗАНЯТОСТИ",
+  "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ",
+  "СПРАВКА О НЕСУДИМОСТИ",
+  "ПОДПИСЬ КЛИЕНТА",
+  "медстраховка",
+] as const;
+
+export type FormgridCrmOpsColumn = (typeof FORMGRID_CRM_OPS_COLUMNS)[number];
+export type FormgridCrmOpsSheet = Record<FormgridCrmOpsColumn, string>;
 
 export type FormgridSheetRow = Record<string, string>;
 
@@ -34,6 +56,7 @@ export type FormgridImportAnswers = Record<string, unknown> & {
   __import: FormgridImportMeta;
   __formgridSheet: FormgridSheetRow;
   __formgridFiles?: Record<string, FormgridStoredFile>;
+  __crmOpsSheet?: Partial<FormgridCrmOpsSheet>;
 };
 
 function clean(value: unknown): string {
@@ -292,6 +315,68 @@ export function mapFormgridRowToAnswers(
       submittedAt: f.submittedAt || null,
     },
     [FORMGRID_SHEET_KEY]: { ...row },
+    [FORMGRID_CRM_OPS_KEY]: emptyFormgridCrmOpsSheet({
+      "Дата подачи": f.submittedAt || "",
+    }),
+  };
+}
+
+export function emptyFormgridCrmOpsSheet(
+  seed: Partial<FormgridCrmOpsSheet> = {},
+): FormgridCrmOpsSheet {
+  const out = {} as FormgridCrmOpsSheet;
+  for (const key of FORMGRID_CRM_OPS_COLUMNS) {
+    out[key] = clean(seed[key]);
+  }
+  return out;
+}
+
+export function readFormgridCrmOpsSheet(
+  answers: Record<string, unknown> | null | undefined,
+): FormgridCrmOpsSheet {
+  const raw = answers?.[FORMGRID_CRM_OPS_KEY];
+  const obj =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  return emptyFormgridCrmOpsSheet(
+    Object.fromEntries(
+      FORMGRID_CRM_OPS_COLUMNS.map((key) => [key, clean(obj[key])]),
+    ) as Partial<FormgridCrmOpsSheet>,
+  );
+}
+
+export function applyFormgridCrmOpsEdits(
+  answers: Record<string, unknown>,
+  fields: Record<string, string>,
+): Record<string, unknown> {
+  const current = readFormgridCrmOpsSheet(answers);
+  for (const key of FORMGRID_CRM_OPS_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      current[key] = clean(fields[key]);
+    }
+  }
+
+  const existingStaff =
+    answers.__staff &&
+    typeof answers.__staff === "object" &&
+    !Array.isArray(answers.__staff)
+      ? { ...(answers.__staff as Record<string, string>) }
+      : {};
+
+  return {
+    ...answers,
+    [FORMGRID_CRM_OPS_KEY]: current,
+    __staff: {
+      ...existingStaff,
+      curator: current["Имя референта"],
+      expectedApproval: current["Дата предпологаемого одобрения"],
+      bookingAddress: current["Адрес букинга"],
+      bookingDate: current["Дата букинга (от и до)"],
+      trpApprovalDate: current["Дата одобрения ВНЖ"],
+      trpCardIssueDate: current["Дата выдачи карточки ВНЖ"],
+      partner: current["Партнер от кого клиент"],
+    },
   };
 }
 
@@ -437,8 +522,7 @@ export function buildFormgridReviewRows(
       ? (sheet as Record<string, unknown>)
       : {};
   const storedFiles = readFormgridStoredFiles(answers);
-
-  return Object.entries(sheetObj).map(([key, value]) => {
+  const formgridRows = Object.entries(sheetObj).map(([key, value]) => {
     const text = clean(value);
     const stored = storedFiles[key];
     if (stored?.id) {
@@ -459,6 +543,16 @@ export function buildFormgridReviewRows(
       externalUrl,
     };
   });
+
+  const crmOps = readFormgridCrmOpsSheet(answers);
+  const crmRows = FORMGRID_CRM_OPS_COLUMNS.map((key) => ({
+    section: "CRM / процесс",
+    label: key,
+    value: crmOps[key],
+    questionId: `${FORMGRID_CRM_OPS_KEY}.${key}`,
+  }));
+
+  return [...formgridRows, ...crmRows];
 }
 
 export function parseFormgridSubmittedAtIso(raw: string | null | undefined): string | null {

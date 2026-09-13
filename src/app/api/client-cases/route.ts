@@ -14,6 +14,7 @@ import {
   deleteSubmittedCaseForStaff,
   updateCaseArchiveState,
   updateLegacyCaseSheetFields,
+  updateFormgridCrmOpsFields,
   updateSubmittedAnswerFields,
   updateSubmittedStaffFields,
 } from "@/lib/client-portal/questionnaire-service";
@@ -223,6 +224,7 @@ export async function PATCH(request: Request) {
     staffFields?: Partial<QuestionnaireStaffFields>;
     archived?: boolean;
     legacySheet?: Record<string, string>;
+    crmOpsSheet?: Record<string, string>;
     answerFields?: Record<string, string>;
   };
 
@@ -250,6 +252,17 @@ export async function PATCH(request: Request) {
         staffFields: readStaffFields(record.answers),
         review: buildReviewRows(record.answers, "ru"),
         isLegacy: true,
+      });
+    }
+
+    if (body.crmOpsSheet && typeof body.crmOpsSheet === "object") {
+      const record = await updateFormgridCrmOpsFields(body.id, body.crmOpsSheet);
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        review: buildReviewRows(record.answers, "ru"),
+        isFormgrid: true,
+        isLegacy: false,
       });
     }
 

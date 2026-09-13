@@ -641,7 +641,12 @@ export function TeamView({ user }: TeamViewProps) {
                               <p className={styles.dayMeta}>
                                 Начало: {formatClock(selectedDay.startedAt)}
                                 {" · "}
-                                Окончание: {formatClock(selectedDay.endedAt)}
+                                Окончание:{" "}
+                                {formatActivityEnd(
+                                  selectedDay.endedAt,
+                                  Boolean(statsTarget.isOnline) &&
+                                    selectedDay.date === getActivityDayKey(),
+                                )}
                               </p>
                             ) : (
                               <p className={styles.dayMeta}>

@@ -1500,12 +1500,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     </td>
                     <td
                       className={`${styles.nameCell} ${styles.stickyName} ${styles.nameCellClickable}`}
-                      onClick={() =>
-                        setHighlightedRowId((prev) =>
-                          prev === item.id ? null : item.id,
-                        )
-                      }
-                      title="Подсветить строку"
+                      onClick={() => void openCase(item)}
+                      title="Открыть карточку"
                     >
                       <span className={styles.nameText}>
                         {name}
@@ -1519,16 +1515,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         ) : null}
                       </span>
                       <span className={styles.emailLine}>{item.email}</span>
-                      <button
-                        type="button"
-                        className={styles.openCaseLink}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void openCase(item);
-                        }}
-                      >
-                        Открыть карточку →
-                      </button>
                     </td>
                     <td className={styles.dateCell}>
                       {formatSubmittedAt(item.submittedAt)}

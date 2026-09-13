@@ -101,13 +101,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
     return NextResponse.json({
-      schemaTitle: isLegacyCrmImport(record.answers)
-        ? "Старая база клиентов (CRM)"
-        : isFormgridImport(record.answers)
-          ? "Анкета клиента"
-          : resolveIntakeClientSource(record.answers) === "manual"
-            ? "Клиент добавлен вручную"
-            : pickLabel(getPublishedSchema().title, "ru"),
+      schemaTitle: isLegacyCrmImport(record.answers) || isFormgridImport(record.answers)
+        ? "Анкета клиента"
+        : resolveIntakeClientSource(record.answers) === "manual"
+          ? "Клиент добавлен вручную"
+          : pickLabel(getPublishedSchema().title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),

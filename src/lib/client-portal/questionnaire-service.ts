@@ -46,6 +46,7 @@ import {
   buildFormgridReviewRows,
   isFormgridImport,
 } from "./formgrid-import";
+import { markManualStaffAnswers } from "./client-source";
 import { notifyNewClient } from "@/lib/notifications/emit";
 import {
   isCaseArchived,
@@ -346,7 +347,11 @@ export async function createManualCaseForStaff(input: {
   }
 
   const answers = writeProcessStatus(
-    hydrateAnswers(baseAnswers, user.email),
+    markManualStaffAnswers(hydrateAnswers(baseAnswers, user.email), {
+      createdByUserId: input.createdByUserId,
+      createdByName: input.createdByName,
+      createdAt: now,
+    }),
     {
       value: INITIAL_PROCESS_STATUS,
       updatedAt: now,

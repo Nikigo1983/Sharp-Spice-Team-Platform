@@ -32,9 +32,13 @@ type ListItem = {
   isNew?: boolean;
   isLegacy?: boolean;
   isFormgrid?: boolean;
+  isManual?: boolean;
+  source?: "legacy" | "formgrid" | "portal" | "manual";
   isArchived?: boolean;
   staffFields?: QuestionnaireStaffFields;
 };
+
+type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
 
 type ReviewRow = {
   section: string;
@@ -142,6 +146,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [curator, setCurator] = useState("");
   const [partner, setPartner] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
+  const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
@@ -393,6 +398,18 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
             return false;
           }
+          if (clientSource) {
+            const source =
+              item.source ??
+              (item.isLegacy
+                ? "legacy"
+                : item.isFormgrid
+                  ? "formgrid"
+                  : item.isManual
+                    ? "manual"
+                    : "portal");
+            if (source !== clientSource) return false;
+          }
           return true;
         })
         .sort((a, b) =>
@@ -401,7 +418,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             numeric: true,
           }),
         ),
-    [items, drafts, query, curator, partner, approvalStatus],
+    [items, drafts, query, curator, partner, approvalStatus, clientSource],
   );
 
   useEffect(() => {
@@ -445,6 +462,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setCurator("");
     setPartner("");
     setApprovalStatus("");
+    setClientSource("");
   };
 
   const exportFilteredCsv = () => {
@@ -1474,6 +1492,22 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <option value="approved">Одобрены</option>
             <option value="not_approved">Не одобрены</option>
           </select>
+          <select
+            className={styles.select}
+            value={clientSource}
+            onChange={(e) =>
+              setClientSource(e.target.value as ClientSourceFilter)
+            }
+            aria-label="Клиенты"
+          >
+            <option value="">Клиенты: все</option>
+            <option value="legacy">Из старой базы</option>
+            <option value="formgrid">Из Formgrid</option>
+            <option value="portal">
+              Новые клиенты из клиентского портала
+            </option>
+            <option value="manual">Добавленные вручную</option>
+          </select>
           <button
             type="button"
             className={styles.filterBtn}
@@ -1580,6 +1614,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                           <span className={styles.formgridBadge}>
                             Formgrid
                           </span>
+                        ) : null}
+                        {item.isManual ? (
+                          <span className={styles.manualBadge}>Вручную</span>
                         ) : null}
                         {item.isNew ? (
                           <span className={styles.newBadge}>Новый клиент</span>

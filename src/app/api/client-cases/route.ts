@@ -27,11 +27,13 @@ import {
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
 import { isFormgridImport } from "@/lib/client-portal/formgrid-import";
+import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
 
 function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
   const identity = readLegacyIdentity(item.answers);
+  const source = resolveIntakeClientSource(item.answers);
   const displayName =
     identity?.fullNameCyrillic ||
     identity?.fullNameLatin ||
@@ -59,8 +61,10 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     ),
     submittedAt: item.submittedAt,
     isNew: !item.staffOpenedAt && !isCaseArchived(item.answers),
-    isLegacy: isLegacyCrmImport(item.answers),
-    isFormgrid: isFormgridImport(item.answers),
+    isLegacy: source === "legacy",
+    isFormgrid: source === "formgrid",
+    isManual: source === "manual",
+    source,
     isArchived: isCaseArchived(item.answers),
     staffFields: readStaffFields(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),
@@ -100,7 +104,9 @@ export async function GET(request: Request) {
         ? "Старая база клиентов (CRM)"
         : isFormgridImport(record.answers)
           ? "Анкета Formgrid (Новые лиды)"
-          : pickLabel(getPublishedSchema().title, "ru"),
+          : resolveIntakeClientSource(record.answers) === "manual"
+            ? "Клиент добавлен вручную"
+            : pickLabel(getPublishedSchema().title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),
@@ -110,6 +116,8 @@ export async function GET(request: Request) {
       review: buildReviewRows(record.answers, "ru"),
       isLegacy: isLegacyCrmImport(record.answers),
       isFormgrid: isFormgridImport(record.answers),
+      isManual: resolveIntakeClientSource(record.answers) === "manual",
+      source: resolveIntakeClientSource(record.answers),
       isArchived: isCaseArchived(record.answers),
     });
   }

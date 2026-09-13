@@ -7,8 +7,19 @@
 export const FORMGRID_SOURCE = "formgrid" as const;
 export const FORMGRID_IMPORT_KEY = "__import";
 export const FORMGRID_SHEET_KEY = "__formgridSheet";
+export const FORMGRID_FILES_KEY = "__formgridFiles";
 
 export type FormgridSheetRow = Record<string, string>;
+
+export type FormgridStoredFile = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sourceUrl: string;
+  sheetColumn: string;
+  storedAt: string;
+};
 
 export type FormgridImportMeta = {
   source: typeof FORMGRID_SOURCE;
@@ -22,6 +33,7 @@ export type FormgridImportMeta = {
 export type FormgridImportAnswers = Record<string, unknown> & {
   __import: FormgridImportMeta;
   __formgridSheet: FormgridSheetRow;
+  __formgridFiles?: Record<string, FormgridStoredFile>;
 };
 
 function clean(value: unknown): string {
@@ -342,6 +354,72 @@ export function fileNameFromExternalUrl(url: string, fallbackLabel: string): str
   return cleaned || "Документ Formgrid";
 }
 
+export function readFormgridStoredFiles(
+  answers: Record<string, unknown> | null | undefined,
+): Record<string, FormgridStoredFile> {
+  const raw = answers?.[FORMGRID_FILES_KEY];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, FormgridStoredFile> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const rec = value as Record<string, unknown>;
+    if (
+      typeof rec.id !== "string" ||
+      typeof rec.fileName !== "string" ||
+      typeof rec.mimeType !== "string" ||
+      typeof rec.sizeBytes !== "number"
+    ) {
+      continue;
+    }
+    out[key] = {
+      id: rec.id,
+      fileName: rec.fileName,
+      mimeType: rec.mimeType,
+      sizeBytes: rec.sizeBytes,
+      sourceUrl: typeof rec.sourceUrl === "string" ? rec.sourceUrl : "",
+      sheetColumn: typeof rec.sheetColumn === "string" ? rec.sheetColumn : key,
+      storedAt: typeof rec.storedAt === "string" ? rec.storedAt : "",
+    };
+  }
+  return out;
+}
+
+/** Map Formgrid sheet column labels onto portal questionnaire file fields when possible. */
+export function guessPortalFileQuestionId(columnLabel: string): string | null {
+  const k = columnLabel.toLowerCase();
+  if (k.includes("паспорт") || k.includes("passport")) return "doc_passport_pdf";
+  if (k.includes("несудимост") || k.includes("criminal") || k.includes("police")) {
+    return "doc_criminal_record_pdf";
+  }
+  if (k.includes("банк") || k.includes("bank") || k.includes("выписк")) {
+    return "doc_bank_statement_pdf";
+  }
+  if (k.includes("договор") || k.includes("contract") || k.includes("трудов")) {
+    return "doc_contract_pdf";
+  }
+  if (k.includes("подпис") || k.includes("signature")) return "doc_signature_sample";
+  if (k.includes("внж") || k.includes("trp") || k.includes("вид на жительств")) {
+    return "doc_other_country_trp_pdf";
+  }
+  return null;
+}
+
+export function listFormgridExternalFileEntries(
+  answers: Record<string, unknown>,
+): Array<{ column: string; url: string }> {
+  const sheet = answers[FORMGRID_SHEET_KEY];
+  const sheetObj =
+    sheet && typeof sheet === "object" && !Array.isArray(sheet)
+      ? (sheet as Record<string, unknown>)
+      : {};
+  const out: Array<{ column: string; url: string }> = [];
+  for (const [column, value] of Object.entries(sheetObj)) {
+    const url = clean(value);
+    if (isExternalFileUrl(url)) out.push({ column, url });
+  }
+  return out;
+}
+
 export function buildFormgridReviewRows(
   answers: Record<string, unknown>,
   _locale: "ru" | "en" = "ru",
@@ -351,15 +429,27 @@ export function buildFormgridReviewRows(
   value: string;
   questionId: string;
   externalUrl?: string;
+  fileId?: string;
 }> {
   const sheet = answers[FORMGRID_SHEET_KEY];
   const sheetObj =
     sheet && typeof sheet === "object" && !Array.isArray(sheet)
       ? (sheet as Record<string, unknown>)
       : {};
+  const storedFiles = readFormgridStoredFiles(answers);
 
   return Object.entries(sheetObj).map(([key, value]) => {
     const text = clean(value);
+    const stored = storedFiles[key];
+    if (stored?.id) {
+      return {
+        section: "Formgrid",
+        label: key,
+        value: stored.fileName,
+        questionId: `${FORMGRID_SHEET_KEY}.${key}`,
+        fileId: stored.id,
+      };
+    }
     const externalUrl = isExternalFileUrl(text) ? text : undefined;
     return {
       section: "Formgrid",

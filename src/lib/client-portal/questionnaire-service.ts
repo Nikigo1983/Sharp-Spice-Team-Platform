@@ -45,6 +45,7 @@ import {
 import {
   buildFormgridReviewRows,
   isFormgridImport,
+  readFormgridStoredFiles,
 } from "./formgrid-import";
 import { markManualStaffAnswers } from "./client-source";
 import { notifyNewClient } from "@/lib/notifications/emit";
@@ -784,6 +785,17 @@ export function findFileAnswerInRecord(
   for (const value of Object.values(record.answers)) {
     if (isFileAnswer(value) && value.id === attachmentId) {
       return value;
+    }
+  }
+  const formgridFiles = readFormgridStoredFiles(record.answers);
+  for (const stored of Object.values(formgridFiles)) {
+    if (stored.id === attachmentId) {
+      return {
+        id: stored.id,
+        fileName: stored.fileName,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+      };
     }
   }
   const staffDoc = findStaffDocument(record.answers, attachmentId);

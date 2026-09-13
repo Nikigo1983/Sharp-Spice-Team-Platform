@@ -350,7 +350,7 @@
 }
 
 .tableScrollTopSpacer {
-  height: 12px;
+  height: 14px;
   pointer-events: none;
 }
 
@@ -358,6 +358,18 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  /* Keep programmatic horizontal scroll; hide the bottom bar visually. */
+  scrollbar-width: thin;
+}
+
+.tableScroll::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+
+.tableScroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
 }
 
 .table {

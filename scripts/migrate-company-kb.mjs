@@ -399,6 +399,9 @@ async function main() {
   const articles = [];
   let filesStored = 0;
   let skippedLarge = 0;
+  let foldersCreatedTotal = 0;
+  let articlesCreatedTotal = 0;
+  let updatedTotal = 0;
 
   const sb =
     !dryRun && url && key
@@ -408,6 +411,35 @@ async function main() {
       : null;
   if (sb) await ensureBucket(sb);
 
+  async function checkpoint(label) {
+    if (dryRun || !sb) return;
+    const { data: existingRow } = await sb
+      .from("app_state")
+      .select("value")
+      .eq("key", APP_STATE_KEY)
+      .maybeSingle();
+    const { snapshot, foldersCreated, articlesCreated, updated } = mergeSnapshot(
+      existingRow?.value,
+      folders,
+      articles,
+    );
+    const { error } = await sb.from("app_state").upsert(
+      {
+        key: APP_STATE_KEY,
+        value: snapshot,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+    if (error) throw new Error(`checkpoint ${label}: ${error.message}`);
+    foldersCreatedTotal += foldersCreated;
+    articlesCreatedTotal += articlesCreated;
+    updatedTotal += updated;
+    console.log(
+      `Checkpoint [${label}]: folders=${snapshot.folders.length} articles=${snapshot.articles.length} filesStored=${filesStored}`,
+    );
+  }
+
   for (const root of roots) {
     folders.push({
       sourceDriveId: root.id,
@@ -416,6 +448,7 @@ async function main() {
     });
     const queue = [root.id];
     const seen = new Set();
+    let filesInRoot = 0;
     while (queue.length) {
       const currentId = queue.shift();
       if (seen.has(currentId)) continue;
@@ -490,7 +523,6 @@ async function main() {
             if (error) throw new Error(`upload ${child.name}: ${error.message}`);
             kind = "file";
             filesStored += 1;
-            // Keep a short extract for search/preview; full file is in Storage.
             const extracted = await extractText(child, buffer, token);
             body = extracted ? extracted.slice(0, 4000) : "";
           } else {
@@ -509,8 +541,13 @@ async function main() {
           fileName: child.name,
           sizeBytes,
         });
+        filesInRoot += 1;
+        if (filesInRoot % 40 === 0) {
+          await checkpoint(`${root.name} @${filesInRoot}`);
+        }
       }
     }
+    await checkpoint(root.name);
   }
 
   console.log(
@@ -534,40 +571,20 @@ async function main() {
     return;
   }
 
-  const { data: existingRow } = await sb
-    .from("app_state")
-    .select("value")
-    .eq("key", APP_STATE_KEY)
-    .maybeSingle();
-
-  const { snapshot, foldersCreated, articlesCreated, updated } = mergeSnapshot(
-    existingRow?.value,
-    folders,
-    articles,
-  );
-
-  const { error } = await sb.from("app_state").upsert(
-    {
-      key: APP_STATE_KEY,
-      value: snapshot,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" },
-  );
-  if (error) throw new Error(error.message);
+  await checkpoint("final");
 
   console.log(
     JSON.stringify(
       {
         dryRun: false,
-        foldersCreated,
-        articlesCreated,
-        updated,
+        foldersCreated: foldersCreatedTotal,
+        articlesCreated: articlesCreatedTotal,
+        updated: updatedTotal,
         filesStored,
         skippedLarge,
         missing,
-        totalFolders: snapshot.folders.length,
-        totalArticles: snapshot.articles.length,
+        totalFolders: folders.length,
+        totalArticles: articles.length,
       },
       null,
       2,

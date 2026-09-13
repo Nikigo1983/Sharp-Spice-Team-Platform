@@ -1,13 +1,15 @@
 /**
- * Dry-run: locate Immigration_Knowledge_Base under GOOGLE_DRIVE_KB_FOLDER_ID.
- * Full import after deploy: Knowledge Base → «Импорт из Drive».
+ * Import Immigration_Knowledge_Base from Google Drive into platform KB (app_state).
  *
+ *   node scripts/migrate-immigration-kb.mjs --dry-run
  *   node scripts/migrate-immigration-kb.mjs
  */
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const { createClient } = require("@supabase/supabase-js");
 const { SignJWT, importPKCS8 } = require("jose");
 
 function loadEnvLocal() {
@@ -31,9 +33,12 @@ function loadEnvLocal() {
 
 loadEnvLocal();
 
+const dryRun = process.argv.includes("--dry-run");
 const TARGET = "Immigration_Knowledge_Base";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const APP_STATE_KEY = "platform_knowledge_base_v1";
+const LIBRARY_ID = "lib-client-knowledge";
 
 async function getToken() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
@@ -69,8 +74,24 @@ async function driveJson(path, token) {
   const res = await fetch(`${DRIVE_API}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Drive HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Drive HTTP ${res.status} ${path}`);
   return res.json();
+}
+
+async function driveText(path, token) {
+  const res = await fetch(`${DRIVE_API}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Drive HTTP ${res.status} ${path}`);
+  return res.text();
+}
+
+async function driveBuffer(path, token) {
+  const res = await fetch(`${DRIVE_API}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Drive HTTP ${res.status} ${path}`);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 async function listChildren(folderId, token) {
@@ -79,7 +100,7 @@ async function listChildren(folderId, token) {
   do {
     const params = new URLSearchParams({
       q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`,
-      fields: "nextPageToken,files(id,name,mimeType)",
+      fields: "nextPageToken,files(id,name,mimeType,size)",
       pageSize: "200",
       supportsAllDrives: "true",
       includeItemsFromAllDrives: "true",
@@ -117,46 +138,291 @@ async function findTarget(rootId, token) {
   return null;
 }
 
-async function countTree(folderId, token) {
-  let folders = 0;
-  let files = 0;
-  const queue = [folderId];
-  const seen = new Set();
-  while (queue.length) {
-    const id = queue.shift();
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const children = await listChildren(id, token);
-    for (const child of children) {
-      if (child.mimeType === FOLDER_MIME) {
-        folders += 1;
-        queue.push(child.id);
-      } else {
-        files += 1;
-      }
+async function extractText(file, token) {
+  const mime = file.mimeType || "";
+  if (
+    mime === "application/vnd.google-apps.document" ||
+    mime === "application/vnd.google-apps.presentation"
+  ) {
+    return (
+      await driveText(
+        `/files/${encodeURIComponent(file.id)}/export?mimeType=${encodeURIComponent("text/plain")}`,
+        token,
+      )
+    ).trim();
+  }
+  if (mime === "application/vnd.google-apps.spreadsheet") {
+    return (
+      await driveText(
+        `/files/${encodeURIComponent(file.id)}/export?mimeType=${encodeURIComponent("text/csv")}`,
+        token,
+      )
+    ).trim();
+  }
+  if (mime.startsWith("text/") || mime === "application/json") {
+    const buf = await driveBuffer(
+      `/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
+      token,
+    );
+    return buf.toString("utf8").trim();
+  }
+  if (mime.includes("pdf")) {
+    if (Number(file.size || 0) > 8 * 1024 * 1024) {
+      return `[PDF слишком большой: ${file.name}]`;
+    }
+    try {
+      const buf = await driveBuffer(
+        `/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
+        token,
+      );
+      const { PDFParse } = require("pdf-parse");
+      const parser = new PDFParse({ data: buf });
+      const result = await parser.getText();
+      await parser.destroy?.();
+      return (result.text || "").trim();
+    } catch {
+      return `[Не удалось извлечь текст PDF: ${file.name}]`;
     }
   }
-  return { folders, files };
+  return `[Файл импортирован без текста (${mime}): ${file.name}]`;
+}
+
+function mergeSnapshot(existing, folders, articles) {
+  const now = new Date().toISOString();
+  const snapshot = existing && typeof existing === "object"
+    ? {
+        library: existing.library || {
+          id: LIBRARY_ID,
+          slug: "client_knowledge",
+          title: "База знаний для клиентов",
+          updatedAt: now,
+        },
+        folders: Array.isArray(existing.folders) ? [...existing.folders] : [],
+        articles: Array.isArray(existing.articles) ? [...existing.articles] : [],
+      }
+    : {
+        library: {
+          id: LIBRARY_ID,
+          slug: "client_knowledge",
+          title: "База знаний для клиентов",
+          updatedAt: now,
+        },
+        folders: [],
+        articles: [],
+      };
+
+  const folderIdByDrive = new Map();
+  for (const folder of snapshot.folders) {
+    if (folder.sourceDriveId) folderIdByDrive.set(folder.sourceDriveId, folder.id);
+  }
+
+  let foldersCreated = 0;
+  let articlesCreated = 0;
+  let updated = 0;
+
+  const pending = [...folders];
+  let safety = pending.length + 10;
+  while (pending.length && safety-- > 0) {
+    const next = [];
+    for (const item of pending) {
+      const parentOk =
+        item.parentSourceDriveId == null ||
+        folderIdByDrive.has(item.parentSourceDriveId);
+      if (!parentOk) {
+        next.push(item);
+        continue;
+      }
+      const parentId = item.parentSourceDriveId
+        ? folderIdByDrive.get(item.parentSourceDriveId)
+        : null;
+      const existingId = folderIdByDrive.get(item.sourceDriveId);
+      if (existingId) {
+        const idx = snapshot.folders.findIndex((f) => f.id === existingId);
+        if (idx >= 0) {
+          const cur = snapshot.folders[idx];
+          if (cur.name !== item.name || cur.parentId !== parentId) {
+            snapshot.folders[idx] = {
+              ...cur,
+              name: item.name,
+              parentId,
+              updatedAt: now,
+            };
+            updated += 1;
+          }
+        }
+      } else {
+        const id = randomUUID();
+        folderIdByDrive.set(item.sourceDriveId, id);
+        snapshot.folders.push({
+          id,
+          libraryId: LIBRARY_ID,
+          parentId,
+          name: item.name,
+          sortOrder: snapshot.folders.filter((f) => f.parentId === parentId)
+            .length,
+          sourceDriveId: item.sourceDriveId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        foldersCreated += 1;
+      }
+    }
+    if (next.length === pending.length) break;
+    pending.splice(0, pending.length, ...next);
+  }
+
+  const articleIndexByDrive = new Map();
+  snapshot.articles.forEach((article, index) => {
+    if (article.sourceDriveId) articleIndexByDrive.set(article.sourceDriveId, index);
+  });
+
+  for (const item of articles) {
+    const folderId = item.parentSourceDriveId
+      ? folderIdByDrive.get(item.parentSourceDriveId) || null
+      : null;
+    const existingIndex = articleIndexByDrive.get(item.sourceDriveId);
+    if (existingIndex != null) {
+      const cur = snapshot.articles[existingIndex];
+      if (
+        cur.title !== item.title ||
+        cur.body !== item.body ||
+        cur.folderId !== folderId
+      ) {
+        snapshot.articles[existingIndex] = {
+          ...cur,
+          title: item.title,
+          body: item.body,
+          folderId,
+          sourceMimeType: item.sourceMimeType,
+          updatedAt: now,
+          updatedByName: "Drive import",
+        };
+        updated += 1;
+      }
+    } else {
+      snapshot.articles.unshift({
+        id: randomUUID(),
+        libraryId: LIBRARY_ID,
+        folderId,
+        title: item.title,
+        body: item.body,
+        status: "published",
+        sourceDriveId: item.sourceDriveId,
+        sourceMimeType: item.sourceMimeType,
+        updatedByUserId: null,
+        updatedByName: "Drive import",
+        createdAt: now,
+        updatedAt: now,
+      });
+      articlesCreated += 1;
+    }
+  }
+
+  snapshot.library = {
+    ...snapshot.library,
+    id: LIBRARY_ID,
+    slug: "client_knowledge",
+    title: "База знаний для клиентов",
+    updatedAt: now,
+  };
+
+  return { snapshot, foldersCreated, articlesCreated, updated };
 }
 
 async function main() {
   const rootId = process.env.GOOGLE_DRIVE_KB_FOLDER_ID?.trim();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!rootId) throw new Error("GOOGLE_DRIVE_KB_FOLDER_ID missing");
+  if (!dryRun && (!url || !key)) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing");
+  }
+
+  console.log(dryRun ? "Mode: DRY-RUN" : "Mode: WRITE to Supabase app_state");
   const token = await getToken();
   const targetId = await findTarget(rootId, token);
-  if (!targetId) {
-    console.log(JSON.stringify({ found: false, target: TARGET }, null, 2));
-    process.exit(1);
+  if (!targetId) throw new Error(`Folder ${TARGET} not found`);
+  console.log("Target folder:", targetId);
+
+  const folders = [
+    {
+      sourceDriveId: targetId,
+      parentSourceDriveId: null,
+      name: TARGET,
+    },
+  ];
+  const articles = [];
+
+  const queue = [targetId];
+  const seen = new Set();
+  while (queue.length) {
+    const currentId = queue.shift();
+    if (seen.has(currentId)) continue;
+    seen.add(currentId);
+    const children = await listChildren(currentId, token);
+    for (const child of children) {
+      if (child.mimeType === FOLDER_MIME) {
+        folders.push({
+          sourceDriveId: child.id,
+          parentSourceDriveId: currentId,
+          name: child.name,
+        });
+        queue.push(child.id);
+        continue;
+      }
+      process.stdout.write(`  extract: ${child.name}\n`);
+      const body = dryRun ? "" : await extractText(child, token);
+      articles.push({
+        sourceDriveId: child.id,
+        parentSourceDriveId: currentId,
+        title: child.name,
+        body,
+        sourceMimeType: child.mimeType,
+      });
+    }
   }
-  const counts = await countTree(targetId, token);
+
+  console.log(`Collected folders=${folders.length} articles=${articles.length}`);
+
+  if (dryRun) {
+    console.log(JSON.stringify({ dryRun: true, folders: folders.length, articles: articles.length }, null, 2));
+    return;
+  }
+
+  const sb = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: existingRow } = await sb
+    .from("app_state")
+    .select("value")
+    .eq("key", APP_STATE_KEY)
+    .maybeSingle();
+
+  const { snapshot, foldersCreated, articlesCreated, updated } = mergeSnapshot(
+    existingRow?.value,
+    folders,
+    articles,
+  );
+
+  const { error } = await sb.from("app_state").upsert(
+    {
+      key: APP_STATE_KEY,
+      value: snapshot,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+  if (error) throw new Error(error.message);
+
   console.log(
     JSON.stringify(
       {
-        found: true,
-        target: TARGET,
-        targetFolderId: targetId,
-        ...counts,
-        note: "Full import: Knowledge Base → «Импорт из Drive» after deploy",
+        dryRun: false,
+        foldersCreated,
+        articlesCreated,
+        updated,
+        totalFolders: snapshot.folders.length,
+        totalArticles: snapshot.articles.length,
       },
       null,
       2,

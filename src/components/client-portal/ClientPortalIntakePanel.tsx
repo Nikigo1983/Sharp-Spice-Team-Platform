@@ -1339,8 +1339,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <table ref={tableRef} className={styles.table}>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Клиент</th>
+                  <th className={styles.stickyNum}>#</th>
+                  <th className={`${styles.stickyName} ${styles.nameCell}`}>
+                    Клиент
+                  </th>
                   <th>Дата подачи</th>
                   {STAFF_FIELD_COLUMNS.map((col) => (
                     <th key={col.key}>{col.label}</th>
@@ -1354,8 +1356,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
                 return (
                   <tr key={item.id}>
-                    <td className={styles.numCell}>{index + 1}</td>
-                    <td className={styles.nameCell}>
+                    <td className={`${styles.numCell} ${styles.stickyNum}`}>
+                      {index + 1}
+                    </td>
+                    <td className={`${styles.nameCell} ${styles.stickyName}`}>
                       <button
                         type="button"
                         className={styles.nameButton}

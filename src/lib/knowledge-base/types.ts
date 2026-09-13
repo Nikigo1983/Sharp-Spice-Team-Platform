@@ -2,6 +2,14 @@ export const CLIENT_KB_LIBRARY_ID = "lib-client-knowledge";
 export const CLIENT_KB_LIBRARY_SLUG = "client_knowledge";
 export const CLIENT_KB_LIBRARY_TITLE = "База знаний для клиентов";
 
+export const COMPANY_KB_LIBRARY_ID = "lib-company-knowledge";
+export const COMPANY_KB_LIBRARY_SLUG = "company_knowledge";
+export const COMPANY_KB_LIBRARY_TITLE = "База знаний для компании";
+
+export type KbLibrarySlug = "client_knowledge" | "company_knowledge";
+
+export type KbArticleKind = "text" | "file";
+
 export type KbFolder = {
   id: string;
   libraryId: string;
@@ -20,6 +28,11 @@ export type KbArticle = {
   title: string;
   body: string;
   status: "draft" | "published";
+  kind: KbArticleKind;
+  /** Private Storage object path inside knowledge-base bucket */
+  storagePath: string | null;
+  fileName: string | null;
+  sizeBytes: number | null;
   sourceDriveId: string | null;
   sourceMimeType: string | null;
   updatedByUserId: string | null;
@@ -52,4 +65,35 @@ export type KbListingItem =
       name: string;
       updatedAt: string;
       preview: string;
+      articleKind: KbArticleKind;
+      mimeType: string | null;
     };
+
+export function libraryMeta(slug: KbLibrarySlug): {
+  id: string;
+  slug: KbLibrarySlug;
+  title: string;
+  appStateKey: string;
+  localFile: string;
+} {
+  if (slug === "company_knowledge") {
+    return {
+      id: COMPANY_KB_LIBRARY_ID,
+      slug: COMPANY_KB_LIBRARY_SLUG,
+      title: COMPANY_KB_LIBRARY_TITLE,
+      appStateKey: "platform_company_knowledge_base_v1",
+      localFile: "platform-company-kb.json",
+    };
+  }
+  return {
+    id: CLIENT_KB_LIBRARY_ID,
+    slug: CLIENT_KB_LIBRARY_SLUG,
+    title: CLIENT_KB_LIBRARY_TITLE,
+    appStateKey: "platform_knowledge_base_v1",
+    localFile: "platform-kb.json",
+  };
+}
+
+export function parseLibrarySlug(value: string | null | undefined): KbLibrarySlug {
+  return value === "company_knowledge" ? "company_knowledge" : "client_knowledge";
+}

@@ -5,10 +5,10 @@ import { KnowledgeBaseDriveView } from "./KnowledgeBaseDriveView";
 import { PlatformKnowledgeBaseView } from "./PlatformKnowledgeBaseView";
 import styles from "./KnowledgeBaseView.module.css";
 
-type Tab = "platform" | "drive";
+type Tab = "company" | "clients" | "drive";
 
 export function KnowledgeBaseView() {
-  const [tab, setTab] = useState<Tab>("platform");
+  const [tab, setTab] = useState<Tab>("company");
 
   return (
     <div className={styles.shell}>
@@ -16,9 +16,18 @@ export function KnowledgeBaseView() {
         <button
           type="button"
           role="tab"
-          aria-selected={tab === "platform"}
-          className={tab === "platform" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("platform")}
+          aria-selected={tab === "company"}
+          className={tab === "company" ? styles.tabActive : styles.tab}
+          onClick={() => setTab("company")}
+        >
+          База знаний для компании
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "clients"}
+          className={tab === "clients" ? styles.tabActive : styles.tab}
+          onClick={() => setTab("clients")}
         >
           База знаний для клиентов
         </button>
@@ -32,8 +41,10 @@ export function KnowledgeBaseView() {
           Google Drive
         </button>
       </div>
-      {tab === "platform" ? (
-        <PlatformKnowledgeBaseView />
+      {tab === "company" ? (
+        <PlatformKnowledgeBaseView library="company_knowledge" />
+      ) : tab === "clients" ? (
+        <PlatformKnowledgeBaseView library="client_knowledge" />
       ) : (
         <KnowledgeBaseDriveView />
       )}

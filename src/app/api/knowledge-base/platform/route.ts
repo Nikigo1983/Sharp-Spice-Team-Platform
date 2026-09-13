@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import {
-  createClientKnowledgeArticle,
-  createClientKnowledgeFolder,
-  getClientKnowledgeArticle,
-  listClientKnowledgeFolder,
-  updateClientKnowledgeArticle,
-  deleteClientKnowledgeArticle,
+  createKnowledgeArticle,
+  createKnowledgeFolder,
+  deleteKnowledgeArticle,
+  getKnowledgeArticle,
+  listKnowledgeFolder,
+  parseLibrarySlug,
+  updateKnowledgeArticle,
 } from "@/lib/knowledge-base/service";
 
 export async function GET(request: Request) {
@@ -16,9 +17,10 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const slug = parseLibrarySlug(searchParams.get("library"));
   const articleId = searchParams.get("articleId");
   if (articleId) {
-    const article = await getClientKnowledgeArticle(articleId);
+    const article = await getKnowledgeArticle(slug, articleId);
     if (!article) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
   }
 
   const folderId = searchParams.get("folderId");
-  const listing = await listClientKnowledgeFolder(folderId || null);
+  const listing = await listKnowledgeFolder(slug, folderId || null);
   return NextResponse.json(listing);
 }
 
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as {
+    library?: string;
     kind?: "folder" | "article";
     name?: string;
     title?: string;
@@ -44,10 +47,12 @@ export async function POST(request: Request) {
     folderId?: string | null;
     parentId?: string | null;
   };
+  const slug = parseLibrarySlug(body.library);
 
   try {
     if (body.kind === "folder") {
-      const folder = await createClientKnowledgeFolder({
+      const folder = await createKnowledgeFolder({
+        slug,
         name: body.name ?? "",
         parentId: body.parentId ?? null,
       });
@@ -55,7 +60,8 @@ export async function POST(request: Request) {
     }
 
     if (body.kind === "article") {
-      const article = await createClientKnowledgeArticle({
+      const article = await createKnowledgeArticle({
+        slug,
         title: body.title ?? body.name ?? "",
         body: body.body ?? "",
         folderId: body.folderId ?? null,
@@ -85,18 +91,21 @@ export async function PATCH(request: Request) {
   }
 
   const body = (await request.json()) as {
+    library?: string;
     id?: string;
     title?: string;
     body?: string;
     folderId?: string | null;
   };
+  const slug = parseLibrarySlug(body.library);
 
   if (!body.id) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
   try {
-    const article = await updateClientKnowledgeArticle({
+    const article = await updateKnowledgeArticle({
+      slug,
       id: body.id,
       title: body.title,
       body: body.body,
@@ -120,13 +129,14 @@ export async function DELETE(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const slug = parseLibrarySlug(searchParams.get("library"));
   const id = searchParams.get("id");
   if (!id) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
   try {
-    await deleteClientKnowledgeArticle(id);
+    await deleteKnowledgeArticle(slug, id);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "DELETE_FAILED";

@@ -316,3 +316,20 @@
   font-size: 0.78rem;
   line-height: 1.4;
 }
+
+.filePreview {
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.pdfPreview {
+  width: 100%;
+  min-height: 480px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #111;
+}

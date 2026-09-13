@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import type { KbLibrarySlug } from "@/lib/knowledge-base/types";
 import styles from "./KnowledgeBaseView.module.css";
 
 type ListingItem =
@@ -12,6 +13,8 @@ type ListingItem =
       name: string;
       updatedAt: string;
       preview: string;
+      articleKind?: "text" | "file";
+      mimeType?: string | null;
     };
 
 type Listing = {
@@ -27,17 +30,32 @@ type Article = {
   title: string;
   body: string;
   folderId: string | null;
+  kind?: "text" | "file";
+  storagePath?: string | null;
+  fileName?: string | null;
+  sourceMimeType?: string | null;
+  sizeBytes?: number | null;
   updatedAt: string;
   updatedByName: string | null;
 };
 
-export function PlatformKnowledgeBaseView() {
+function libraryLabel(slug: KbLibrarySlug): string {
+  return slug === "company_knowledge"
+    ? "База знаний для компании"
+    : "База знаний для клиентов";
+}
+
+export function PlatformKnowledgeBaseView({
+  library = "client_knowledge",
+}: {
+  library?: KbLibrarySlug;
+}) {
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [history, setHistory] = useState<
     Array<{ id: string | null; name: string }>
-  >([{ id: null, name: "База знаний для клиентов" }]);
+  >([{ id: null, name: libraryLabel(library) }]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [editing, setEditing] = useState<Article | null>(null);
@@ -50,26 +68,37 @@ export function PlatformKnowledgeBaseView() {
   const [newArticleTitle, setNewArticleTitle] = useState("");
   const [importing, setImporting] = useState(false);
 
-  const load = useCallback(async (nextFolderId: string | null) => {
-    setLoading(true);
+  useEffect(() => {
+    setFolderId(null);
+    setEditing(null);
+    setHistory([{ id: null, name: libraryLabel(library) }]);
+    setStatus(null);
     setError(null);
-    try {
-      const params = nextFolderId
-        ? `?folderId=${encodeURIComponent(nextFolderId)}`
-        : "";
-      const res = await fetch(`/api/knowledge-base/platform${params}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("load failed");
-      const data = (await res.json()) as Listing;
-      setListing(data);
-    } catch {
-      setListing(null);
-      setError("Не удалось загрузить базу знаний.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }, [library]);
+
+  const load = useCallback(
+    async (nextFolderId: string | null) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ library });
+        if (nextFolderId) params.set("folderId", nextFolderId);
+        const res = await fetch(
+          `/api/knowledge-base/platform?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) throw new Error("load failed");
+        const data = (await res.json()) as Listing;
+        setListing(data);
+      } catch {
+        setListing(null);
+        setError("Не удалось загрузить базу знаний.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [library],
+  );
 
   useEffect(() => {
     void load(folderId);
@@ -93,12 +122,13 @@ export function PlatformKnowledgeBaseView() {
   async function openArticle(id: string) {
     setError(null);
     setStatus(null);
+    const params = new URLSearchParams({ library, articleId: id });
     const res = await fetch(
-      `/api/knowledge-base/platform?articleId=${encodeURIComponent(id)}`,
+      `/api/knowledge-base/platform?${params.toString()}`,
       { cache: "no-store" },
     );
     if (!res.ok) {
-      setError("Не удалось открыть текст.");
+      setError("Не удалось открыть материал.");
       return;
     }
     const data = (await res.json()) as { article: Article };
@@ -117,6 +147,7 @@ export function PlatformKnowledgeBaseView() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          library,
           id: editing.id,
           title: draftTitle,
           body: draftBody,
@@ -140,8 +171,9 @@ export function PlatformKnowledgeBaseView() {
     if (!window.confirm(`Удалить «${editing.title}»?`)) return;
     setSaving(true);
     try {
+      const params = new URLSearchParams({ library, id: editing.id });
       const res = await fetch(
-        `/api/knowledge-base/platform?id=${encodeURIComponent(editing.id)}`,
+        `/api/knowledge-base/platform?${params.toString()}`,
         { method: "DELETE" },
       );
       if (!res.ok) {
@@ -165,6 +197,7 @@ export function PlatformKnowledgeBaseView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          library,
           kind: "folder",
           name: newFolderName,
           parentId: folderId,
@@ -190,6 +223,7 @@ export function PlatformKnowledgeBaseView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          library,
           kind: "article",
           title: newArticleTitle,
           body: "",
@@ -212,42 +246,59 @@ export function PlatformKnowledgeBaseView() {
   }
 
   async function importFromDrive() {
-    if (
-      !window.confirm(
-        "Импортировать папку Immigration_Knowledge_Base из Google Drive в «База знаний для клиентов»?",
-      )
-    ) {
-      return;
-    }
+    const isCompany = library === "company_knowledge";
+    const confirmText = isCompany
+      ? "Импортировать папки «Демо документы», «СПИОРА» и «ЭМИГРАНТ» из Google Drive (включая PDF и фото)?"
+      : "Импортировать папку Immigration_Knowledge_Base из Google Drive?";
+    if (!window.confirm(confirmText)) return;
+
     setImporting(true);
     setError(null);
     setStatus(null);
     try {
-      const res = await fetch("/api/knowledge-base/platform/import", {
-        method: "POST",
+      const params = new URLSearchParams({
+        target: isCompany ? "company" : "clients",
       });
+      const res = await fetch(
+        `/api/knowledge-base/platform/import?${params.toString()}`,
+        { method: "POST" },
+      );
       const data = (await res.json()) as {
         folders?: number;
         articles?: number;
         updated?: number;
+        filesStored?: number;
+        missingRoots?: string[];
         error?: string;
       };
       if (!res.ok) {
         setError(
-          data.error === "TARGET_FOLDER_NOT_FOUND"
-            ? "Папка Immigration_Knowledge_Base не найдена в Google Drive."
+          data.error === "TARGET_FOLDERS_NOT_FOUND" ||
+            data.error === "TARGET_FOLDER_NOT_FOUND"
+            ? "Нужные папки не найдены в Google Drive."
             : "Не удалось импортировать из Google Drive.",
         );
         return;
       }
+      const missing =
+        data.missingRoots && data.missingRoots.length > 0
+          ? ` Не найдены: ${data.missingRoots.join(", ")}.`
+          : "";
       setStatus(
-        `Импорт готов: папок ${data.folders ?? 0}, текстов ${data.articles ?? 0}, обновлено ${data.updated ?? 0}.`,
+        `Импорт готов: папок ${data.folders ?? 0}, материалов ${data.articles ?? 0}, файлов ${data.filesStored ?? 0}, обновлено ${data.updated ?? 0}.${missing}`,
       );
       await load(folderId);
     } finally {
       setImporting(false);
     }
   }
+
+  const fileUrl = editing?.storagePath
+    ? `/api/knowledge-base/platform/file?library=${encodeURIComponent(library)}&id=${encodeURIComponent(editing.id)}`
+    : null;
+  const isImage =
+    Boolean(editing?.sourceMimeType?.startsWith("image/")) ||
+    /\.(png|jpe?g|gif|webp|bmp)$/i.test(editing?.fileName || editing?.title || "");
 
   if (editing) {
     return (
@@ -261,6 +312,24 @@ export function PlatformKnowledgeBaseView() {
             ← К списку
           </button>
           <div className={styles.actions}>
+            {fileUrl ? (
+              <>
+                <a
+                  className={styles.linkBtn}
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Открыть файл
+                </a>
+                <a
+                  className={styles.linkBtn}
+                  href={`${fileUrl}&download=1`}
+                >
+                  Скачать
+                </a>
+              </>
+            ) : null}
             <button
               type="button"
               className={styles.linkBtn}
@@ -290,8 +359,23 @@ export function PlatformKnowledgeBaseView() {
               onChange={(event) => setDraftTitle(event.target.value)}
             />
           </label>
+          {fileUrl && isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={fileUrl}
+              alt={editing.title}
+              className={styles.filePreview}
+            />
+          ) : null}
+          {fileUrl && editing.sourceMimeType?.includes("pdf") ? (
+            <iframe
+              title={editing.title}
+              src={fileUrl}
+              className={styles.pdfPreview}
+            />
+          ) : null}
           <label className={styles.editorLabel}>
-            Текст
+            {editing.kind === "file" ? "Текст / описание" : "Текст"}
             <textarea
               className={styles.editorTextarea}
               value={draftBody}
@@ -300,9 +384,12 @@ export function PlatformKnowledgeBaseView() {
             />
           </label>
           <p className={styles.meta}>
-            Обновлено:{" "}
-            {new Date(editing.updatedAt).toLocaleString("ru-RU")}
+            Обновлено: {new Date(editing.updatedAt).toLocaleString("ru-RU")}
             {editing.updatedByName ? ` · ${editing.updatedByName}` : ""}
+            {editing.fileName ? ` · ${editing.fileName}` : ""}
+            {typeof editing.sizeBytes === "number"
+              ? ` · ${Math.max(1, Math.round(editing.sizeBytes / 1024))} КБ`
+              : ""}
           </p>
         </Card>
       </div>
@@ -339,8 +426,9 @@ export function PlatformKnowledgeBaseView() {
       </div>
 
       <p className={styles.hint}>
-        Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и
-        редактировать материалы.
+        {library === "company_knowledge"
+          ? "Корпоративная база на платформе (Supabase Storage): папки, тексты, PDF и фото."
+          : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
       </p>
 
       <div className={styles.createRow}>
@@ -422,54 +510,51 @@ export function PlatformKnowledgeBaseView() {
                           className={
                             item.kind === "folder"
                               ? `fa-solid fa-folder ${styles.nameIcon}`
-                              : `fa-solid fa-file-lines ${styles.nameIcon}`
+                              : item.kind === "article" &&
+                                  item.articleKind === "file"
+                                ? `fa-solid fa-file ${styles.nameIcon}`
+                                : `fa-solid fa-file-lines ${styles.nameIcon}`
                           }
                           aria-hidden
                         />
-                        {item.kind === "folder" ? (
-                          <button
-                            type="button"
-                            className={styles.nameBtn}
-                            onClick={() => openFolder(item)}
-                          >
-                            {item.name}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className={styles.nameBtn}
-                            onClick={() => void openArticle(item.id)}
-                          >
-                            {item.name}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className={styles.nameBtn}
+                          onClick={() =>
+                            item.kind === "folder"
+                              ? openFolder(item)
+                              : void openArticle(item.id)
+                          }
+                        >
+                          {item.name}
+                        </button>
                       </div>
                       {item.kind === "article" && item.preview ? (
                         <p className={styles.preview}>{item.preview}</p>
                       ) : null}
                     </td>
-                    <td>{item.kind === "folder" ? "Папка" : "Текст"}</td>
+                    <td>
+                      {item.kind === "folder"
+                        ? "Папка"
+                        : item.articleKind === "file"
+                          ? "Файл"
+                          : "Текст"}
+                    </td>
                     <td>
                       {new Date(item.updatedAt).toLocaleString("ru-RU")}
                     </td>
                     <td>
-                      {item.kind === "article" ? (
-                        <button
-                          type="button"
-                          className={styles.openLink}
-                          onClick={() => void openArticle(item.id)}
-                        >
-                          Открыть
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.openLink}
-                          onClick={() => openFolder(item)}
-                        >
-                          Открыть
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className={styles.openLink}
+                        onClick={() =>
+                          item.kind === "folder"
+                            ? openFolder(item)
+                            : void openArticle(item.id)
+                        }
+                      >
+                        Открыть
+                      </button>
                     </td>
                   </tr>
                 ))

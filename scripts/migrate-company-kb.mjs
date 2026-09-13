@@ -220,6 +220,28 @@ async function ensureBucket(sb) {
   }
 }
 
+async function uploadWithRetry(sb, storagePath, buffer, contentType, fileName) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const { error } = await sb.storage.from(BUCKET).upload(storagePath, buffer, {
+      contentType: contentType || "application/octet-stream",
+      upsert: true,
+    });
+    if (!error) return;
+    lastError = error;
+    const transient = /bad gateway|timeout|fetch failed|network|5\d\d/i.test(
+      error.message || "",
+    );
+    if (!transient || attempt === 5) break;
+    const waitMs = attempt * 1500;
+    console.warn(
+      `  retry upload (${attempt}/5) ${fileName}: ${error.message}; wait ${waitMs}ms`,
+    );
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+  throw new Error(`upload ${fileName}: ${lastError?.message || "failed"}`);
+}
+
 function scrubText(value) {
   if (value == null) return value;
   return String(value)
@@ -524,13 +546,13 @@ async function main() {
           sizeBytes = buffer.byteLength;
           if (shouldStoreBinary(child.mimeType, child.name)) {
             storagePath = `${LIBRARY_SLUG}/drive-${child.id}.${extOf(child.name)}`;
-            const { error } = await sb.storage
-              .from(BUCKET)
-              .upload(storagePath, buffer, {
-                contentType: child.mimeType || "application/octet-stream",
-                upsert: true,
-              });
-            if (error) throw new Error(`upload ${child.name}: ${error.message}`);
+            await uploadWithRetry(
+              sb,
+              storagePath,
+              buffer,
+              child.mimeType || "application/octet-stream",
+              child.name,
+            );
             kind = "file";
             filesStored += 1;
             const extracted = await extractText(child, buffer, token);

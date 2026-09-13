@@ -15,8 +15,10 @@ import {
   buildActivityCalendarCells,
   clampActivityAnchor,
   getActivityDayKey,
+  ACTIVITY_TIMEZONE,
   shiftActivityPeriodAnchor,
 } from "@/lib/presence/daily-activity-logic";
+import { parseDateKey } from "@/lib/calendar/range";
 import { canViewTeamMemberActivity } from "@/lib/team/permissions";
 import type { TeamMember } from "@/lib/team/types";
 import { Button } from "@/components/ui/Button";
@@ -48,7 +50,7 @@ function formatClock(iso: string | null | undefined): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "Europe/Moscow",
+    timeZone: ACTIVITY_TIMEZONE,
   }).format(new Date(ts));
 }
 
@@ -68,32 +70,32 @@ function formatOnlineDurationCompact(onlineMs: number): string {
 }
 
 function formatActivityDay(dayKey: string): string {
-  const ts = Date.parse(`${dayKey}T12:00:00+03:00`);
+  const ts = parseDateKey(dayKey, ACTIVITY_TIMEZONE).getTime();
   if (Number.isNaN(ts)) return dayKey;
   return new Intl.DateTimeFormat("ru-RU", {
     weekday: "short",
     day: "numeric",
     month: "short",
-    timeZone: "Europe/Moscow",
+    timeZone: ACTIVITY_TIMEZONE,
   }).format(new Date(ts));
 }
 
 function formatActivityMonthTitle(dayKey: string): string {
-  const ts = Date.parse(`${dayKey}T12:00:00+03:00`);
+  const ts = parseDateKey(dayKey, ACTIVITY_TIMEZONE).getTime();
   if (Number.isNaN(ts)) return dayKey;
   return new Intl.DateTimeFormat("ru-RU", {
     month: "long",
     year: "numeric",
-    timeZone: "Europe/Moscow",
+    timeZone: ACTIVITY_TIMEZONE,
   }).format(new Date(ts));
 }
 
 function formatActivityMonthShort(monthKey: string): string {
-  const ts = Date.parse(`${monthKey}-15T12:00:00+03:00`);
+  const ts = parseDateKey(`${monthKey}-15`, ACTIVITY_TIMEZONE).getTime();
   if (Number.isNaN(ts)) return monthKey;
   return new Intl.DateTimeFormat("ru-RU", {
     month: "short",
-    timeZone: "Europe/Moscow",
+    timeZone: ACTIVITY_TIMEZONE,
   }).format(new Date(ts));
 }
 
@@ -108,9 +110,17 @@ function formatActivityWeekTitle(days: ActivityDayStat[]): string {
   const fmt = new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "short",
-    timeZone: "Europe/Moscow",
+    timeZone: ACTIVITY_TIMEZONE,
   });
-  return `${fmt.format(new Date(`${first}T12:00:00+03:00`))} – ${fmt.format(new Date(`${last}T12:00:00+03:00`))}`;
+  return `${fmt.format(parseDateKey(first, ACTIVITY_TIMEZONE))} – ${fmt.format(parseDateKey(last, ACTIVITY_TIMEZONE))}`;
+}
+
+function formatActivityEnd(
+  endedAt: string | null | undefined,
+  isOnline: boolean,
+): string {
+  if (isOnline) return "сейчас";
+  return formatClock(endedAt);
 }
 
 function dayNumber(dayKey: string): string {
@@ -401,7 +411,10 @@ export function TeamView({ user }: TeamViewProps) {
                         {" · "}
                         Окончание:{" "}
                         <span className={styles.statValue}>
-                          {formatClock(activity.endedAt)}
+                          {formatActivityEnd(
+                            activity.endedAt,
+                            Boolean(member.isOnline),
+                          )}
                         </span>
                       </p>
                     ) : (
@@ -522,7 +535,12 @@ export function TeamView({ user }: TeamViewProps) {
                           <p className={styles.dayMeta}>
                             Начало: {formatClock(stats.days[0].startedAt)}
                             {" · "}
-                            Окончание: {formatClock(stats.days[0].endedAt)}
+                            Окончание:{" "}
+                            {formatActivityEnd(
+                              stats.days[0].endedAt,
+                              Boolean(statsTarget.isOnline) &&
+                                stats.days[0].date === getActivityDayKey(),
+                            )}
                           </p>
                         ) : (
                           <p className={styles.dayMeta}>

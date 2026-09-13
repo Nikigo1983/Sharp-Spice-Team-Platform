@@ -1,4 +1,11 @@
 import { PRESENCE_ONLINE_THRESHOLD_MS } from "@/lib/presence/constants";
+import { CALENDAR_TIMEZONE } from "@/lib/calendar/constants";
+import {
+  addDaysToDateKey,
+  formatDateKey,
+  parseDateKey,
+} from "@/lib/calendar/range";
+import { getZonedWeekday } from "@/lib/calendar/zoned-time";
 
 export type DailyActivityRecord = {
   date: string;
@@ -39,29 +46,27 @@ export type MemberActivityStats = {
 /** Keep one year of per-day history. */
 export const DAILY_ACTIVITY_RETENTION_DAYS = 365;
 
+/** Same timezone as calendar — Croatia / company HQ. */
+export const ACTIVITY_TIMEZONE = CALENDAR_TIMEZONE;
+
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Calendar day key in Europe/Moscow (company default). */
+/** Calendar day key in company timezone (Europe/Zagreb). */
 export function getActivityDayKey(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Moscow",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+  return formatDateKey(now, ACTIVITY_TIMEZONE);
 }
 
 export function isValidActivityDayKey(value: string): boolean {
   if (!DAY_KEY_RE.test(value)) return false;
-  const parsed = Date.parse(`${value}T12:00:00+03:00`);
-  return !Number.isNaN(parsed) && getActivityDayKey(new Date(parsed)) === value;
+  const parsed = parseDateKey(value, ACTIVITY_TIMEZONE);
+  return (
+    !Number.isNaN(parsed.getTime()) && getActivityDayKey(parsed) === value
+  );
 }
 
-/** Shift a Moscow YYYY-MM-DD key by whole days (MSK has no DST). */
+/** Shift a YYYY-MM-DD key by whole days in the activity timezone. */
 export function shiftActivityDayKey(dayKey: string, deltaDays: number): string {
-  const date = new Date(`${dayKey}T12:00:00+03:00`);
-  date.setTime(date.getTime() + deltaDays * 86_400_000);
-  return getActivityDayKey(date);
+  return addDaysToDateKey(dayKey, deltaDays, ACTIVITY_TIMEZONE);
 }
 
 export function getActivityRetentionCutoff(now = new Date()): string {
@@ -80,10 +85,13 @@ export function clampActivityAnchor(anchor: string, now = new Date()): string {
   return anchor;
 }
 
-/** Monday=0 … Sunday=6 for a Moscow YYYY-MM-DD key. */
+/** Monday=0 … Sunday=6 for an activity YYYY-MM-DD key. */
 export function getActivityWeekdayMon0(dayKey: string): number {
-  const utcDay = new Date(`${dayKey}T12:00:00+03:00`).getUTCDay();
-  return utcDay === 0 ? 6 : utcDay - 1;
+  const weekday = getZonedWeekday(
+    parseDateKey(dayKey, ACTIVITY_TIMEZONE),
+    ACTIVITY_TIMEZONE,
+  );
+  return weekday === 0 ? 6 : weekday - 1;
 }
 
 export function getMondayOfActivityWeek(dayKey: string): string {

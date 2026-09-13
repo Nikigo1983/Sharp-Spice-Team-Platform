@@ -190,6 +190,36 @@ export function PlatformKnowledgeBaseView({
     }
   }
 
+  async function removeListItem(item: ListingItem) {
+    const label =
+      item.kind === "folder"
+        ? `папку «${item.name}» вместе со всем содержимым`
+        : `«${item.name}»`;
+    if (!window.confirm(`Удалить ${label}?`)) return;
+    setError(null);
+    setStatus(null);
+    try {
+      const params = new URLSearchParams({
+        library,
+        id: item.id,
+        kind: item.kind === "folder" ? "folder" : "article",
+      });
+      const res = await fetch(
+        `/api/knowledge-base/platform?${params.toString()}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        setError("Не удалось удалить.");
+        return;
+      }
+      if (editing?.id === item.id) setEditing(null);
+      setStatus("Удалено.");
+      await load(folderId);
+    } catch {
+      setError("Не удалось удалить.");
+    }
+  }
+
   async function createFolder(event: React.FormEvent) {
     event.preventDefault();
     setCreatingFolder(true);

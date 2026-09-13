@@ -4,6 +4,7 @@ import {
   createKnowledgeArticle,
   createKnowledgeFolder,
   deleteKnowledgeArticle,
+  deleteKnowledgeFolder,
   getKnowledgeArticle,
   listKnowledgeFolder,
   parseLibrarySlug,
@@ -131,12 +132,17 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const slug = parseLibrarySlug(searchParams.get("library"));
   const id = searchParams.get("id");
+  const kind = searchParams.get("kind") === "folder" ? "folder" : "article";
   if (!id) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
   try {
-    await deleteKnowledgeArticle(slug, id);
+    if (kind === "folder") {
+      await deleteKnowledgeFolder(slug, id);
+    } else {
+      await deleteKnowledgeArticle(slug, id);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "DELETE_FAILED";

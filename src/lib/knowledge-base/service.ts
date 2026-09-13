@@ -363,6 +363,48 @@ export async function deleteKnowledgeArticle(
   );
 }
 
+export async function deleteKnowledgeFolder(
+  slug: KbLibrarySlug,
+  folderId: string,
+): Promise<void> {
+  const snapshot = await getLibrary(slug);
+  if (!snapshot.folders.some((f) => f.id === folderId)) {
+    throw new Error("NOT_FOUND");
+  }
+
+  const removeFolderIds = new Set<string>();
+  const queue = [folderId];
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (removeFolderIds.has(currentId)) continue;
+    removeFolderIds.add(currentId);
+    for (const child of snapshot.folders) {
+      if (child.parentId === currentId) queue.push(child.id);
+    }
+  }
+
+  const { deleteKnowledgeBaseFile } = await import("./asset-storage");
+  const remainingArticles: KbArticle[] = [];
+  for (const article of snapshot.articles) {
+    if (article.folderId && removeFolderIds.has(article.folderId)) {
+      if (article.storagePath) {
+        await deleteKnowledgeBaseFile(article.storagePath);
+      }
+      continue;
+    }
+    remainingArticles.push(article);
+  }
+
+  await saveKbSnapshot(
+    {
+      ...snapshot,
+      folders: snapshot.folders.filter((f) => !removeFolderIds.has(f.id)),
+      articles: remainingArticles,
+    },
+    slug,
+  );
+}
+
 export async function deleteClientKnowledgeArticle(id: string): Promise<void> {
   return deleteKnowledgeArticle("client_knowledge", id);
 }

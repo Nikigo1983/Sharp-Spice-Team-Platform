@@ -186,6 +186,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
+  const nameClickTimerRef = useRef<number | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -1355,8 +1356,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 {filteredItems.map((item, index) => {
                 const name = clientName(item);
                 const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
+                const isHighlighted = highlightedRowId === item.id;
                 return (
-                  <tr key={item.id}>
+                  <tr
+                    key={item.id}
+                    className={isHighlighted ? styles.rowHighlighted : undefined}
+                  >
                     <td className={`${styles.numCell} ${styles.stickyNum}`}>
                       {index + 1}
                     </td>
@@ -1364,7 +1369,25 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       <button
                         type="button"
                         className={styles.nameButton}
-                        onClick={() => void openCase(item)}
+                        onClick={() => {
+                          if (nameClickTimerRef.current != null) {
+                            window.clearTimeout(nameClickTimerRef.current);
+                          }
+                          nameClickTimerRef.current = window.setTimeout(() => {
+                            nameClickTimerRef.current = null;
+                            setHighlightedRowId((prev) =>
+                              prev === item.id ? null : item.id,
+                            );
+                          }, 220);
+                        }}
+                        onDoubleClick={() => {
+                          if (nameClickTimerRef.current != null) {
+                            window.clearTimeout(nameClickTimerRef.current);
+                            nameClickTimerRef.current = null;
+                          }
+                          void openCase(item);
+                        }}
+                        title="Клик — подсветить строку. Двойной клик — открыть карточку."
                       >
                         {name}
                         {item.isLegacy ? (

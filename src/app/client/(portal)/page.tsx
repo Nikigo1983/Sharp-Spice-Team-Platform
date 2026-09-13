@@ -78,12 +78,6 @@ export default async function ClientPortalHomePage() {
       ) : null}
 
       <section className={styles.portalCard}>
-        <h2>Договор и подпись</h2>
-        <p>Консультационный договор и подпись появятся после анкеты.</p>
-        <span className={styles.comingSoon}>Скоро</span>
-      </section>
-
-      <section className={styles.portalCard}>
         <h2>Ассистент</h2>
         <p>Клиентский AI-ассистент подключим после базового кабинета.</p>
         <span className={styles.comingSoon}>Скоро</span>

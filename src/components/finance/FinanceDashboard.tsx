@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FinanceClientListItem } from "@/lib/finance/types";
 import type {
   FinanceDashboardKpis,
@@ -94,37 +94,64 @@ export function FinanceDashboard() {
     return params.toString();
   }, [page, pageSize, search, direction, paymentStatus]);
 
-  const fetchClients = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/finance/clients?${queryString}`);
-      if (!res.ok) throw new Error("fetch failed");
-      const data = (await res.json()) as ClientsResponse;
-      setClients(data.items);
-      setTotal(data.total);
-    } catch {
-      setClients([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [queryString]);
-
+  const searchDebounceRef = useRef(search);
   useEffect(() => {
+    const searchChanged = searchDebounceRef.current !== search;
+    searchDebounceRef.current = search;
+    const controller = new AbortController();
     const timer = setTimeout(
       () => {
-        void fetchClients();
+        setLoading(true);
+        void (async () => {
+          try {
+            const res = await fetch(`/api/finance/clients?${queryString}`, {
+              signal: controller.signal,
+            });
+            if (!res.ok) throw new Error("fetch failed");
+            const data = (await res.json()) as ClientsResponse;
+            if (controller.signal.aborted) return;
+            setClients(data.items);
+            setTotal(data.total);
+          } catch {
+            if (controller.signal.aborted) return;
+            setClients([]);
+            setTotal(0);
+          } finally {
+            if (!controller.signal.aborted) setLoading(false);
+          }
+        })();
       },
-      search ? 200 : 0,
+      searchChanged && search ? 200 : 0,
     );
-    return () => clearTimeout(timer);
-  }, [fetchClients, search]);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [queryString, search]);
 
+  const filtersKey = `${search}\0${direction}\0${paymentStatus}\0${pageSize}`;
+  const filtersKeyRef = useRef(filtersKey);
   useEffect(() => {
+    if (filtersKeyRef.current === filtersKey) return;
+    filtersKeyRef.current = filtersKey;
     setPage(1);
-  }, [search, direction, paymentStatus, pageSize]);
+  }, [filtersKey]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const goToPage = useCallback(
+    (next: number) => {
+      const clamped = Math.min(Math.max(1, next), Math.max(1, totalPages));
+      if (clamped === page) return;
+      setPage(clamped);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [page, totalPages],
+  );
 
   const openCase = useCallback(
     (clientId: string) => {
@@ -361,10 +388,11 @@ export function FinanceDashboard() {
           <button
             type="button"
             className={styles.pageBtn}
-            disabled={page <= 1 || loading}
-            onClick={() => setPage((p) => p - 1)}
+            disabled={page <= 1}
+            onClick={() => goToPage(page - 1)}
+            aria-label="Предыдущая страница"
           >
-            Назад
+            ← Назад
           </button>
           <span className={styles.pageInfo}>
             {page} / {totalPages}
@@ -372,10 +400,11 @@ export function FinanceDashboard() {
           <button
             type="button"
             className={styles.pageBtn}
-            disabled={page >= totalPages || loading}
-            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= totalPages}
+            onClick={() => goToPage(page + 1)}
+            aria-label="Следующая страница"
           >
-            Далее
+            Далее →
           </button>
         </div>
       ) : null}

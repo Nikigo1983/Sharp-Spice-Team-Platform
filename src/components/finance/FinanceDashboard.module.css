@@ -303,6 +303,9 @@
   align-items: center;
   justify-content: center;
   gap: 1rem;
+  position: relative;
+  z-index: 2;
+  padding: 0.25rem 0 0.5rem;
 }
 
 .pageBtn {
@@ -313,6 +316,7 @@
   color: var(--white);
   font-family: Inter, sans-serif;
   cursor: pointer;
+  min-width: 7.5rem;
 }
 
 .pageBtn:disabled {

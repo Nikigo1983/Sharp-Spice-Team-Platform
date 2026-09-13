@@ -1281,6 +1281,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                   <tr
                     key={item.id}
                     className={isHighlighted ? styles.rowHighlighted : undefined}
+                    data-highlighted={isHighlighted ? "true" : undefined}
+                    style={
+                      isHighlighted
+                        ? { backgroundColor: "#1f6b45" }
+                        : undefined
+                    }
                   >
                     <td className={`${styles.numCell} ${styles.stickyNum}`}>
                       {index + 1}

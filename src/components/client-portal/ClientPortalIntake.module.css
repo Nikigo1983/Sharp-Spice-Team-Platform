@@ -341,35 +341,27 @@
   overflow: hidden;
 }
 
+.tableScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Horizontal scroll only via the top bar — hide bottom scrollbar on all browsers. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .tableScrollTop {
   flex: 0 0 auto;
   overflow-x: auto;
   overflow-y: hidden;
   background: rgba(18, 18, 22, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Make the only horizontal scrollbar easy to grab. */
+  min-height: 18px;
 }
 
 .tableScrollTopSpacer {
-  height: 14px;
+  height: 1px;
   pointer-events: none;
-}
-
-.tableScroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  /* Keep programmatic horizontal scroll; hide the bottom bar visually. */
-  scrollbar-width: thin;
-}
-
-.tableScroll::-webkit-scrollbar {
-  width: 8px;
-  height: 0;
-}
-
-.tableScroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
 }
 
 .table {
@@ -439,18 +431,18 @@
 }
 
 .rowHighlighted td {
-  background: rgba(46, 160, 90, 0.42) !important;
-  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.45);
+  background: #1f6b45 !important;
+  box-shadow: inset 0 0 0 2px rgba(134, 239, 172, 0.7);
 }
 
 .rowHighlighted .stickyNum,
 .rowHighlighted .stickyName {
-  background: rgba(32, 110, 68, 0.98) !important;
+  background: #185a3a !important;
 }
 
 .rowHighlighted .cellInput {
-  background: rgba(10, 48, 30, 0.72) !important;
-  border-color: rgba(134, 239, 172, 0.55);
+  background: #0f3d28 !important;
+  border-color: rgba(134, 239, 172, 0.65);
 }
 
 .rowHighlighted .nameButton {
@@ -458,7 +450,7 @@
 }
 
 .rowHighlighted .emailLine {
-  color: rgba(209, 250, 229, 0.85);
+  color: rgba(209, 250, 229, 0.9);
 }
 
 .rowHighlighted .openCaseLink {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "sharp-spice-pwa-v7";
+const CACHE_NAME = "sharp-spice-pwa-v8";
 
 const PRECACHE_URLS = [
   "/manifest.json",
@@ -177,6 +177,7 @@ self.addEventListener("fetch", (event) => {
 
   if (
     url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/") ||
     url.pathname === "/sw.js" ||
     url.pathname === "/manifest.json"
   ) {

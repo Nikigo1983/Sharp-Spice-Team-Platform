@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import type { KbLibrarySlug } from "@/lib/knowledge-base/types";
 import styles from "./KnowledgeBaseView.module.css";
@@ -66,7 +66,9 @@ export function PlatformKnowledgeBaseView({
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingArticle, setCreatingArticle] = useState(false);
   const [newArticleTitle, setNewArticleTitle] = useState("");
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setFolderId(null);
@@ -242,6 +244,49 @@ export function PlatformKnowledgeBaseView({
       await load(folderId);
     } finally {
       setCreatingArticle(false);
+    }
+  }
+
+  async function uploadDocuments(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setUploadingFiles(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const form = new FormData();
+      form.set("library", library);
+      if (folderId) form.set("folderId", folderId);
+      Array.from(fileList).forEach((file) => form.append("file", file));
+
+      const res = await fetch("/api/knowledge-base/platform/file", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json()) as {
+        uploaded?: number;
+        failed?: number;
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(
+          data.error === "FILE_TOO_LARGE"
+            ? "Файл слишком большой (лимит 40 МБ)."
+            : "Не удалось загрузить документ.",
+        );
+        return;
+      }
+      const failed = data.failed ?? 0;
+      setStatus(
+        failed > 0
+          ? `Загружено: ${data.uploaded ?? 0}, с ошибкой: ${failed}.`
+          : `Документы добавлены: ${data.uploaded ?? 0}.`,
+      );
+      await load(folderId);
+    } catch {
+      setError("Не удалось загрузить документ.");
+    } finally {
+      setUploadingFiles(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -429,24 +474,28 @@ export function PlatformKnowledgeBaseView({
         {library === "company_knowledge"
           ? "Корпоративная база на платформе (Supabase Storage): папки, тексты, PDF и фото."
           : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
+        {folderId
+          ? ` Сейчас открыта папка «${listing?.folderName || "…"}» — новые папки и документы попадут сюда.`
+          : " Новые папки и документы можно создавать на любом уровне."}
       </p>
 
-      <div className={styles.createRow}>
+      <div className={styles.createPanel}>
         <form className={styles.createForm} onSubmit={createFolder}>
           <input
             className={styles.editorInput}
             value={newFolderName}
             onChange={(event) => setNewFolderName(event.target.value)}
-            placeholder="Новая папка"
+            placeholder="Название новой папки"
             required
             disabled={creatingFolder}
+            aria-label="Название новой папки"
           />
           <button
             type="submit"
-            className={styles.linkBtn}
+            className={styles.primaryBtn}
             disabled={creatingFolder}
           >
-            Папка
+            {creatingFolder ? "Создание…" : "Создать папку"}
           </button>
         </form>
         <form className={styles.createForm} onSubmit={createArticle}>
@@ -460,12 +509,35 @@ export function PlatformKnowledgeBaseView({
           />
           <button
             type="submit"
-            className={styles.primaryBtn}
+            className={styles.linkBtn}
             disabled={creatingArticle}
           >
             Добавить текст
           </button>
         </form>
+        <div className={styles.createForm}>
+          <input
+            ref={fileInputRef}
+            className={styles.fileInput}
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            disabled={uploadingFiles}
+            onChange={(event) => void uploadDocuments(event.target.files)}
+            aria-label="Добавить документ"
+          />
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={uploadingFiles}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploadingFiles ? "Загрузка…" : "Добавить документ"}
+          </button>
+          <span className={styles.uploadHint}>
+            PDF, Word, Excel, PowerPoint, фото, текст — до 40 МБ
+          </span>
+        </div>
       </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}
@@ -497,8 +569,7 @@ export function PlatformKnowledgeBaseView({
               ) : !listing || listing.items.length === 0 ? (
                 <tr>
                   <td colSpan={4} className={styles.empty}>
-                    Пока пусто. Добавьте текст или запустите импорт из Google
-                    Drive.
+                    Пока пусто. Создайте папку, добавьте текст или документ.
                   </td>
                 </tr>
               ) : (

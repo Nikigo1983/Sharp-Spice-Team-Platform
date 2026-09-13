@@ -210,6 +210,72 @@ export async function createKnowledgeArticle(input: {
   return article;
 }
 
+export async function createKnowledgeFileArticle(input: {
+  slug: KbLibrarySlug;
+  folderId?: string | null;
+  fileName: string;
+  contentType: string;
+  data: Buffer;
+  title?: string;
+  updatedByUserId: string;
+  updatedByName: string;
+}): Promise<KbArticle> {
+  const fileName = input.fileName.trim().slice(0, 255);
+  if (!fileName) throw new Error("INVALID_FILE");
+  if (!input.data.length) throw new Error("EMPTY_FILE");
+
+  const { MAX_KB_FILE_BYTES, kbStorageObjectPath, saveKnowledgeBaseFile } =
+    await import("./asset-storage");
+  if (input.data.length > MAX_KB_FILE_BYTES) {
+    throw new Error("FILE_TOO_LARGE");
+  }
+
+  const meta = libraryMeta(input.slug);
+  const snapshot = await getLibrary(input.slug);
+  const folderId = input.folderId ?? null;
+  if (folderId && !snapshot.folders.some((f) => f.id === folderId)) {
+    throw new Error("FOLDER_NOT_FOUND");
+  }
+
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  const storagePath = kbStorageObjectPath(input.slug, id, fileName);
+  const mime =
+    input.contentType.split(";")[0]?.trim() || "application/octet-stream";
+
+  await saveKnowledgeBaseFile(storagePath, input.data, mime);
+
+  const title = (input.title?.trim() || fileName.replace(/\.[^.]+$/, "") || fileName).slice(
+    0,
+    200,
+  );
+
+  const article: KbArticle = {
+    id,
+    libraryId: meta.id,
+    folderId,
+    title,
+    body: "",
+    status: "published",
+    kind: "file",
+    storagePath,
+    fileName,
+    sizeBytes: input.data.length,
+    sourceDriveId: null,
+    sourceMimeType: mime,
+    updatedByUserId: input.updatedByUserId,
+    updatedByName: input.updatedByName,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await saveKbSnapshot(
+    { ...snapshot, articles: [article, ...snapshot.articles] },
+    input.slug,
+  );
+  return article;
+}
+
 export async function createClientKnowledgeArticle(input: {
   title: string;
   body?: string;

@@ -617,7 +617,7 @@ export async function executeListClientContracts(
         returned: rows.length,
         totalContractAmount:
           listed.withContract > 0
-            ? `${(totalCents / 100).toLocaleString("ru-RU")} €`
+            ? formatEuroFromCents(totalCents, "ru")
             : null,
         clients: rows,
       },

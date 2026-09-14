@@ -113,9 +113,10 @@ export async function listPortalFinanceSnapshots(options?: {
   ]);
 
   const all = cases.map((record) => snapshotFromRecord(record, store));
-  const withContract = all.filter((row) => row.contractAmountCents != null);
-  const withoutContract = all.length - withContract.length;
-  const filtered = onlyWithContract ? withContract : all;
+  const withContractRows = all.filter((row) => row.contractAmountCents != null);
+  const withContract = withContractRows.length;
+  const withoutContract = all.length - withContract;
+  const filtered = onlyWithContract ? withContractRows : all;
   const sorted = [...filtered].sort((a, b) =>
     a.name.localeCompare(b.name, "ru"),
   );

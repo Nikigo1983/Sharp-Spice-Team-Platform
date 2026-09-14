@@ -138,10 +138,13 @@ const FIELD_SEEDS: FieldSeed[] = [
     label: "Гражданство",
     required: true,
     fromClient: (c) => {
-      const raw = pickDebug(c, [/гражданств/i, /citizenship/i, /национальн/i]);
-      if (raw && !/^[A-Za-z\s\-'.]+$/.test(raw)) return raw;
-      // Prefer non-latin citizenship; latin-looking values are latinName.
-      return pickDebug(c, [/гражданств/i, /национальн/i]);
+      const latin = pickDebug(c, [/^latinname$/i, /латиниц/i]);
+      const raw = pickDebug(c, [/гражданств/i, /^citizenship$/i, /национальн/i]);
+      if (!raw) return null;
+      if (latin && raw.toLowerCase() === latin.toLowerCase()) return null;
+      // Latin-looking person names belong in latinName, not citizenship.
+      if (latin && /^[A-Za-z\s\-'.]+$/.test(raw)) return null;
+      return raw;
     },
     fromMemory: (m) => clean(m.citizenship),
   },

@@ -1291,7 +1291,8 @@ function clientSnapshotFromResolved(
         ? `merged:${client.rowIndex}`
         : `${client.source}:${client.rowIndex}`,
     name: client.name ?? null,
-    citizenship: pick(/гражданств|citizenship|латиниц/i),
+    citizenship: pick(/^(гражданств|citizenship)$/i),
+    latinName: pick(/латиниц|latinName|^latin$/i),
     passportNumber: pick(/паспорт|passport/i),
     country: client.country ?? null,
     direction: client.direction ?? null,

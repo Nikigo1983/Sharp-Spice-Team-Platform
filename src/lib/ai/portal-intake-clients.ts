@@ -31,6 +31,11 @@ import {
 import type { QuestionnaireRecord } from "@/lib/client-portal/questionnaire-types";
 import { readStaffFields } from "@/lib/client-portal/staff-fields";
 import { readStaffNotes } from "@/lib/client-portal/staff-case-meta";
+import {
+  answerCitizenshipFromAnswers,
+  answerContractFromAnswers,
+  answerLatinNameFromAnswers,
+} from "@/lib/ai/portal-intake-fields";
 
 export const PORTAL_INTAKE_SOURCE_LABEL = "Заявки портала Emigrant";
 
@@ -111,9 +116,17 @@ function answerPassport(record: QuestionnaireRecord): string {
 }
 
 function answerLatinName(record: QuestionnaireRecord): string {
-  const identity = readLegacyIdentity(record.answers);
-  if (identity?.fullNameLatin) return identity.fullNameLatin;
-  return clean(record.answers.full_name_latin);
+  return answerLatinNameFromAnswers(record.answers);
+}
+
+/** Real citizenship/nationality — never the «Латиница» FIO column. */
+export function answerCitizenship(record: QuestionnaireRecord): string {
+  return answerCitizenshipFromAnswers(record.answers);
+}
+
+/** Contract label from staff fields or legacy/Formgrid «Договор» column. */
+export function answerContract(record: QuestionnaireRecord): string {
+  return answerContractFromAnswers(record.answers);
 }
 
 function answerEmail(record: QuestionnaireRecord): string {
@@ -140,11 +153,7 @@ function answerNotes(record: QuestionnaireRecord): string {
 
 function answerDirection(record: QuestionnaireRecord): string {
   const identity = readLegacyIdentity(record.answers);
-  return (
-    identity?.direction ||
-    clean(record.answers.citizenship_latin) ||
-    "Хорватия"
-  );
+  return identity?.direction || clean(record.answers.direction) || "Хорватия";
 }
 
 function buildSurveyText(record: QuestionnaireRecord): string {
@@ -191,7 +200,8 @@ export function portalCaseToSearchFields(
   push("паспорт", answerPassport(record), "other");
   push("менеджер", staff.curator, "other");
   push("партнер от кого клиент", staff.partner, "other");
-  push("договор", staff.contractNumber || staff.contractAmount, "other");
+  push("договор", answerContract(record), "other");
+  push("гражданство", answerCitizenship(record), "other");
   push("адрес букинга", staff.bookingAddress, "other");
   push("даты букинга", staff.bookingDate, "other");
   push("статус", process?.value, "other");
@@ -257,8 +267,9 @@ export function portalCaseToContext(
       id: record.id,
       name,
       latinName: answerLatinName(record),
+      citizenship: answerCitizenship(record),
       partner: staff.partner,
-      contract: staff.contractNumber || staff.contractAmount,
+      contract: answerContract(record),
       passport: answerPassport(record),
       submittedAt: record.submittedAt || "",
       expectedApprovalAt: staff.expectedApproval,
@@ -313,6 +324,7 @@ export function portalCaseLine(
     answerPhone(record) ? `тел: ${answerPhone(record)}` : null,
     answerPassport(record) ? `паспорт: ${answerPassport(record)}` : null,
     staff.partner ? `партнёр: ${staff.partner}` : null,
+    answerContract(record) ? `договор: ${answerContract(record)}` : null,
     staff.bookingAddress ? `букинг: ${staff.bookingAddress}` : null,
   ]
     .filter(Boolean)

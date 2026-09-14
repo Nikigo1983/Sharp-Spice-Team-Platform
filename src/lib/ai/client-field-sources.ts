@@ -240,6 +240,14 @@ export function resolveClientContextAttribution(
     if (latin) {
       fields.push({ label: "Латиница", value: latin, source: "Заявки портала" });
     }
+    const citizenship = pickDebug("citizenship", "гражданство");
+    if (citizenship && citizenship.toLowerCase() !== latin.toLowerCase()) {
+      fields.push({
+        label: "Гражданство",
+        value: citizenship,
+        source: "Заявки портала",
+      });
+    }
     const partner = pickDebug("partner", "partnerName", "партнер");
     if (partner) {
       fields.push({

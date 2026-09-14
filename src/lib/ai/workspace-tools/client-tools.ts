@@ -150,9 +150,10 @@ export function projectSafeFromResolved(
     expectedApprovalAt: display(row.expectedApprovalAt),
     notes,
     direction: display(client.direction),
-    citizenship: display(row.latinName),
+    // Never reuse latin FIO as citizenship — that column is «Латиница».
+    citizenship: display(row.citizenship),
     hasContract: contract != null,
-    contractLabel: contract ? "указан" : null,
+    contractLabel: contract,
     source: PORTAL_INTAKE_SOURCE_LABEL,
   };
 }
@@ -187,6 +188,7 @@ export function projectSafeClient(client: {
   return {
     clientId: client.id,
     name: display(client.name),
+    // Legacy Sheets «citizenship» column historically held Latin FIO.
     latinName: display(client.citizenship),
     email: display(client.email),
     phone: display(client.phone),
@@ -201,9 +203,9 @@ export function projectSafeClient(client: {
     expectedApprovalAt: display(client.expectedApprovalAt),
     notes,
     direction: display(client.direction),
-    citizenship: display(client.citizenship),
+    citizenship: null,
     hasContract: contract != null,
-    contractLabel: contract ? "указан" : null,
+    contractLabel: contract,
     source: PORTAL_INTAKE_SOURCE_LABEL,
   };
 }

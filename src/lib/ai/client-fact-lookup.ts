@@ -199,9 +199,9 @@ export function formatStructuredClientFactReply(params: {
       ? ` · строка ${params.rowIndex}`
       : "";
   if (!params.present) {
-    return `У **${params.clientName}** в таблице «Клиенты» поле «${spec.label}» пустое (не заполнено)${row}.`;
+    return `У **${params.clientName}** в заявках портала Emigrant поле «${spec.label}» пустое (не заполнено)${row}.`;
   }
-  return `**${params.value}** — ${spec.label.toLowerCase()} **${params.clientName}** · таблица «Клиенты»${row}`;
+  return `**${params.value}** — ${spec.label.toLowerCase()} **${params.clientName}** · Заявки портала Emigrant${row}`;
 }
 
 /** Match CRM surname/name against a query token (supports RU case endings). */

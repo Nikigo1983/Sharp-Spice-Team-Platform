@@ -111,7 +111,7 @@ export function formatStructuredClientListReply(params: {
   const reportedCount = totalFound;
 
   if (totalFound === 0) {
-    const reply = `По фильтру ${params.filterLabel} ничего не найдено в таблицах «Клиенты» и «Новые клиенты».`;
+    const reply = `По фильтру ${params.filterLabel} ничего не найдено в заявках портала Emigrant.`;
     return {
       reply,
       continuation: null,

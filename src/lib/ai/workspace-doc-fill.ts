@@ -98,8 +98,9 @@ function pickDebug(
 
 function sourceLabel(client: ResolvedClientContext): string {
   if (isMergedClientContext(client)) return "объединённый клиент";
+  if (client.sourceLabel) return client.sourceLabel;
   if (client.source === "new_clients") return "анкета Formgrid";
-  return "таблица «Клиенты»";
+  return "Заявки портала Emigrant";
 }
 
 type FieldSeed = {

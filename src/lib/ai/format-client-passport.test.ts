@@ -20,7 +20,7 @@ describe("formatPassportLookupReply", () => {
   it("formats a single-line manager answer", () => {
     assert.equal(
       formatPassportLookupReply("Белоус Екатерина", "КВ2719292", 7),
-      "**КВ2719292** — паспорт Белоус Екатерина · таблица «Клиенты» · строка 7",
+      "**КВ2719292** — паспорт Белоус Екатерина · Заявки портала Emigrant · строка 7",
     );
   });
 });

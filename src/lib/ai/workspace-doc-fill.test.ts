@@ -72,9 +72,9 @@ describe("workspace doc fill", () => {
 
     const byId = Object.fromEntries(pack.fields.map((f) => [f.id, f]));
     assert.equal(byId.fullName?.value, "Иван Иванов");
-    assert.equal(byId.fullName?.source, "таблица «Клиенты»");
+    assert.equal(byId.fullName?.source, "Клиенты");
     assert.equal(byId.passport?.value, "AA1234567");
-    assert.equal(byId.passport?.source, "таблица «Клиенты»");
+    assert.equal(byId.passport?.source, "Клиенты");
     assert.equal(byId.latinName?.value, "Ivan Ivanov");
     assert.equal(byId.citizenship?.value, "РФ");
     assert.equal(byId.citizenship?.source, "память кейса");

@@ -130,6 +130,8 @@ export function looksLikePassportNumber(value: string): boolean {
   return alnum.length >= 6 && /\d/.test(alnum);
 }
 
+const CLIENT_SOURCE_ATTRIBUTION = "Заявки портала Emigrant";
+
 /** Короткий ответ менеджеру на вопрос про номер паспорта. */
 export function formatPassportLookupReply(
   clientName: string,
@@ -137,7 +139,7 @@ export function formatPassportLookupReply(
   rowIndex?: number,
 ): string {
   const row = rowIndex && rowIndex > 0 ? ` · строка ${rowIndex}` : "";
-  return `**${passport}** — паспорт ${clientName} · таблица «Клиенты»${row}`;
+  return `**${passport}** — паспорт ${clientName} · ${CLIENT_SOURCE_ATTRIBUTION}${row}`;
 }
 
 export function formatPassportMissingReply(
@@ -145,5 +147,5 @@ export function formatPassportMissingReply(
   rowIndex?: number,
 ): string {
   const row = rowIndex && rowIndex > 0 ? ` (строка ${rowIndex})` : "";
-  return `У **${clientName}** в таблице «Клиенты» колонка «Номер паспорта» пуста${row}.`;
+  return `У **${clientName}** в заявках портала Emigrant поле «Номер паспорта» пустое${row}.`;
 }

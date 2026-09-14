@@ -1,4 +1,3 @@
-import { rethrowMirrorError } from "@/lib/ai-data/failure";
 import { streamTask } from "@/lib/ai/stream-task";
 import { AiCompletionError } from "@/lib/ai/errors";
 import { throwIfAiAborted } from "@/lib/ai/request-scope";
@@ -817,7 +816,6 @@ async function prepareWorkspaceRequest(
         }
       }
     } catch (error) {
-      rethrowMirrorError(error);
       console.error(`[workspace-ai][${requestId}] client search failed`, error);
       trace.notes.push("CLIENT_SEARCH_ERROR");
     }
@@ -1008,7 +1006,6 @@ async function prepareWorkspaceRequest(
   try {
     context = await buildWorkspaceContext(trimmed, intent);
   } catch (error) {
-      rethrowMirrorError(error);
     console.error(`[workspace-ai][${requestId}] context build failed`, error);
     context = emptyContextBundle();
     trace.fallbackActivated = true;
@@ -1070,7 +1067,6 @@ async function prepareWorkspaceRequest(
         deskSlice = emigrantDeskClientToContextSlice(deskClient);
       }
     } catch (error) {
-      rethrowMirrorError(error);
       console.error(
         `[workspace-ai][${requestId}] desk lookup for client context failed`,
         error,
@@ -1092,7 +1088,6 @@ async function prepareWorkspaceRequest(
         );
       }
     } catch (error) {
-      rethrowMirrorError(error);
       console.error(`[workspace-ai][${requestId}] web search failed`, error);
       trace.notes.push("web_search_error");
     }
@@ -1440,7 +1435,6 @@ async function executeAgentPrepared(params: {
       statusEvents: loop.statusEvents,
     };
   } catch (error) {
-      rethrowMirrorError(error);
     console.error(
       `[workspace-ai][${prepared.requestId}] agent loop failed`,
       error,

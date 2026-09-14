@@ -117,6 +117,7 @@ export type SafeClientRecord = {
   notes: string | null;
   direction: string | null;
   citizenship: string | null;
+  placeOfBirth: string | null;
   hasContract: boolean | null;
   contractLabel: string | null;
   employmentType: string | null;
@@ -133,11 +134,12 @@ export function projectSafeFromResolved(
   const row = isMergedClientContext(client)
     ? client.parts[0]?.debugRow ?? client.debugRow
     : client.debugRow;
-  const notesRaw = display(row.notes ?? client.surveyData?.slice(0, 1500));
+  const notesRaw = display(row.notes);
   const notes =
     notesRaw == null ? null : truncateChars(notesRaw, 1500).text;
   const contract = display(row.contract);
   const passport = display(row.passport);
+  const placeOfBirth = display(row.placeOfBirth);
   const fieldLines = (client.surveyData || "")
     .split("\n")
     .map((line) => line.trim())
@@ -178,6 +180,11 @@ export function projectSafeFromResolved(
             empty: passport == null,
           },
           {
+            label: "Место рождения",
+            value: placeOfBirth,
+            empty: placeOfBirth == null,
+          },
+          {
             label: "электронная почта",
             value: display(client.email),
             empty: !display(client.email),
@@ -186,16 +193,6 @@ export function projectSafeFromResolved(
             label: "Дата подачи",
             value: display(row.submittedAt ?? client.lastActivity),
             empty: !display(row.submittedAt ?? client.lastActivity),
-          },
-          {
-            label: "Дата предпологаемого одобрения",
-            value: display(row.expectedApprovalAt),
-            empty: !display(row.expectedApprovalAt),
-          },
-          {
-            label: "Имя референта",
-            value: display(row.referentName ?? client.manager),
-            empty: !display(row.referentName ?? client.manager),
           },
           {
             label: "Адрес букинга",
@@ -208,21 +205,6 @@ export function projectSafeFromResolved(
             empty: !display(row.bookingRange),
           },
           {
-            label: "Дата одобрения ВНЖ",
-            value: display(row.approvalAt),
-            empty: !display(row.approvalAt),
-          },
-          {
-            label: "Заметки",
-            value: notes,
-            empty: notes == null,
-          },
-          {
-            label: "Дата выдачи карточки ВНЖ",
-            value: display(row.residenceCardIssuedAt),
-            empty: !display(row.residenceCardIssuedAt),
-          },
-          {
             label: "Партнер от кого клиент",
             value: display(row.partner),
             empty: !display(row.partner),
@@ -231,11 +213,6 @@ export function projectSafeFromResolved(
             label: "Договор",
             value: contract,
             empty: contract == null,
-          },
-          {
-            label: "ТИП ЗАНЯТОСТИ",
-            value: display(row.employmentType),
-            empty: !display(row.employmentType),
           },
           {
             label: "Гражданство",
@@ -262,8 +239,8 @@ export function projectSafeFromResolved(
     expectedApprovalAt: display(row.expectedApprovalAt),
     notes,
     direction: display(client.direction),
-    // Never reuse latin FIO as citizenship — that column is «Латиница».
     citizenship: display(row.citizenship),
+    placeOfBirth,
     hasContract: contract != null,
     contractLabel: contract,
     employmentType: display(row.employmentType),
@@ -322,6 +299,7 @@ export function projectSafeClient(client: {
     notes,
     direction: display(client.direction),
     citizenship: null,
+    placeOfBirth: null,
     hasContract: contract != null,
     contractLabel: contract,
     employmentType: null,
@@ -555,7 +533,7 @@ export async function executeGetClient(
   }
 }
 
-const CASE_CONTEXT_MAX_CHARS = 7500;
+const CASE_CONTEXT_MAX_CHARS = 14000;
 
 export async function executeGetCaseContext(
   rawArgs: unknown,
@@ -629,6 +607,7 @@ export async function executeGetCaseContext(
         expectedApprovalAt: client.expectedApprovalAt,
         contractLabel: client.contractLabel,
         citizenship: client.citizenship,
+        placeOfBirth: client.placeOfBirth,
         latinName: client.latinName,
       },
       notesPreview,

@@ -24,7 +24,6 @@ import {
 } from "@/lib/client-portal/legacy-crm";
 import { readProcessStatus } from "@/lib/client-portal/process-status";
 import {
-  buildReviewRows,
   getSubmittedForStaff,
   listSubmittedForStaff,
 } from "@/lib/client-portal/questionnaire-service";
@@ -36,6 +35,7 @@ import {
   answerContractFromAnswers,
   answerLatinNameFromAnswers,
   answerPassportFromAnswers,
+  answerPlaceOfBirthFromAnswers,
   answerSubmittedAtFromAnswers,
   buildPortalIntakeFieldCard,
   formatPortalIntakeFieldCardText,
@@ -141,23 +141,12 @@ function answerDirection(record: QuestionnaireRecord): string {
 }
 
 function buildSurveyText(record: QuestionnaireRecord): string {
-  const fieldCard = formatPortalIntakeFieldCardText(
+  return formatPortalIntakeFieldCardText(
     buildPortalIntakeFieldCard(record.answers, {
       recordStatus: record.status,
       submittedAtFallback: record.submittedAt,
     }),
   );
-  const rows = buildReviewRows(record.answers, "ru");
-  const extra = rows
-    .slice(0, 80)
-    .map((row) => {
-      const value = clean(row.value);
-      if (!value) return null;
-      return `${row.label}: ${value}`;
-    })
-    .filter(Boolean);
-  if (extra.length === 0) return fieldCard;
-  return `${fieldCard}\n\nДоп. строки анкеты:\n${extra.join("\n")}`;
 }
 
 export function portalCaseToSearchFields(
@@ -193,6 +182,11 @@ export function portalCaseToSearchFields(
   push("партнер от кого клиент", staff.partner, "other");
   push("договор", answerContract(record), "other");
   push("гражданство", answerCitizenship(record), "other");
+  push(
+    "место рождения",
+    answerPlaceOfBirthFromAnswers(record.answers),
+    "other",
+  );
   push("адрес букинга", staff.bookingAddress, "other");
   push("даты букинга", staff.bookingDate, "other");
   push("статус", process?.value, "other");
@@ -259,6 +253,7 @@ export function portalCaseToContext(
       name,
       latinName: answerLatinName(record),
       citizenship: answerCitizenship(record),
+      placeOfBirth: answerPlaceOfBirthFromAnswers(record.answers),
       partner: staff.partner,
       contract: answerContract(record),
       passport: answerPassport(record),

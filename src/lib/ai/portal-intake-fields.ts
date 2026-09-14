@@ -1,19 +1,25 @@
 /**
  * Pure field readers for Emigrant portal intake answers (no server-only deps).
- * Maps questionnaire / legacy sheet columns for AI Workspace.
+ * Builds a full per-question field card for AI Workspace.
  */
 import {
   EXTERNAL_COLUMN_ORDER,
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
-import { readStaffFields } from "@/lib/client-portal/staff-fields";
+import { SHARP_SPICE_ONBOARDING_SCHEMA } from "@/lib/client-portal/questionnaire-schema";
+import {
+  isFileAnswer,
+  pickLabel,
+} from "@/lib/client-portal/questionnaire-types";
 import { readProcessStatus } from "@/lib/client-portal/process-status";
+import { readStaffFields } from "@/lib/client-portal/staff-fields";
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 export type PortalIntakeFieldRow = {
+  id?: string;
   label: string;
   value: string;
   empty: boolean;
@@ -119,8 +125,63 @@ export function answerSubmittedAtFromAnswers(
   );
 }
 
+export function answerPlaceOfBirthFromAnswers(
+  answers: Record<string, unknown>,
+): string {
+  return (
+    clean(answers.place_of_birth_latin) ||
+    readSheetColumnFromAnswers(
+      answers,
+      "Место рождения",
+      "Place of birth",
+      "Место рождения (латинскими)",
+    )
+  );
+}
+
+function formatAnswerValue(raw: unknown, type?: string): string {
+  if (raw == null) return "";
+  if (type === "yes_no") {
+    if (raw === "yes" || raw === true) return "Да";
+    if (raw === "no" || raw === false) return "Нет";
+  }
+  if (type === "boolean") {
+    if (raw === true) return "Да";
+    if (raw === false) return "Нет";
+  }
+  if (type === "file" && isFileAnswer(raw)) {
+    return `${raw.fileName} (${Math.round(raw.sizeBytes / 1024)} KB)`;
+  }
+  if (typeof raw === "string") return raw.trim();
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  return "";
+}
+
+function shortRuLabel(label: string): string {
+  return label.replace(/^\d+\.\s*/, "").trim();
+}
+
+function pushUnique(
+  rows: PortalIntakeFieldRow[],
+  seen: Set<string>,
+  row: PortalIntakeFieldRow,
+): void {
+  const key = row.label.toLowerCase();
+  if (seen.has(key)) {
+    const existing = rows.find((r) => r.label.toLowerCase() === key);
+    if (existing?.empty && !row.empty) {
+      existing.value = row.value;
+      existing.empty = false;
+      if (row.id) existing.id = row.id;
+    }
+    return;
+  }
+  seen.add(key);
+  rows.push(row);
+}
+
 /**
- * Full questionnaire field card — one row per UI position.
+ * Full questionnaire field card — one row per UI / schema position.
  * Empty values are kept so the model can say «не заполнено» without inventing.
  */
 export function buildPortalIntakeFieldCard(
@@ -130,13 +191,55 @@ export function buildPortalIntakeFieldCard(
   const staff = readStaffFields(answers);
   const process = readProcessStatus(answers, options?.recordStatus);
   const identity = readLegacyIdentity(answers);
+  const rows: PortalIntakeFieldRow[] = [];
+  const seen = new Set<string>();
 
-  const byLabel = (label: string, value: string): PortalIntakeFieldRow => {
+  const byLabel = (
+    label: string,
+    value: string,
+    id?: string,
+  ): PortalIntakeFieldRow => {
     const v = clean(value);
-    return { label, value: v, empty: !v };
+    return { id, label, value: v, empty: !v };
   };
 
-  const sheetRows: PortalIntakeFieldRow[] = EXTERNAL_COLUMN_ORDER.map((label) => {
+  // 1) Full onboarding questionnaire (portal form positions).
+  for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
+    for (const question of section.questions) {
+      if (question.type === "information") continue;
+      const label = shortRuLabel(pickLabel(question.label, "ru"));
+      let value = formatAnswerValue(answers[question.id], question.type);
+
+      // Legacy / staff fallbacks for common identity fields.
+      if (!value) {
+        if (question.id === "full_name_cyrillic") {
+          value =
+            clean(identity?.fullNameCyrillic) ||
+            readSheetColumnFromAnswers(answers, "Фамилия");
+        } else if (question.id === "full_name_latin") {
+          value = answerLatinNameFromAnswers(answers);
+        } else if (question.id === "passport_number") {
+          value = answerPassportFromAnswers(answers);
+        } else if (question.id === "contact_email") {
+          value = clean(identity?.email) || clean(answers.contact_email);
+        } else if (question.id === "place_of_birth_latin") {
+          value = answerPlaceOfBirthFromAnswers(answers);
+        } else if (question.id === "citizenship_latin") {
+          value = answerCitizenshipFromAnswers(answers);
+        } else if (question.id === "phone") {
+          value =
+            clean(answers.phone) ||
+            clean(answers.contact_phone) ||
+            readSheetColumnFromAnswers(answers, "Телефон", "Phone");
+        }
+      }
+
+      pushUnique(rows, seen, byLabel(label, value, question.id));
+    }
+  }
+
+  // 2) Legacy sheet / staff CRM columns (portal intake UI for imported cases).
+  for (const label of EXTERNAL_COLUMN_ORDER) {
     let value = readSheetColumnFromAnswers(answers, label);
     if (!value) {
       if (label === "Фамилия") {
@@ -170,33 +273,42 @@ export function buildPortalIntakeFieldCard(
         value = clean(staff.partner);
       } else if (label === "Договор") {
         value = answerContractFromAnswers(answers);
-      } else if (label === "Заметки") {
-        value = readSheetColumnFromAnswers(answers, "Заметки");
       }
     }
-    return byLabel(label, value);
-  });
+    pushUnique(rows, seen, byLabel(label, value));
+  }
 
-  const extras: PortalIntakeFieldRow[] = [
-    byLabel("Гражданство", answerCitizenshipFromAnswers(answers)),
+  // 3) Remaining legacy/formgrid sheet keys not already covered.
+  for (const sheetKey of ["__legacySheet", "__formgridSheet"] as const) {
+    const sheet = answers[sheetKey];
+    if (!sheet || typeof sheet !== "object" || Array.isArray(sheet)) continue;
+    for (const [key, raw] of Object.entries(sheet as Record<string, unknown>)) {
+      if (/пароль|password/i.test(key)) continue;
+      const value = clean(raw);
+      if (!value || value.length > 500) continue;
+      pushUnique(rows, seen, byLabel(key, value));
+    }
+  }
+
+  // 4) Process / staff extras.
+  for (const row of [
     byLabel("Статус процесса", process?.value || ""),
     byLabel("Куратор", staff.curator),
     byLabel("Компания", staff.company),
-  ];
-
-  const seen = new Set(sheetRows.map((row) => row.label.toLowerCase()));
-  for (const row of extras) {
-    if (seen.has(row.label.toLowerCase())) continue;
-    sheetRows.push(row);
+    byLabel("Гражданство", answerCitizenshipFromAnswers(answers)),
+    byLabel("Место рождения", answerPlaceOfBirthFromAnswers(answers)),
+  ]) {
+    pushUnique(rows, seen, row);
   }
-  return sheetRows;
+
+  return rows;
 }
 
 export function formatPortalIntakeFieldCardText(
   rows: PortalIntakeFieldRow[],
 ): string {
   const lines = [
-    "ПОЛЯ ЗАЯВКИ ПОРТАЛА (по позициям анкеты):",
+    "ПОЛЯ ЗАЯВКИ ПОРТАЛА (по позициям анкеты — авторитетный источник):",
     ...rows.map((row) =>
       row.empty
         ? `- ${row.label}: [не заполнено]`
@@ -206,31 +318,52 @@ export function formatPortalIntakeFieldCardText(
   return lines.join("\n");
 }
 
-/** Prompt dictionary: how the model must interpret each UI column. */
+/** Prompt dictionary: how the model must interpret each client detail. */
 export const PORTAL_INTAKE_FIELD_PROMPT = `
-Словарь полей заявки портала Emigrant (обязательно):
-- Фамилия / ФИО — кириллическое имя клиента. Не путать с латиницей.
-- Латиница — ФИО латиницей (как в загранпаспорте). Это НЕ гражданство и НЕ страна.
-- Номер паспорта — номер документа. Если в полях заявки есть значение — ОБЯЗАТЕЛЬНО используй его; не говори «не получен», пока в карточке полей стоит [не заполнено].
-- электронная почта — email клиента.
-- Дата подачи — дата подачи заявки/кейса.
-- Дата предпологаемого одобрения — ожидаемый период/дата одобрения (может быть диапазоном).
-- Имя референта / Куратор — ответственный менеджер.
-- Адрес букинга — адрес бронирования/проживания.
-- Дата букинга (от и до) — период букинга (год может отсутствовать).
-- Дата одобрения ВНЖ — фактическая дата одобрения; пусто ≠ «отказано».
-- Дата выдачи карточки ВНЖ — дата выдачи карты; пусто ≠ отсутствие права.
-- Заметки — свободные заметки по делу.
-- Партнер от кого клиент — партнёр/источник лида.
-- Договор — тип/название договора или контрагента (например Flant JSC), не обязательно номер.
-- ТИП ЗАНЯТОСТИ — занятость (фриланс и т.п.).
-- СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ / СПРАВКА О НЕСУДИМОСТИ / ПОДПИСЬ КЛИЕНТА / медстраховка — статусы/значения этих позиций анкеты.
-- Гражданство — только реальное гражданство/национальность. Никогда не подставляй «Латиница».
-- Статус процесса — этап дела в портале.
+Словарь полей заявки портала Emigrant (обязательно читать блок «ПОЛЯ ЗАЯВКИ ПОРТАЛА» / fields[]):
 
-Правила ответа по карточке полей:
-1. Опирайся на блок «ПОЛЯ ЗАЯВКИ ПОРТАЛА» / fields[] / CLIENT CONTEXT.
-2. Для каждой упомянутой позиции: либо точное значение, либо явно «не заполнено».
-3. Не называй заполненное поле отсутствующим.
-4. Не путай Латиница ↔ Гражданство, Договор ↔ компания работодателя без данных.
+Личные данные:
+- Фамилия, Имя, Отчество (кириллицей) / Фамилия — кириллическое ФИО. Не путать с латиницей.
+- ФИО (латинскими) / Латиница — ФИО латиницей как в загранпаспорте. Это НЕ гражданство и НЕ место рождения.
+- Фамилия при рождении (латинскими) — девичья/прежняя фамилия, не место рождения.
+- Дата рождения — дата рождения клиента.
+- Место рождения (латинскими) / Место рождения — город/страна рождения. Если value есть — назови его; не говори «не удалось подтвердить».
+- Место жительства (адрес в стране гражданства) — домашний адрес в стране гражданства.
+- Контактный телефон — телефон клиента.
+- Электронный адрес / электронная почта — email.
+- № заграничного паспорта / Номер паспорта — номер паспорта. Заполненное значение нельзя называть «не получен».
+- Орган выдавший документ / Дата выдачи / Дата окончания — реквизиты паспорта.
+- Образование/специальность — образование.
+- Гражданство (латинскими) / Гражданство — гражданство. Никогда не подставляй Латиницу.
+- Национальность — национальность.
+- Семейное положение — marital status.
+- Отец: ФИО / Мать: ФИО — родители.
+
+Вопросы по Хорватии:
+- Почему вы выбрали именно Хорватию…
+- Как вы узнали о программе…
+- Был ли у вас … ВНЖ в Хорватии / в другой стране — Да/Нет.
+- Чем именно вы занимаетесь… — опыт работы.
+- Бывали ли вы в Хорватии раньше — Да/Нет.
+- В каких странах вы были… — travel history.
+
+Документы / статусы вложений:
+- Загранпаспорт (PDF) / Справка о несудимости / ВНЖ другой страны / Банковская выписка / Контракт — имя файла или [не заполнено].
+- У вас есть справка/выписка/контракт — Да/Нет.
+
+Операционные поля кейса (staff / legacy):
+- Дата подачи, Дата предпологаемого одобрения, Имя референта / Куратор.
+- Адрес букинга, Дата букинга (от и до).
+- Дата одобрения ВНЖ, Дата выдачи карточки ВНЖ.
+- Заметки, Партнер от кого клиент, Договор, ТИП ЗАНЯТОСТИ.
+- СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ / СПРАВКА О НЕСУДИМОСТИ / ПОДПИСЬ КЛИЕНТА / медстраховка.
+- Статус процесса, Компания.
+
+Правила ответа:
+1. Для любого факта о клиенте сначала найди строку в «ПОЛЯ ЗАЯВКИ ПОРТАЛА» / fields[].
+2. Если value есть — ответь этим значением и укажи «из заявки портала Emigrant».
+3. Если стоит [не заполнено] / empty=true — скажи, что в заявке поле пустое. Не выдумывай.
+4. Не называй заполненное поле отсутствующим.
+5. Не путай: Латиница ≠ Гражданство ≠ Место рождения ≠ Фамилия при рождении.
+6. Запрос «какое место рождения» = поле «Место рождения (латинскими)» / «Место рождения».
 `.trim();

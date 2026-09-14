@@ -5,6 +5,7 @@ import {
   answerContractFromAnswers,
   answerLatinNameFromAnswers,
   answerPassportFromAnswers,
+  answerPlaceOfBirthFromAnswers,
   buildPortalIntakeFieldCard,
 } from "@/lib/ai/portal-intake-fields";
 
@@ -65,6 +66,19 @@ describe("portal intake field mapping", () => {
       }),
       "AA111",
     );
+  });
+
+  it("includes place of birth from questionnaire answers", () => {
+    const answers = {
+      ...byakovaAnswers,
+      place_of_birth_latin: "Moscow, Russia",
+    };
+    assert.equal(answerPlaceOfBirthFromAnswers(answers), "Moscow, Russia");
+    const card = buildPortalIntakeFieldCard(answers);
+    const birth = card.find((row) => /место рождения/i.test(row.label));
+    assert.ok(birth);
+    assert.equal(birth!.value, "Moscow, Russia");
+    assert.equal(birth!.empty, false);
   });
 
   it("builds a field card with every questionnaire position", () => {

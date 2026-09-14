@@ -58,6 +58,10 @@ const CRM_TABLE_FIELD_KEYS: Array<{ keys: string[]; label: string }> = [
   { keys: ["passport", "номер паспорта", "паспорт"], label: "Номер паспорта" },
   { keys: ["latinName", "латиница"], label: "Латиница" },
   { keys: ["citizenship", "гражданство"], label: "Гражданство" },
+  {
+    keys: ["placeOfBirth", "место рождения", "place_of_birth"],
+    label: "Место рождения",
+  },
   { keys: ["submittedAt", "дата подачи"], label: "Дата подачи" },
   {
     keys: ["expectedApprovalAt", "предполагаемое одобрение"],
@@ -264,6 +268,18 @@ export function resolveClientContextAttribution(
     if (contract) {
       fields.push({ label: "Договор", value: contract, source: "Заявки портала" });
     }
+    const placeOfBirth = pickDebug(
+      "placeOfBirth",
+      "место рождения",
+      "place_of_birth",
+    );
+    if (placeOfBirth) {
+      fields.push({
+        label: "Место рождения",
+        value: placeOfBirth,
+        source: "Заявки портала",
+      });
+    }
 
     appendCrmTableFields(fields, crmPart);
   }
@@ -407,7 +423,7 @@ export function formatPartsTechnicalBlocks(
   surveyData: string,
   desk?: EmigrantDeskContextSlice | null,
 ): string[] {
-  const lines: string[] = ["--- Технические блоки по источникам ---"];
+  const lines: string[] = ["--- Полные поля заявки по источникам ---"];
 
   const crmPart = parts.find((part) => part.source === "clients");
   const formPart = parts.find((part) => part.source === "new_clients");
@@ -415,7 +431,7 @@ export function formatPartsTechnicalBlocks(
   if (crmPart) {
     lines.push(
       "",
-      `CRM (строка ${crmPart.rowIndex}):`,
+      `Заявки портала:`,
       crmPart.surveyData || crmData || "(нет дополнительных полей)",
     );
   }
@@ -480,7 +496,7 @@ export function formatSingleClientContextWithSources(
   ];
 
   if (client.surveyData) {
-    lines.push("", "--- Технический блок ---", client.surveyData);
+    lines.push("", client.surveyData);
   }
 
   return lines.filter((line, index, array) => !(line === "" && array[index - 1] === "")).join("\n");

@@ -951,8 +951,6 @@ export function AiWorkspaceView() {
 
               </h2>
 
-              <p className={styles.panelSubtitle}>KB · Заявки портала Emigrant</p>
-
             </div>
 
             <div className={styles.panelActions}>

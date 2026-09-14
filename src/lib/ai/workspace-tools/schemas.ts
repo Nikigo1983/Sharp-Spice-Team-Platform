@@ -176,6 +176,7 @@ export function validateSearchKnowledgeBaseArgs(
 
 export type ListClientContractsArgs = {
   onlyWithContract: boolean;
+  onlyWithDebt: boolean;
   limit: number;
 };
 
@@ -183,10 +184,17 @@ export function validateListClientContractsArgs(
   raw: unknown,
 ): SchemaValidationResult<ListClientContractsArgs> {
   if (raw == null) {
-    return { ok: true, value: { onlyWithContract: false, limit: 100 } };
+    return {
+      ok: true,
+      value: { onlyWithContract: false, onlyWithDebt: false, limit: 100 },
+    };
   }
   if (!isPlainObject(raw)) return reject("Arguments must be an object");
-  const bad = assertOnlyKeys(raw, ["onlyWithContract", "limit"]);
+  const bad = assertOnlyKeys(raw, [
+    "onlyWithContract",
+    "onlyWithDebt",
+    "limit",
+  ]);
   if (bad) return bad;
   let onlyWithContract = false;
   if ("onlyWithContract" in raw && raw.onlyWithContract != null) {
@@ -194,6 +202,13 @@ export function validateListClientContractsArgs(
       return reject("Field onlyWithContract must be a boolean");
     }
     onlyWithContract = raw.onlyWithContract;
+  }
+  let onlyWithDebt = false;
+  if ("onlyWithDebt" in raw && raw.onlyWithDebt != null) {
+    if (typeof raw.onlyWithDebt !== "boolean") {
+      return reject("Field onlyWithDebt must be a boolean");
+    }
+    onlyWithDebt = raw.onlyWithDebt;
   }
   const limit = readInteger(raw, "limit", {
     min: 1,
@@ -205,6 +220,7 @@ export function validateListClientContractsArgs(
     ok: true,
     value: {
       onlyWithContract,
+      onlyWithDebt,
       limit: limit.value ?? 100,
     },
   };
@@ -255,6 +271,11 @@ export const LIST_CLIENT_CONTRACTS_PARAMETERS = {
       type: "boolean",
       description:
         "If true, return only clients with a Finance contract amount. Default false (all cases; missing amounts shown as «пока нет договора»).",
+    },
+    onlyWithDebt: {
+      type: "boolean",
+      description:
+        "If true, return only clients with Finance balance > 0 (должники по оплате). Use for «кто должник», unpaid debts — not portal CRM status.",
     },
     limit: {
       type: "integer",

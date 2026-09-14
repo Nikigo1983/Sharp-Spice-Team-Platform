@@ -127,7 +127,8 @@ Rules:
 - partnerName: for "партнер Шарипа", "у каких клиентов партнер X" → isListQuery: true
 - notesContains: key phrases like "куратор", "запрос куратору"
 - country/direction: e.g. "Хорватия", "Croatia"
-- city: e.g. "Загреб", "Zagreb" — also set address if query mentions address in city`;
+- city: e.g. "Загреб", "Zagreb" — also set address if query mentions address in city
+- NEVER put "должник", "должник по оплате", "неоплачен", unpaid debt into status — those are Finance payment questions, not CRM status. Leave status null for such queries.`;
 
 function normalizeSubmittedMonths(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
@@ -366,6 +367,13 @@ export function parseClientSearchIntentRules(query: string): ClientSearchIntent 
     }
   }
 
+  // Finance payment debt ≠ CRM/portal process status.
+  if (
+    /должник|долг(?:и|ов)?\s+по\s+оплат|неоплачен|кто\s+должен/i.test(query)
+  ) {
+    intent.status = null;
+  }
+
   return intent;
 }
 
@@ -418,12 +426,17 @@ function mergeIntents(
   const isList =
     ai.isListQuery || rules.isListQuery || isClientListQuery(query);
 
+  const status =
+    /должник|долг(?:и|ов)?\s+по\s+оплат|неоплачен|кто\s+должен/i.test(query)
+      ? null
+      : ai.status ?? rules.status;
+
   return {
     clientName: isList ? null : ai.clientName ?? rules.clientName,
     country: ai.country ?? rules.country,
     direction: ai.direction ?? rules.direction,
     manager: ai.manager ?? rules.manager,
-    status: ai.status ?? rules.status,
+    status,
     address: ai.address ?? rules.address,
     city: ai.city ?? rules.city,
     passport: ai.passport ?? rules.passport,

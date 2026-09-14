@@ -15,9 +15,9 @@ import { formatEuroFromCents } from "@/lib/finance/money";
 import { readFinanceStore } from "@/lib/finance/persistence";
 import { readStaffFields } from "@/lib/client-portal/staff-fields";
 import type { QuestionnaireRecord } from "@/lib/client-portal/questionnaire-types";
+import { NO_CONTRACT_YET_LABEL } from "@/lib/ai/finance-debt-query";
 
-/** Shown to AI / managers when Finance has no contract amount yet. */
-export const NO_CONTRACT_YET_LABEL = "пока нет договора";
+export { NO_CONTRACT_YET_LABEL };
 
 export type PortalFinanceSnapshot = {
   clientId: string;
@@ -28,6 +28,7 @@ export type PortalFinanceSnapshot = {
   contractAmountCents: number | null;
   paidAmount: string | null;
   balance: string | null;
+  balanceCents: number | null;
   paymentStatus: string | null;
   /** Legacy/staff «Договор» label (e.g. Flant JSC), not the money amount. */
   contractLabel: string | null;
@@ -90,8 +91,8 @@ export function snapshotFromRecord(
       summary.contractAmountCents != null
         ? formatEuroFromCents(summary.balanceCents, "ru")
         : null,
-    paymentStatus:
-      summary.contractAmountCents != null ? summary.paymentStatus : null,
+    balanceCents: summary.balanceCents,
+    paymentStatus: summary.paymentStatus,
     contractLabel,
     staffContractAmount: staffAmount,
   };
@@ -108,14 +109,18 @@ export async function getPortalFinanceSnapshot(
 
 export async function listPortalFinanceSnapshots(options?: {
   onlyWithContract?: boolean;
+  /** Clients with Finance balance > 0 (unpaid / partial). */
+  onlyWithDebt?: boolean;
   limit?: number;
 }): Promise<{
   items: PortalFinanceSnapshot[];
   totalCases: number;
   withContract: number;
   withoutContract: number;
+  withDebt: number;
 }> {
   const onlyWithContract = options?.onlyWithContract ?? false;
+  const onlyWithDebt = options?.onlyWithDebt ?? false;
   const limit = Math.min(200, Math.max(1, options?.limit ?? 100));
   const [cases, store] = await Promise.all([
     listPortalIntakeCasesForAi(),
@@ -126,15 +131,23 @@ export async function listPortalFinanceSnapshots(options?: {
   const withContractRows = all.filter((row) => row.contractAmountCents != null);
   const withContract = withContractRows.length;
   const withoutContract = all.length - withContract;
-  const filtered = onlyWithContract ? withContractRows : all;
-  const sorted = [...filtered].sort((a, b) =>
-    a.name.localeCompare(b.name, "ru"),
+  const debtRows = withContractRows.filter(
+    (row) => (row.balanceCents ?? 0) > 0,
   );
+  let filtered = onlyWithContract ? withContractRows : all;
+  if (onlyWithDebt) filtered = debtRows;
+  const sorted = [...filtered].sort((a, b) => {
+    if (onlyWithDebt) {
+      return (b.balanceCents ?? 0) - (a.balanceCents ?? 0);
+    }
+    return a.name.localeCompare(b.name, "ru");
+  });
 
   return {
     items: sorted.slice(0, limit),
     totalCases: all.length,
     withContract,
     withoutContract,
+    withDebt: debtRows.length,
   };
 }

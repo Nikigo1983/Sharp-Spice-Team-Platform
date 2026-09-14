@@ -85,6 +85,11 @@ import {
   type ClientListContinuationState,
 } from "@/lib/ai/client-list-reply";
 import {
+  formatFinanceDebtorsListReply,
+  isFinancePaymentDebtQuery,
+} from "@/lib/ai/finance-debt-query";
+import { listPortalFinanceSnapshots } from "@/lib/ai/portal-finance-snapshot";
+import {
   formatConversationSummaryForPrompt,
   selectRecentHistoryTurns,
   sanitizeConversationSummary,
@@ -690,6 +695,41 @@ async function prepareWorkspaceRequest(
         logWorkspaceAiTrace(trace);
         return { ...direct, requestId, trace };
       }
+    }
+  }
+
+  if (!followUp && isFinancePaymentDebtQuery(trimmed)) {
+    try {
+      const listed = await listPortalFinanceSnapshots({
+        onlyWithDebt: true,
+        limit: 100,
+      });
+      const reply = formatFinanceDebtorsListReply({
+        debtors: listed.items,
+        totalCases: listed.totalCases,
+        withContract: listed.withContract,
+        withoutContract: listed.withoutContract,
+      });
+      trace.selectedRoutes = ["finance_debtors_direct"];
+      trace.responseOk = true;
+      trace.latencyMs.prepare = Date.now() - started;
+      trace.notes.push(
+        `finance_debtors=${listed.items.length};with_contract=${listed.withContract}`,
+      );
+      logWorkspaceAiTrace(trace);
+      return {
+        kind: "direct",
+        reply: redactSensitiveText(reply),
+        sources: ["Finance", "Заявки портала Emigrant"],
+        requestId,
+        trace,
+      };
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] finance debtors list failed`,
+        error,
+      );
+      trace.notes.push("FINANCE_DEBTORS_ERROR");
     }
   }
 

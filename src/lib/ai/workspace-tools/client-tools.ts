@@ -590,6 +590,7 @@ export async function executeListClientContracts(
   try {
     const listed = await listPortalFinanceSnapshots({
       onlyWithContract: validated.value.onlyWithContract,
+      onlyWithDebt: validated.value.onlyWithDebt,
       limit: validated.value.limit,
     });
     const rows = listed.items.map((row) => ({
@@ -616,13 +617,16 @@ export async function executeListClientContracts(
         totalCases: listed.totalCases,
         withContract: listed.withContract,
         withoutContract: listed.withoutContract,
+        withDebt: listed.withDebt,
         returned: rows.length,
         totalContractAmount:
           listed.withContract > 0
             ? formatEuroFromCents(totalCents, "ru")
             : null,
         clients: rows,
-        note: "Если contractAmount = «пока нет договора» — в Finance сумма ещё не задана. Пиши менеджеру именно «пока нет договора», без оговорок что пустое ≠ отсутствие.",
+        note: validated.value.onlyWithDebt
+          ? "Список должников: balance > 0 в Finance. Не путай с CRM-статусом заявки."
+          : "Если contractAmount = «пока нет договора» — в Finance сумма ещё не задана. Пиши менеджеру именно «пока нет договора», без оговорок что пустое ≠ отсутствие.",
       },
       resultCount: rows.length,
       sourceTags: ["CLIENT", "FINANCE"],

@@ -56,7 +56,7 @@ export const WORKSPACE_TOOL_REGISTRY: Record<
   list_client_contracts: {
     name: "list_client_contracts",
     description:
-      "List contract amounts (€) for portal Emigrant cases from Finance. Use for «суммы договоров по всем клиентам», totals, who has/doesn't have a contract amount. Missing amount is returned as «пока нет договора».",
+      "List contract amounts (€) and payment balances for portal Emigrant cases from Finance. Use for «суммы договоров», «кто должник по оплате» (onlyWithDebt=true). Missing amount = «пока нет договора». Not a CRM status filter.",
     parameters: LIST_CLIENT_CONTRACTS_PARAMETERS as unknown as Record<
       string,
       unknown

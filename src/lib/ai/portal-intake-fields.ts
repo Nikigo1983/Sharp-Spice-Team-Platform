@@ -161,6 +161,32 @@ function shortRuLabel(label: string): string {
   return label.replace(/^\d+\.\s*/, "").trim();
 }
 
+/** Stable AI-facing labels — avoid confusing parentheticals like «в стране гражданства». */
+const AI_FIELD_LABEL_BY_ID: Record<string, string> = {
+  full_name_cyrillic: "ФИО (кириллицей)",
+  full_name_latin: "ФИО (латиницей)",
+  birth_surname_latin: "Фамилия при рождении",
+  date_of_birth: "Дата рождения",
+  place_of_birth_latin: "Место рождения",
+  residence_address_latin: "Адрес проживания (страна гражданства)",
+  phone: "Контактный телефон",
+  contact_email: "Электронная почта",
+  passport_number: "Номер загранпаспорта",
+  passport_issued_by: "Орган, выдавший паспорт",
+  passport_issue_date: "Дата выдачи паспорта",
+  passport_expiry_date: "Дата окончания паспорта",
+  education_specialty_latin: "Образование / специальность",
+  citizenship_latin: "Гражданство",
+  nationality_latin: "Национальность",
+  marital_status_latin: "Семейное положение",
+  father_name_latin: "Отец: ФИО",
+  mother_name_latin: "Мать: ФИО",
+};
+
+function aiLabelForQuestion(questionId: string, fallbackLabel: string): string {
+  return AI_FIELD_LABEL_BY_ID[questionId] ?? shortRuLabel(fallbackLabel);
+}
+
 function pushUnique(
   rows: PortalIntakeFieldRow[],
   seen: Set<string>,
@@ -207,7 +233,10 @@ export function buildPortalIntakeFieldCard(
   for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
     for (const question of section.questions) {
       if (question.type === "information") continue;
-      const label = shortRuLabel(pickLabel(question.label, "ru"));
+      const label = aiLabelForQuestion(
+        question.id,
+        pickLabel(question.label, "ru"),
+      );
       let value = formatAnswerValue(answers[question.id], question.type);
 
       // Legacy / staff fallbacks for common identity fields.
@@ -290,13 +319,11 @@ export function buildPortalIntakeFieldCard(
     }
   }
 
-  // 4) Process / staff extras.
+  // 4) Process / staff extras (skip Гражданство/Место рождения — already from schema).
   for (const row of [
     byLabel("Статус процесса", process?.value || ""),
     byLabel("Куратор", staff.curator),
     byLabel("Компания", staff.company),
-    byLabel("Гражданство", answerCitizenshipFromAnswers(answers)),
-    byLabel("Место рождения", answerPlaceOfBirthFromAnswers(answers)),
   ]) {
     pushUnique(rows, seen, row);
   }
@@ -323,19 +350,19 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 Словарь полей заявки портала Emigrant (обязательно читать блок «ПОЛЯ ЗАЯВКИ ПОРТАЛА» / fields[]):
 
 Личные данные:
-- Фамилия, Имя, Отчество (кириллицей) / Фамилия — кириллическое ФИО. Не путать с латиницей.
-- ФИО (латинскими) / Латиница — ФИО латиницей как в загранпаспорте. Это НЕ гражданство и НЕ место рождения.
-- Фамилия при рождении (латинскими) — девичья/прежняя фамилия, не место рождения.
+- ФИО (кириллицей) / Фамилия — кириллическое ФИО. Не путать с латиницей.
+- ФИО (латиницей) / Латиница — ФИО латиницей как в загранпаспорте. Это НЕ гражданство и НЕ место рождения.
+- Фамилия при рождении — девичья/прежняя фамилия, не место рождения.
 - Дата рождения — дата рождения клиента.
-- Место рождения (латинскими) / Место рождения — город/страна рождения. Если value есть — назови его; не говори «не удалось подтвердить».
-- Место жительства (адрес в стране гражданства) — домашний адрес в стране гражданства.
+- Место рождения — город/страна рождения. Если value есть — назови его; не говори «не удалось подтвердить».
+- Адрес проживания (страна гражданства) — это АДРЕС дома. НЕ гражданство. Не называй это поле «Гражданство» и не пиши «расхождение» с гражданством.
 - Контактный телефон — телефон клиента.
-- Электронный адрес / электронная почта — email.
-- № заграничного паспорта / Номер паспорта — номер паспорта. Заполненное значение нельзя называть «не получен».
-- Орган выдавший документ / Дата выдачи / Дата окончания — реквизиты паспорта.
-- Образование/специальность — образование.
-- Гражданство (латинскими) / Гражданство — гражданство. Никогда не подставляй Латиницу.
-- Национальность — национальность.
+- Электронная почта — email.
+- Номер загранпаспорта — номер паспорта. Заполненное значение нельзя называть «не получен».
+- Орган, выдавший паспорт / Дата выдачи паспорта / Дата окончания паспорта — реквизиты паспорта.
+- Образование / специальность — образование.
+- Гражданство — только страна/гражданство (например Russian Federation). Никогда не подставляй Латиницу или адрес.
+- Национальность — национальность (не путать с гражданством и адресом).
 - Семейное положение — marital status.
 - Отец: ФИО / Мать: ФИО — родители.
 
@@ -364,6 +391,8 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 2. Если value есть — ответь этим значением и укажи «из заявки портала Emigrant».
 3. Если стоит [не заполнено] / empty=true — скажи, что в заявке поле пустое. Не выдумывай.
 4. Не называй заполненное поле отсутствующим.
-5. Не путай: Латиница ≠ Гражданство ≠ Место рождения ≠ Фамилия при рождении.
-6. Запрос «какое место рождения» = поле «Место рождения (латинскими)» / «Место рождения».
+5. Не путай: Латиница ≠ Гражданство ≠ Место рождения ≠ Фамилия при рождении ≠ Адрес проживания.
+6. Запрос «какое гражданство» = только поле «Гражданство». Адрес проживания — не гражданство и не конфликт.
+7. Запрос «какое место рождения» = только поле «Место рождения».
+8. Не выдумывай «расхождения» между разными полями, если они про разное (гражданство vs адрес).
 `.trim();

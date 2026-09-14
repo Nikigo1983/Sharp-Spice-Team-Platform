@@ -451,6 +451,11 @@ export async function executeSearchClients(
     let ranked = matches;
     if (bestScore >= 90) {
       ranked = matches.filter((m) => m!.score >= 80);
+    } else if (bestScore >= 70) {
+      // Surname-level hit: drop weak first-name collisions (Олефир vs Олег).
+      ranked = matches.filter(
+        (m) => m!.score >= bestScore - 10 && m!.score >= 65,
+      );
     }
 
     const publicMatches = ranked.map((m) => {

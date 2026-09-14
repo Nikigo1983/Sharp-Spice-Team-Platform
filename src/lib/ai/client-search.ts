@@ -10,6 +10,7 @@ import {
   formatNormalizedQueryLabel,
   getRussianNameLemmaVariants,
   morphNameMatch,
+  nameStemsCompatible,
   type NormalizedNameParts,
 } from "@/lib/ai/russian-name-morphology";
 import {
@@ -139,20 +140,18 @@ export function tokensMatchWord(token: string, word: string): boolean {
   const wc = normalizeComparable(word);
   if (tc.length >= 3 && wc.length >= 3) {
     if (tc === wc) return true;
-    if (tc.length >= 4 && wc.length >= 4) {
-      if (
-        tc.startsWith(wc.slice(0, Math.min(5, wc.length))) ||
-        wc.startsWith(tc.slice(0, Math.min(5, tc.length)))
-      ) {
-        return true;
-      }
+    if (tc.length >= 4 && wc.length >= 4 && nameStemsCompatible(tc, wc)) {
+      return true;
     }
   }
 
   const minLen = Math.min(t.length, w.length);
   if (minLen >= 4) {
     const sim = fuzzySimilarity(t, w);
-    if (sim >= 0.72) return true;
+    // Stricter for short first names vs longer surnames (Олег/Олефир ≈ 0.67).
+    const maxLen = Math.max(t.length, w.length);
+    const lengthRatio = minLen / maxLen;
+    if (sim >= 0.82 && lengthRatio >= 0.75) return true;
   }
 
   return false;
@@ -544,17 +543,42 @@ export function scoreClientRecord(
   // first-name-only / surname-only fuzzy hits — that caused AMBIGUOUS floods
   // of unrelated «Мария» clients when the surname had a Formgrid-only hit.
   const multiTokenNameQuery = query.morphology.lemmaTokens.length >= 2;
+  const singleSurnameQuery =
+    !multiTokenNameQuery && query.morphology.lemmaTokens.length === 1;
 
   if (query.morphology.lemmaTokens.length > 0 && score < 80 && !multiTokenNameQuery) {
     const primaryLemma =
       query.morphology.normalizedSurname ??
       [...query.morphology.lemmaTokens].sort((a, b) => b.length - a.length)[0];
-    const surnameHit = nameWords.some((word) =>
-      tokensMatchWord(primaryLemma, word),
-    );
-    if (surnameHit) {
-      matchedFields.push(`Фамилия/имя (lemma): «${primaryLemma}»`);
-      score = Math.max(score, 68);
+
+    // For a single surname token, prefer the leading FIO token (фамилия).
+    const leadingNameWords = fullNameValues
+      .map((value) => value.split(/[^\p{L}\p{N}]+/u).filter(Boolean)[0] ?? "")
+      .filter(Boolean);
+    const surnamePositionHit =
+      singleSurnameQuery &&
+      leadingNameWords.some((word) => {
+        const w = normalizeComparable(word);
+        const p = normalizeComparable(primaryLemma);
+        return (
+          w === p ||
+          morphNameMatch(primaryLemma, word) ||
+          nameStemsCompatible(primaryLemma, word)
+        );
+      });
+
+    if (surnamePositionHit) {
+      matchedFields.push(`Фамилия (точная позиция): «${primaryLemma}»`);
+      score = Math.max(score, 78);
+    } else {
+      const surnameHit = nameWords.some((word) =>
+        tokensMatchWord(primaryLemma, word),
+      );
+      if (surnameHit) {
+        matchedFields.push(`Фамилия/имя (lemma): «${primaryLemma}»`);
+        // Mid-name / first-name collisions stay weaker than real surname hits.
+        score = Math.max(score, singleSurnameQuery ? 42 : 68);
+      }
     }
 
     for (const lemma of query.morphology.lemmaTokens) {

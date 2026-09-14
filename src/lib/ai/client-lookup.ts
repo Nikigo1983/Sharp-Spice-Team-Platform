@@ -120,8 +120,21 @@ function pickBestMatches(
 
   if (resolved.length > 1) {
     const strongResolved = resolved.filter((m) => m.score >= SCORE_STRONG);
+    // Clear surname winner: keep only top cluster, drop weak first-name collisions.
+    if (
+      strongResolved.length >= 1 &&
+      topScore >= 70 &&
+      second &&
+      topScore - second.score >= 15
+    ) {
+      return { kind: "single", client: top, query };
+    }
     const list =
-      strongResolved.length > 1 ? strongResolved : resolved.filter((m) => m.score >= SCORE_VIABLE);
+      strongResolved.length > 1
+        ? strongResolved
+        : strongResolved.length === 1
+          ? strongResolved
+          : resolved.filter((m) => m.score >= SCORE_VIABLE);
     if (list.length > 1) {
       return {
         kind: "multiple",
@@ -129,6 +142,9 @@ function pickBestMatches(
         pendingParts: candidates.slice(0, 12),
         query,
       };
+    }
+    if (list.length === 1) {
+      return { kind: "single", client: list[0], query };
     }
   }
 

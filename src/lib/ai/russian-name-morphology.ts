@@ -180,6 +180,32 @@ export function lemmatizeRussianNameWord(word: string): string {
   return cyrillic ?? variants[0] ?? normalizeText(word);
 }
 
+/**
+ * Prefix match for names/surnames: allow short morphological tails only.
+ * Rejects false positives like «Олефир» ↔ «Олег» (shared «олег» prefix).
+ */
+export function nameStemsCompatible(a: string, b: string): boolean {
+  const left = normalizeComparable(a);
+  const right = normalizeComparable(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length < 4 || right.length < 4) return false;
+
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length <= right.length ? right : left;
+  if (!longer.startsWith(shorter)) return false;
+
+  const ratio = shorter.length / longer.length;
+  if (ratio >= 0.8) return true;
+
+  const tail = longer.slice(shorter.length);
+  // Common Russian case / soft endings only — not an extra name root.
+  return (
+    tail.length <= 3 &&
+    /^(а|у|е|ы|и|ю|я|ой|ом|ым|ых|ей|ью|ём|ем)$/i.test(tail)
+  );
+}
+
 export function morphNameMatch(token: string, candidate: string): boolean {
   if (!token || !candidate) return false;
 
@@ -189,8 +215,8 @@ export function morphNameMatch(token: string, candidate: string): boolean {
   for (const a of left) {
     for (const b of right) {
       if (a === b) return true;
-      if (a.length >= 4 && b.length >= 4) {
-        if (a.startsWith(b) || b.startsWith(a)) return true;
+      if (a.length >= 4 && b.length >= 4 && nameStemsCompatible(a, b)) {
+        return true;
       }
     }
   }

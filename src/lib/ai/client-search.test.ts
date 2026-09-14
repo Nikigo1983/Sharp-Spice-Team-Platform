@@ -79,6 +79,33 @@ describe("client-search Ratnikova-like full-name priority", () => {
     assert.ok(a.score >= 90 && b.score >= 90);
   });
 
+  it("surname Olefir does not collide with first name Oleg", () => {
+    const query = buildClientSearchQuery("Олефир");
+    const hit = scoreClientRecord(
+      query,
+      nameFields("Олефир Анна Юрьевна", "Olefir Anna"),
+    );
+    const missA = scoreClientRecord(
+      query,
+      nameFields("Рыбин Олег Михайлович", "Rybin Oleg"),
+    );
+    const missB = scoreClientRecord(
+      query,
+      nameFields("РОДИОНОВ USA", "Rodionov Oleg"),
+    );
+    assert.ok(hit.score >= 70, `Olefir score ${hit.score}`);
+    assert.ok(
+      missA.score < 35,
+      `Rybin Oleg should not match: ${missA.score} ${missA.matchedFields}`,
+    );
+    assert.ok(
+      missB.score < 35,
+      `Rodionov should not match: ${missB.score} ${missB.matchedFields}`,
+    );
+    assert.equal(morphNameMatch("олефир", "олег"), false);
+    assert.equal(morphNameMatch("Olefir", "Oleg"), false);
+  });
+
   it("no candidate stays below viable threshold", () => {
     const scored = scoreClientRecord(
       buildClientSearchQuery("Ратникова Мария"),

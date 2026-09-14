@@ -23,6 +23,7 @@ export const WORKSPACE_AGENT_SYSTEM_ADDON = `
 13. Если Phase 1 не даёт Drive/полных документов — честно укажи ограничение, не выдумывай список документов.
 15. Для сумм договоров по всем / списку клиентов вызывай list_client_contracts (Finance €). Не говори, что выгрузка недоступна, и не проси менеджера прислать файл.
 16. Поле «Договор» / contractLabel — тип/название; денежная сумма — contractAmount из Finance.
+17. Если contractAmount = «пока нет договора» или null — пиши менеджеру «пока нет договора». Запрещено писать, что пустое значение «не означает отсутствие договора».
 `.trim();
 
 export function buildWorkspaceAgentMessages(params: {

@@ -22,6 +22,7 @@ import {
   PORTAL_INTAKE_SOURCE_LABEL,
 } from "@/lib/ai/portal-intake-clients";
 import {
+  displayContractAmount,
   getPortalFinanceSnapshot,
   listPortalFinanceSnapshots,
 } from "@/lib/ai/portal-finance-snapshot";
@@ -522,9 +523,10 @@ export async function executeGetClient(
       });
     }
     const finance = await getPortalFinanceSnapshot(validated.value.clientId);
-    if (finance?.contractAmount) {
-      safe.contractAmount = finance.contractAmount;
-      safe.hasContract = true;
+    if (finance) {
+      const amountLabel = displayContractAmount(finance.contractAmount);
+      safe.contractAmount = amountLabel;
+      safe.hasContract = finance.contractAmountCents != null;
       if (
         !safe.fields.some(
           (f) => f.label === "Сумма договора" && f.value != null,
@@ -532,8 +534,8 @@ export async function executeGetClient(
       ) {
         safe.fields.push({
           label: "Сумма договора",
-          value: finance.contractAmount,
-          empty: false,
+          value: amountLabel,
+          empty: finance.contractAmountCents == null,
         });
       }
     }
@@ -547,7 +549,7 @@ export async function executeGetClient(
         client: safe,
         finance: finance
           ? {
-              contractAmount: finance.contractAmount,
+              contractAmount: displayContractAmount(finance.contractAmount),
               paidAmount: finance.paidAmount,
               balance: finance.balance,
               paymentStatus: finance.paymentStatus,
@@ -593,7 +595,7 @@ export async function executeListClientContracts(
     const rows = listed.items.map((row) => ({
       clientId: row.clientId,
       name: row.name,
-      contractAmount: row.contractAmount,
+      contractAmount: displayContractAmount(row.contractAmount),
       paidAmount: row.paidAmount,
       balance: row.balance,
       paymentStatus: row.paymentStatus,
@@ -620,6 +622,7 @@ export async function executeListClientContracts(
             ? formatEuroFromCents(totalCents, "ru")
             : null,
         clients: rows,
+        note: "Если contractAmount = «пока нет договора» — в Finance сумма ещё не задана. Пиши менеджеру именно «пока нет договора», без оговорок что пустое ≠ отсутствие.",
       },
       resultCount: rows.length,
       sourceTags: ["CLIENT", "FINANCE"],
@@ -696,16 +699,16 @@ export async function executeGetCaseContext(
       client.notes == null ? null : truncateChars(client.notes, 800).text;
 
     const finance = await getPortalFinanceSnapshot(validated.value.clientId);
-    if (finance?.contractAmount) {
-      client.contractAmount = finance.contractAmount;
-      client.hasContract = true;
+    if (finance) {
+      client.contractAmount = displayContractAmount(finance.contractAmount);
+      client.hasContract = finance.contractAmountCents != null;
     }
 
     let payload: Record<string, unknown> = {
       client,
       finance: finance
         ? {
-            contractAmount: finance.contractAmount,
+            contractAmount: displayContractAmount(finance.contractAmount),
             paidAmount: finance.paidAmount,
             balance: finance.balance,
             paymentStatus: finance.paymentStatus,

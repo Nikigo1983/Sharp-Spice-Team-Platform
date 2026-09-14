@@ -16,6 +16,9 @@ import { readFinanceStore } from "@/lib/finance/persistence";
 import { readStaffFields } from "@/lib/client-portal/staff-fields";
 import type { QuestionnaireRecord } from "@/lib/client-portal/questionnaire-types";
 
+/** Shown to AI / managers when Finance has no contract amount yet. */
+export const NO_CONTRACT_YET_LABEL = "пока нет договора";
+
 export type PortalFinanceSnapshot = {
   clientId: string;
   name: string;
@@ -30,6 +33,13 @@ export type PortalFinanceSnapshot = {
   contractLabel: string | null;
   staffContractAmount: string | null;
 };
+
+/** Human-readable amount for tool/LLM output (never leave blank). */
+export function displayContractAmount(
+  amount: string | null | undefined,
+): string {
+  return amount?.trim() || NO_CONTRACT_YET_LABEL;
+}
 
 function findActiveProfile(
   store: Awaited<ReturnType<typeof readFinanceStore>>,

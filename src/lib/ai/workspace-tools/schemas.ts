@@ -254,7 +254,7 @@ export const LIST_CLIENT_CONTRACTS_PARAMETERS = {
     onlyWithContract: {
       type: "boolean",
       description:
-        "If true, return only clients with a Finance contract amount. Default false (all cases; empty amounts marked null).",
+        "If true, return only clients with a Finance contract amount. Default false (all cases; missing amounts shown as «пока нет договора»).",
     },
     limit: {
       type: "integer",

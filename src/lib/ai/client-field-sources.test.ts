@@ -57,20 +57,24 @@ describe("resolveClientContextAttribution", () => {
       internalComment: "",
     });
 
-    assert.deepEqual(attribution.activeSources, ["CRM", "Formgrid", "Emigrant Desk"]);
+    assert.deepEqual(attribution.activeSources, [
+      "Заявки портала",
+      "Formgrid",
+      "Emigrant Desk",
+    ]);
     assert.equal(
       attribution.fields.find((field) => field.label === "Email")?.source,
       "Formgrid",
     );
     assert.equal(
       attribution.fields.find((field) => field.label === "Статус")?.source,
-      "CRM",
+      "Заявки портала",
     );
     assert.equal(
       attribution.fields.find((field) => field.label === "Номер дела")?.value,
       "765946434",
     );
-    assert.match(attribution.managerSummary, /CRM.*Formgrid/);
+    assert.match(attribution.managerSummary, /заявки портала.*Formgrid/i);
     assert.match(attribution.managerSummary, /Emigrant Desk/);
     assert.match(attribution.managerSummary, /анкеты Formgrid/);
   });
@@ -192,7 +196,7 @@ describe("formatMergedClientContextWithSources", () => {
     };
 
     const text = formatMergedClientContextWithSources(merged);
-    assert.match(text, /✅ CRM/);
+    assert.match(text, /✅ Заявки портала|✅ CRM/);
     assert.match(text, /✅ Formgrid/);
     assert.match(text, /Email:\nloladav1409@gmail.com\nИсточник: Formgrid/);
     assert.match(text, /Технические блоки по источникам/);
@@ -203,7 +207,7 @@ describe("buildManagerSourceSummary", () => {
   it("formats two-source summary", () => {
     assert.equal(
       buildManagerSourceSummary(["CRM", "Formgrid"]),
-      "Данные объединены из CRM и Formgrid.",
+      "Данные объединены из заявки портала и Formgrid.",
     );
   });
 });

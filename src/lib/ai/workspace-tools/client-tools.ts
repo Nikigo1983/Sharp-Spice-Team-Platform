@@ -1,5 +1,5 @@
 /**
- * Read-only client tools wrapping existing CRM search/loaders.
+ * Read-only client tools wrapping portal intake (Заявки Emigrant).
  */
 
 import {
@@ -16,12 +16,12 @@ import {
   extractPhoneFromQuery,
 } from "@/lib/ai/client-search";
 import { looksLikePassportNumber } from "@/lib/ai/format-client";
-import { getClientDetail } from "@/lib/google-sheets/service";
 import {
-  getFormgridClientById,
-  isFormgridClientId,
-} from "@/lib/google-sheets/formgrid-lookup";
-import type { Client } from "@/lib/google-sheets/types";
+  getPortalIntakeCaseById,
+  portalCaseToContext,
+  PORTAL_INTAKE_SOURCE_LABEL,
+} from "@/lib/ai/portal-intake-clients";
+import { readStaffDocuments } from "@/lib/client-portal/staff-case-meta";
 import {
   deepRedactToolPayload,
   isDeniedClientFieldKey,
@@ -52,30 +52,33 @@ function confidenceFromScore(score: number): "high" | "medium" | "low" {
 
 function resolvedClientId(client: ResolvedClientContext): string | null {
   if (isMergedClientContext(client)) {
-    const crm = client.parts.find((p) => p.source === "clients");
-    const crmId = crm?.debugRow?.id?.trim();
-    if (crmId) return crmId;
-    const formgrid = client.parts.find((p) => p.source === "new_clients");
-    const fgId = formgrid?.debugRow?.id?.trim();
-    if (fgId) return fgId;
-    const prefixed = client.debugRow?.["Клиенты:id"]?.trim();
-    return prefixed || null;
+    for (const part of client.parts) {
+      const id = part.debugRow?.id?.trim();
+      if (id) return id;
+    }
+    return null;
   }
   return client.debugRow?.id?.trim() || null;
 }
 
 function latinNameFromResolved(client: ResolvedClientContext): string | null {
   if (isMergedClientContext(client)) {
-    const crm = client.parts.find((p) => p.source === "clients");
-    return display(crm?.debugRow?.latinName) ?? display(client.name);
+    for (const part of client.parts) {
+      const latin = display(part.debugRow?.latinName);
+      if (latin) return latin;
+    }
+    return display(client.name);
   }
   return display(client.debugRow?.latinName);
 }
 
 function partnerFromResolved(client: ResolvedClientContext): string | null {
   if (isMergedClientContext(client)) {
-    const crm = client.parts.find((p) => p.source === "clients");
-    return display(crm?.debugRow?.partner) ?? null;
+    for (const part of client.parts) {
+      const partner = display(part.debugRow?.partner);
+      if (partner) return partner;
+    }
+    return null;
   }
   return display(client.debugRow?.partner);
 }
@@ -118,12 +121,68 @@ export type SafeClientRecord = {
   source: string;
 };
 
-export function projectSafeClient(client: Client): SafeClientRecord {
+export function projectSafeFromResolved(
+  client: ResolvedClientContext,
+): SafeClientRecord | null {
+  const clientId = resolvedClientId(client);
+  if (!clientId) return null;
+  const row = isMergedClientContext(client)
+    ? client.parts[0]?.debugRow ?? client.debugRow
+    : client.debugRow;
+  const notesRaw = display(row.notes ?? client.surveyData?.slice(0, 1500));
+  const notes =
+    notesRaw == null ? null : truncateChars(notesRaw, 1500).text;
+  const contract = display(row.contract);
+  return {
+    clientId,
+    name: display(client.name),
+    latinName: display(row.latinName),
+    email: display(client.email),
+    phone: display(client.phone),
+    status: display(client.status),
+    manager: display(client.manager),
+    partner: display(row.partner),
+    submittedAt: display(row.submittedAt ?? client.lastActivity),
+    bookingAddress: display(row.bookingAddress),
+    bookingRange: display(row.bookingRange),
+    approvalAt: display(row.approvalAt),
+    residenceCardIssuedAt: display(row.residenceCardIssuedAt),
+    expectedApprovalAt: display(row.expectedApprovalAt),
+    notes,
+    direction: display(client.direction),
+    citizenship: display(row.latinName),
+    hasContract: contract != null,
+    contractLabel: contract ? "указан" : null,
+    source: PORTAL_INTAKE_SOURCE_LABEL,
+  };
+}
+
+/** Test/compat helper: project a legacy Sheets Client shape without loading Sheets. */
+export function projectSafeClient(client: {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  country?: string;
+  citizenship?: string;
+  direction?: string;
+  status?: string;
+  manager?: string;
+  lastActivity?: string;
+  createdAt?: string;
+  bookingAddress?: string;
+  bookingRange?: string;
+  approvalAt?: string;
+  residenceCardIssuedAt?: string;
+  expectedApprovalAt?: string;
+  partnerName?: string;
+  notes?: string;
+  contract?: string;
+  submittedAt?: string;
+}): SafeClientRecord {
   const notesRaw = display(client.notes);
   const notes =
-    notesRaw == null
-      ? null
-      : truncateChars(notesRaw, 1500).text;
+    notesRaw == null ? null : truncateChars(notesRaw, 1500).text;
   const contract = display(client.contract);
   return {
     clientId: client.id,
@@ -145,7 +204,7 @@ export function projectSafeClient(client: Client): SafeClientRecord {
     citizenship: display(client.citizenship),
     hasContract: contract != null,
     contractLabel: contract ? "указан" : null,
-    source: "clients",
+    source: PORTAL_INTAKE_SOURCE_LABEL,
   };
 }
 
@@ -228,9 +287,7 @@ export async function executeSearchClients(
           matchReasons: (client.matchedFields ?? []).slice(0, 6),
           source: isMergedClientContext(client)
             ? "merged"
-            : client.source === "clients"
-              ? "clients"
-              : "new_clients",
+            : "portal_intake",
         };
       })
       .filter(Boolean);
@@ -305,15 +362,8 @@ export async function executeGetClient(
   }
 
   try {
-    let client: Client | null = null;
-    if (isFormgridClientId(validated.value.clientId)) {
-      client = await getFormgridClientById(validated.value.clientId);
-    } else {
-      const detail = await getClientDetail(validated.value.clientId);
-      client = detail?.client ?? null;
-    }
-
-    if (!client) {
+    const record = await getPortalIntakeCaseById(validated.value.clientId);
+    if (!record) {
       return baseResult("get_client", started, {
         ok: false,
         errorCode: "NOT_FOUND",
@@ -324,7 +374,17 @@ export async function executeGetClient(
       });
     }
 
-    const safe = projectSafeClient(client);
+    const safe = projectSafeFromResolved(portalCaseToContext(record, 100));
+    if (!safe) {
+      return baseResult("get_client", started, {
+        ok: false,
+        errorCode: "NOT_FOUND",
+        errorMessage: "Client lacked stable id",
+        data: { clientId: validated.value.clientId },
+        resultCount: 0,
+        sourceTags: ["CLIENT"],
+      });
+    }
     assertNoSensitiveKeys(safe as unknown as Record<string, unknown>);
 
     return baseResult("get_client", started, {
@@ -365,23 +425,8 @@ export async function executeGetCaseContext(
   }
 
   try {
-    let clientRecord: Client | null = null;
-    let documents: Array<{
-      id: string;
-      name: string;
-      category: string;
-      uploadedAt: string;
-    }> = [];
-
-    if (isFormgridClientId(validated.value.clientId)) {
-      clientRecord = await getFormgridClientById(validated.value.clientId);
-    } else {
-      const detail = await getClientDetail(validated.value.clientId);
-      clientRecord = detail?.client ?? null;
-      documents = detail?.documents ?? [];
-    }
-
-    if (!clientRecord) {
+    const record = await getPortalIntakeCaseById(validated.value.clientId);
+    if (!record) {
       return baseResult("get_case_context", started, {
         ok: false,
         errorCode: "NOT_FOUND",
@@ -392,23 +437,32 @@ export async function executeGetCaseContext(
       });
     }
 
-    const client = projectSafeClient(clientRecord);
-    const documentsInventory = documents.slice(0, 25).map((doc) => ({
+    const resolved = portalCaseToContext(record, 100);
+    const client = projectSafeFromResolved(resolved);
+    if (!client) {
+      return baseResult("get_case_context", started, {
+        ok: false,
+        errorCode: "NOT_FOUND",
+        errorMessage: "Client lacked stable id",
+        data: { clientId: validated.value.clientId },
+        resultCount: 0,
+        sourceTags: ["CLIENT"],
+      });
+    }
+
+    const staffDocs = readStaffDocuments(record.answers);
+    const documentsInventory = staffDocs.slice(0, 25).map((doc) => ({
       documentId: doc.id,
-      title: doc.name,
-      category: doc.category || null,
-      uploadedAt: doc.uploadedAt || null,
-      source: "sheets_documents" as const,
+      title: doc.fileName,
+      category: null as string | null,
+      uploadedAt: doc.createdAt || null,
+      source: "portal_documents" as const,
       textAvailable: false,
       extractionStatus: "not_fetched" as const,
     }));
 
     const notesPreview =
-      client.notes == null
-        ? null
-        : truncateChars(client.notes, 800).text;
-
-    const formgridOnly = isFormgridClientId(validated.value.clientId);
+      client.notes == null ? null : truncateChars(client.notes, 800).text;
 
     let payload: Record<string, unknown> = {
       client,
@@ -429,20 +483,18 @@ export async function executeGetCaseContext(
       documentsInventory,
       documentCount: documentsInventory.length,
       sourcesAvailable: {
-        clients: !formgridOnly,
-        formgrid: formgridOnly,
-        sheetsDocuments: documentsInventory.length > 0,
+        clients: true,
+        formgrid: false,
+        portalIntake: true,
+        sheetsDocuments: false,
         emigrantDrive: false,
         knowledgeBase: false,
       },
       limitations: [
+        "Клиентские данные — только из заявок портала Emigrant.",
+        "Formgrid / Google Sheets CRM отключены для AI Workspace.",
         "Phase 1: Emigrant Drive and KB full content not included in get_case_context.",
         "Use search_knowledge_base for program requirements.",
-        ...(formgridOnly
-          ? [
-              "Client resolved from Formgrid lead row (not yet in CRM Clients sheet).",
-            ]
-          : []),
       ],
       partial: false,
     };

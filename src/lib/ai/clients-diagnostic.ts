@@ -2,18 +2,18 @@ import "server-only";
 
 import {
   SEARCH_COLUMNS_CLIENTS,
-  SEARCH_COLUMNS_NEW_CLIENTS,
 } from "@/lib/ai/client-search";
 import {
   getRecentClientSearches,
   type ClientSearchHistoryEntry,
 } from "@/lib/ai/client-search-history";
 import {
-  formatFormgridRowSummary,
-  getFormgridClientName,
-} from "@/lib/google-sheets/formgrid-dates";
-import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
-import { listAllClients } from "@/lib/google-sheets/service";
+  listPortalIntakeCasesForAi,
+  portalIntakeDisplayName,
+  PORTAL_INTAKE_SOURCE_LABEL,
+} from "@/lib/ai/portal-intake-clients";
+import { readProcessStatus } from "@/lib/client-portal/process-status";
+import { readStaffFields } from "@/lib/client-portal/staff-fields";
 
 export type ClientTableSample = {
   rowIndex: number;
@@ -48,53 +48,43 @@ export type ClientsDiagnosticReport = {
 
 export async function getClientsDiagnosticReport(): Promise<ClientsDiagnosticReport> {
   const syncedAt = new Date().toISOString();
-  const [{ items, source: clientsSource }, formgrid] = await Promise.all([
-    listAllClients(),
-    getFormgridLeadsTable(),
-  ]);
+  const cases = await listPortalIntakeCasesForAi();
 
   return {
     lastSyncedAt: syncedAt,
     searchColumns: {
       clients: [...SEARCH_COLUMNS_CLIENTS],
-      newClients: [...SEARCH_COLUMNS_NEW_CLIENTS],
+      newClients: [],
     },
     recentSearches: getRecentClientSearches(),
     clientsTable: {
-      label: "Клиенты",
-      count: items.length,
-      source: clientsSource,
-      spreadsheetEnv: "GOOGLE_SHEETS_SPREADSHEET_ID",
-      gidEnv: "GOOGLE_SHEETS_PUBLIC_CLIENTS_GID",
-      samples: items.slice(0, 3).map((client) => ({
-        rowIndex: client.rowIndex ?? 0,
-        name: client.name,
-        details: [
-          client.passportNumber && client.passportNumber !== "—"
-            ? `паспорт ${client.passportNumber}`
-            : null,
-          client.manager && client.manager !== "—"
-            ? `менеджер ${client.manager}`
-            : null,
-          client.status && client.status !== "—"
-            ? `статус ${client.status}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      })),
+      label: PORTAL_INTAKE_SOURCE_LABEL,
+      count: cases.length,
+      source: "portal_intake",
+      spreadsheetEnv: "n/a (Supabase client_portal_questionnaires)",
+      gidEnv: "n/a",
+      samples: cases.slice(0, 3).map((record, index) => {
+        const staff = readStaffFields(record.answers);
+        const process = readProcessStatus(record.answers, record.status);
+        return {
+          rowIndex: index + 1,
+          name: portalIntakeDisplayName(record),
+          details: [
+            process?.value ? `статус ${process.value}` : null,
+            staff.curator ? `куратор ${staff.curator}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      }),
     },
     newClientsTable: {
-      label: "Новые клиенты",
-      count: formgrid.rows.length,
-      source: formgrid.source,
-      spreadsheetEnv: "GOOGLE_SHEETS_FORMGRID_SPREADSHEET_ID",
-      gidEnv: "GOOGLE_SHEETS_FORMGRID_GID",
-      samples: formgrid.rows.slice(0, 3).map((row, index) => ({
-        rowIndex: index + 2,
-        name: getFormgridClientName(formgrid.headers, row),
-        details: formatFormgridRowSummary(formgrid.headers, row),
-      })),
+      label: "Formgrid / Новые клиенты (отключено)",
+      count: 0,
+      source: "disabled",
+      spreadsheetEnv: "disabled",
+      gidEnv: "disabled",
+      samples: [],
     },
   };
 }

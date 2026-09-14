@@ -1,3 +1,4 @@
+import { rethrowMirrorError } from "@/lib/ai-data/failure";
 import { streamTask } from "@/lib/ai/stream-task";
 import { AiCompletionError } from "@/lib/ai/errors";
 import { throwIfAiAborted } from "@/lib/ai/request-scope";
@@ -43,7 +44,6 @@ import {
   detectRequestedClientFactField,
   extractClientNameHintFromFactQuery,
   formatStructuredClientFactReply,
-  readClientFactFromClientRecord,
   readClientFactFromCrmContext,
 } from "@/lib/ai/client-fact-lookup";
 import {
@@ -141,13 +141,12 @@ import {
   emigrantDeskClientToContextSlice,
   findEmigrantDeskClientByQuery,
 } from "@/lib/emigrant-desk/clients";
+import { parseRecentDaysFromQuery } from "@/lib/google-sheets/formgrid-dates";
 import {
-  formatFormgridRowSummary,
-  listFormgridRowsSince,
-  parseRecentDaysFromQuery,
-} from "@/lib/google-sheets/formgrid-dates";
-import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
-import { listClients } from "@/lib/google-sheets/service";
+  listPortalIntakeCasesForAi,
+  portalCaseToContext,
+  portalIntakeDisplayName,
+} from "@/lib/ai/portal-intake-clients";
 
 export type { WorkspaceResponseMode } from "@/lib/ai/workspace-config";
 
@@ -443,7 +442,7 @@ function buildPassportLookupDirectResult(reply: string) {
   return {
     kind: "direct" as const,
     reply,
-    sources: ["Клиенты"],
+    sources: ["Заявки портала Emigrant"],
     pendingClientCandidates: [] as ClientContext[],
     needsClientSelection: false,
     groundingBlocked: false,
@@ -512,7 +511,7 @@ function listSourcesFromClients(clients: ResolvedClientContext[]): string[] {
       labels.add(client.sourceLabel);
     }
   }
-  if (labels.size === 0) return ["Клиенты", "Новые клиенты"];
+  if (labels.size === 0) return ["Заявки портала Emigrant"];
   return [...labels];
 }
 
@@ -659,7 +658,7 @@ async function prepareWorkspaceRequest(
     return {
       kind: "direct",
       reply: redactSensitiveText(debugReply),
-      sources: ["Клиенты", "Новые клиенты"],
+      sources: ["Заявки портала Emigrant"],
       requestId,
       trace,
     };
@@ -818,6 +817,7 @@ async function prepareWorkspaceRequest(
         }
       }
     } catch (error) {
+      rethrowMirrorError(error);
       console.error(`[workspace-ai][${requestId}] client search failed`, error);
       trace.notes.push("CLIENT_SEARCH_ERROR");
     }
@@ -878,7 +878,7 @@ async function prepareWorkspaceRequest(
     return {
       kind: "direct",
       reply: structuredFact,
-      sources: ["Клиенты"],
+      sources: ["Заявки портала Emigrant"],
       requestId,
       trace,
     };
@@ -1008,6 +1008,7 @@ async function prepareWorkspaceRequest(
   try {
     context = await buildWorkspaceContext(trimmed, intent);
   } catch (error) {
+      rethrowMirrorError(error);
     console.error(`[workspace-ai][${requestId}] context build failed`, error);
     context = emptyContextBundle();
     trace.fallbackActivated = true;
@@ -1069,6 +1070,7 @@ async function prepareWorkspaceRequest(
         deskSlice = emigrantDeskClientToContextSlice(deskClient);
       }
     } catch (error) {
+      rethrowMirrorError(error);
       console.error(
         `[workspace-ai][${requestId}] desk lookup for client context failed`,
         error,
@@ -1090,6 +1092,7 @@ async function prepareWorkspaceRequest(
         );
       }
     } catch (error) {
+      rethrowMirrorError(error);
       console.error(`[workspace-ai][${requestId}] web search failed`, error);
       trace.notes.push("web_search_error");
     }
@@ -1420,7 +1423,7 @@ async function executeAgentPrepared(params: {
     const sources =
       loop.finalSourceSet.length > 0
         ? loop.finalSourceSet.map((tag) =>
-            tag === "KB" ? "Knowledge Base" : "Клиенты",
+            tag === "KB" ? "Knowledge Base" : "Заявки портала Emigrant",
           )
         : ["Агент"];
 
@@ -1437,6 +1440,7 @@ async function executeAgentPrepared(params: {
       statusEvents: loop.statusEvents,
     };
   } catch (error) {
+      rethrowMirrorError(error);
     console.error(
       `[workspace-ai][${prepared.requestId}] agent loop failed`,
       error,
@@ -1907,24 +1911,31 @@ async function tryDirectFormgridRecentAnswer(
   if (days === null) return null;
   if (!/анкет|formgrid|заявк|новые\s+клиент/i.test(message)) return null;
 
-  const table = await getFormgridLeadsTable();
-  if (table.rows.length === 0) return null;
+  const cases = await listPortalIntakeCasesForAi();
+  if (cases.length === 0) return null;
 
   const since = new Date();
   since.setHours(0, 0, 0, 0);
   since.setDate(since.getDate() - days);
+  const sinceMs = since.getTime();
 
-  const recent = listFormgridRowsSince(table.headers, table.rows, since);
+  const recent = cases.filter((record) => {
+    const raw = record.submittedAt || record.createdAt;
+    if (!raw) return false;
+    const ts = Date.parse(raw);
+    return Number.isFinite(ts) && ts >= sinceMs;
+  });
+
   if (recent.length === 0) {
-    return `За последние **${days}** дн. в анкете Formgrid новых заявок нет.`;
+    return `За последние **${days}** дн. в заявках портала Emigrant новых заявок нет.`;
   }
 
-  const lines = recent.map((row) =>
-    `- ${formatFormgridRowSummary(table.headers, row)}`,
-  );
+  const lines = recent
+    .slice(0, 40)
+    .map((record) => `- ${portalIntakeDisplayName(record)}`);
 
   return [
-    `За последние **${days}** дн. в анкете Formgrid — **${recent.length}** заявок:`,
+    `За последние **${days}** дн. в заявках портала Emigrant — **${recent.length}** заявок:`,
     ...lines,
   ].join("\n");
 }
@@ -1958,23 +1969,20 @@ async function tryDirectPassportAnswer(message: string): Promise<string | null> 
   const tokens = extractPersonNameTokens(message);
   if (tokens.length === 0) return null;
 
-  const { items } = await listClients(1, 500);
-  const client = items.find((entry) => {
-    const nameLower = entry.name.toLowerCase();
+  const cases = await listPortalIntakeCasesForAi();
+  const record = cases.find((entry) => {
+    const nameLower = portalIntakeDisplayName(entry).toLowerCase();
     return tokens.every((token) => nameLower.includes(token.toLowerCase()));
   });
-  if (!client) return null;
+  if (!record) return null;
 
-  const passport = client.passportNumber?.trim();
+  const ctx = portalCaseToContext(record, 100);
+  const passport = ctx.debugRow.passport?.trim();
   if (passport && passport !== "—" && looksLikePassportNumber(passport)) {
-    return formatPassportLookupReply(
-      client.name,
-      passport,
-      client.rowIndex,
-    );
+    return formatPassportLookupReply(ctx.name, passport, 0);
   }
 
-  return formatPassportMissingReply(client.name, client.rowIndex);
+  return formatPassportMissingReply(ctx.name, 0);
 }
 
 async function resolveStructuredClientFactReply(
@@ -2026,28 +2034,28 @@ async function resolveStructuredClientFactReply(
     }
   }
 
-  // Authoritative CRM pass: unique surname match only (never silent pick).
+  // Authoritative portal pass: unique surname match only (never silent pick).
   if (hint) {
-    const { items } = await listClients(1, 500);
-    const matches = items.filter((client) =>
-      clientFactSurnameMatches(client.name, hint),
+    const cases = await listPortalIntakeCasesForAi();
+    const matches = cases.filter((record) =>
+      clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
     );
     if (matches.length === 1) {
-      const client = matches[0];
-      const fact = readClientFactFromClientRecord(client, fieldId);
+      const ctx = portalCaseToContext(matches[0], 100);
+      const fact = readClientFactFromCrmContext(ctx, fieldId);
       return formatStructuredClientFactReply({
-        clientName: client.name,
+        clientName: ctx.name,
         fieldId,
         value: fact.value,
         present: fact.present,
-        rowIndex: client.rowIndex,
+        rowIndex: 0,
       });
     }
     // Still ambiguous after surname filter — do not invent a pick.
     if (matches.length > 1) return null;
   }
 
-  // No unique CRM row: if we had a single resolved CRM client, report empty honestly.
+  // No unique row: if we had a single resolved portal client, report empty honestly.
   if (fromResolved) {
     const crm = crmPartFromResolved(fromResolved);
     if (crm) {

@@ -6,8 +6,6 @@ import {
   redactForLogging,
 } from "@/lib/ai/context-redaction";
 import {
-  crmClientToContext,
-  formgridRowToContext,
   isMergedClientContext,
   type ClientContext,
   type ClientDebugScanHit,
@@ -24,7 +22,6 @@ import {
 } from "@/lib/ai/client-entity-extract";
 import {
   buildClientSearchQuery,
-  buildNormalizedNameFields,
   extractLeadingCandidateName,
   scoreClientRecord,
   SCORE_AUTO,
@@ -32,7 +29,6 @@ import {
   SCORE_MIN,
   SCORE_STRONG,
   SCORE_VIABLE,
-  type SearchField,
 } from "@/lib/ai/client-search";
 import {
   analyzeClientSearchIntent,
@@ -50,9 +46,12 @@ import {
   getRecentClientSearches,
   recordClientSearch,
 } from "@/lib/ai/client-search-history";
-import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
-import { listAllClients } from "@/lib/google-sheets/service";
-import type { Client } from "@/lib/google-sheets/types";
+import {
+  listPortalIntakeCasesForAi,
+  portalCaseToContext,
+  portalCaseToSearchFields,
+  PORTAL_INTAKE_SOURCE_LABEL,
+} from "@/lib/ai/portal-intake-clients";
 
 const DEBUG_PREFIX = /^\/debug_client(?:\s+(.+))?$/iu;
 
@@ -78,101 +77,6 @@ export type SheetsConnectionHealth = {
   lastSyncedAt: string;
   configured: boolean;
 };
-
-function isEmptyField(value: string | undefined): boolean {
-  return !value || value === "—";
-}
-
-function pushField(
-  fields: SearchField[],
-  label: string,
-  value: string | undefined,
-  category: SearchField["category"],
-): void {
-  if (isEmptyField(value)) return;
-  fields.push({ label, value: value!.trim(), category });
-}
-
-function appendNormalizedNameFields(
-  fields: SearchField[],
-  ...names: Array<string | undefined>
-): void {
-  for (const name of names) {
-    if (!name || name === "—") continue;
-    fields.push(...buildNormalizedNameFields(name));
-  }
-}
-
-function crmClientToSearchFields(client: Client): SearchField[] {
-  const fields: SearchField[] = [];
-  pushField(fields, "ФИО / фамилия", client.name, "name");
-  appendNormalizedNameFields(fields, client.name);
-  if (client.citizenship && client.citizenship !== "—") {
-    pushField(fields, "латиница", client.citizenship, "name");
-    pushField(fields, "ФИО (латиница)", client.citizenship, "name");
-    appendNormalizedNameFields(fields, client.citizenship);
-  }
-  pushField(fields, "партнер от кого клиент", client.partnerName, "other");
-  pushField(fields, "договор", client.contract, "other");
-  pushField(fields, "телефон", client.phone, "phone");
-  pushField(fields, "email", client.email, "email");
-  pushField(fields, "паспорт", client.passportNumber, "other");
-  pushField(fields, "менеджер", client.manager, "other");
-  pushField(fields, "заметки", client.notes, "notes");
-  pushField(fields, "адрес букинга", client.bookingAddress, "other");
-  pushField(fields, "даты букинга", client.bookingRange, "other");
-  pushField(fields, "страна", client.country, "other");
-  pushField(fields, "направление", client.direction, "other");
-  pushField(fields, "статус", client.status, "other");
-  return fields;
-}
-
-function formgridRowToSearchFields(headers: string[], row: string[]): SearchField[] {
-  const fields: SearchField[] = [];
-  const nameValues: string[] = [];
-
-  headers.forEach((header, index) => {
-    const value = (row[index] ?? "").trim();
-    if (!header || !value) return;
-
-    let category: SearchField["category"] = "other";
-    if (/фио|name|имя|фамил|surname|first|last/i.test(header)) {
-      category = "name";
-      nameValues.push(value);
-    } else if (/телефон|phone|whatsapp|telegram|тел\./i.test(header)) {
-      category = "phone";
-    } else if (/email|почта|e-mail|электронн|mail/i.test(header)) {
-      category = "email";
-    } else if (/коммент|замет|note|comment/i.test(header)) {
-      category = "notes";
-    }
-
-    fields.push({ label: header, value, category });
-  });
-
-  appendNormalizedNameFields(fields, ...nameValues);
-  return fields;
-}
-
-function buildCrmRawRow(client: Client): Record<string, string> {
-  return {
-    name: client.name,
-    latinName: client.citizenship !== "—" ? client.citizenship : "",
-    partner: client.partnerName ?? "",
-    contract: client.contract ?? "",
-    passport: client.passportNumber ?? "",
-    submittedAt: client.submittedAt ?? "",
-    expectedApprovalAt: client.expectedApprovalAt ?? "",
-    referentName: client.referentName ?? "",
-    bookingAddress: client.bookingAddress ?? "",
-    bookingRange: client.bookingRange ?? "",
-    approvalAt: client.approvalAt ?? "",
-    notes: client.notes ?? "",
-    residenceCardIssuedAt: client.residenceCardIssuedAt ?? "",
-    manager: client.manager ?? "",
-    status: client.status ?? "",
-  };
-}
 
 function pickBestMatches(
   matches: ClientContext[],
@@ -459,36 +363,16 @@ async function collectClientMatches(
   const searchQuery = buildClientSearchQuery(query);
   const matches: ClientContext[] = [];
 
-  const { items: crmClients } = await listAllClients();
-  for (const client of crmClients) {
-    const fields = crmClientToSearchFields(client);
+  const cases = await listPortalIntakeCasesForAi();
+  for (const record of cases) {
+    const fields = portalCaseToSearchFields(record);
     const { score, matchedFields } = scoreClientRecord(searchQuery, fields);
     if (score >= minScore) {
-      const ctx = crmClientToContext(client, score, matchedFields);
-      ctx.debugRow = redactDebugRow({
-        ...buildCrmRawRow(client),
-        ...ctx.debugRow,
-      });
+      const ctx = portalCaseToContext(record, score, matchedFields);
+      ctx.debugRow = redactDebugRow(ctx.debugRow);
       matches.push(ctx);
     }
   }
-
-  const formgrid = await getFormgridLeadsTable();
-  formgrid.rows.forEach((row, index) => {
-    const fields = formgridRowToSearchFields(formgrid.headers, row);
-    const { score, matchedFields } = scoreClientRecord(searchQuery, fields);
-    if (score >= minScore) {
-      matches.push(
-        formgridRowToContext(
-          formgrid.headers,
-          row,
-          index,
-          score,
-          matchedFields,
-        ),
-      );
-    }
-  });
 
   return matches.sort((a, b) => b.score - a.score);
 }
@@ -502,17 +386,17 @@ export async function scanRawRowsForTokens(
   const hits: ClientDebugScanHit[] = [];
   const tokenLower = tokens.map((t) => t.toLowerCase());
 
-  const { items: crmClients } = await listAllClients();
-  for (const client of crmClients) {
-    const raw = buildCrmRawRow(client);
-    for (const [column, value] of Object.entries(raw)) {
+  const cases = await listPortalIntakeCasesForAi({ includeArchived: true });
+  for (const record of cases) {
+    const ctx = portalCaseToContext(record, 0);
+    for (const [column, value] of Object.entries(ctx.debugRow)) {
       if (isSensitiveFieldKey(column)) continue;
       const hay = value.toLowerCase();
       for (const token of tokenLower) {
         if (hay.includes(token)) {
           hits.push({
-            source: "Клиенты",
-            rowIndex: client.rowIndex ?? 0,
+            source: PORTAL_INTAKE_SOURCE_LABEL,
+            rowIndex: 0,
             column,
             value,
             matchedToken: token,
@@ -521,26 +405,6 @@ export async function scanRawRowsForTokens(
       }
     }
   }
-
-  const formgrid = await getFormgridLeadsTable();
-  formgrid.rows.forEach((row, index) => {
-    formgrid.headers.forEach((header, colIndex) => {
-      const value = (row[colIndex] ?? "").trim();
-      if (!value || isSensitiveFieldKey(header)) return;
-      const hay = value.toLowerCase();
-      for (const token of tokenLower) {
-        if (hay.includes(token)) {
-          hits.push({
-            source: "Новые клиенты",
-            rowIndex: index + 2,
-            column: header || `col ${colIndex}`,
-            value,
-            matchedToken: token,
-          });
-        }
-      }
-    });
-  });
 
   return hits;
 }
@@ -619,17 +483,14 @@ export async function lookupClientsInSheets(
 
 export async function getSheetsConnectionHealth(): Promise<SheetsConnectionHealth> {
   const syncedAt = new Date().toISOString();
-  const [{ items, source: clientsSource }, formgrid] = await Promise.all([
-    listAllClients(),
-    getFormgridLeadsTable(),
-  ]);
+  const cases = await listPortalIntakeCasesForAi();
 
   return {
-    clientsCount: items.length,
-    newClientsCount: formgrid.rows.length,
-    clientsSource,
-    newClientsSource: formgrid.source,
+    clientsCount: cases.length,
+    newClientsCount: 0,
+    clientsSource: "portal_intake",
+    newClientsSource: "disabled",
     lastSyncedAt: syncedAt,
-    configured: clientsSource === "google_sheets",
+    configured: true,
   };
 }

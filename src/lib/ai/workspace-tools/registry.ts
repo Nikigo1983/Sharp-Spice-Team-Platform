@@ -27,7 +27,7 @@ export const WORKSPACE_TOOL_REGISTRY: Record<
   search_clients: {
     name: "search_clients",
     description:
-      "Search CRM clients by name (RU morphology), email, or passport. Returns safe match summaries. If multiple credible matches, ambiguous=true — ask the user; do not pick silently.",
+      "Search portal intake cases (Заявки Emigrant) by name, email, or passport. Returns safe match summaries. If multiple credible matches, ambiguous=true — ask the user; do not pick silently.",
     parameters: SEARCH_CLIENTS_PARAMETERS as unknown as Record<string, unknown>,
     uiStatusLabel: "Ищу клиента…",
     execute: executeSearchClients,
@@ -35,7 +35,7 @@ export const WORKSPACE_TOOL_REGISTRY: Record<
   get_client: {
     name: "get_client",
     description:
-      "Load a safe canonical CRM client record by clientId from search_clients. Never returns passwords or secrets.",
+      "Load a safe portal intake client record by clientId from search_clients. Never returns passwords or secrets.",
     parameters: GET_CLIENT_PARAMETERS as unknown as Record<string, unknown>,
     uiStatusLabel: "Получаю данные клиента…",
     execute: executeGetClient,

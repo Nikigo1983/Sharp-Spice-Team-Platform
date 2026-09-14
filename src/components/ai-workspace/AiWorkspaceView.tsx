@@ -52,9 +52,9 @@ const PRESETS = [
 
     icon: "fa-clipboard-list",
 
-    label: "Анкеты Formgrid",
+    label: "Заявки портала",
 
-    text: "Покажи последние заявки из анкеты Formgrid",
+    text: "Покажи последние заявки из клиентского портала Emigrant",
 
   },
 
@@ -132,7 +132,7 @@ const PRESETS = [
 
 
 
-const DEFAULT_SOURCES = ["Knowledge Base", "Клиенты", "Formgrid"];
+const DEFAULT_SOURCES = ["Knowledge Base", "Заявки портала Emigrant"];
 
 const RESPONSE_MODES: {
   id: WorkspaceResponseMode;
@@ -951,7 +951,7 @@ export function AiWorkspaceView() {
 
               </h2>
 
-              <p className={styles.panelSubtitle}>KB · Клиенты · Formgrid</p>
+              <p className={styles.panelSubtitle}>KB · Заявки портала Emigrant</p>
 
             </div>
 
@@ -1099,7 +1099,7 @@ export function AiWorkspaceView() {
 
                 <p className={styles.welcomeText}>
 
-                  Клиенты — только из Google Sheets. Для отладки:{" "}
+                  Клиенты — только из заявок портала Emigrant. Для отладки:{" "}
                   <code>/debug_client Фамилия</code>
 
                 </p>

@@ -55,6 +55,9 @@ const SHEET_FIELD_PRIORITY: Record<
 };
 
 const CRM_TABLE_FIELD_KEYS: Array<{ keys: string[]; label: string }> = [
+  { keys: ["passport", "номер паспорта", "паспорт"], label: "Номер паспорта" },
+  { keys: ["latinName", "латиница"], label: "Латиница" },
+  { keys: ["citizenship", "гражданство"], label: "Гражданство" },
   { keys: ["submittedAt", "дата подачи"], label: "Дата подачи" },
   {
     keys: ["expectedApprovalAt", "предполагаемое одобрение"],
@@ -71,6 +74,7 @@ const CRM_TABLE_FIELD_KEYS: Array<{ keys: string[]; label: string }> = [
     keys: ["bookingRange", "даты букинга", "дата букинга"],
     label: "Дата букинга (от и до)",
   },
+  { keys: ["employmentType", "тип занятости"], label: "ТИП ЗАНЯТОСТИ" },
   { keys: ["notes", "заметки"], label: "Заметки" },
 ];
 
@@ -222,7 +226,7 @@ export function resolveClientContextAttribution(
     const passport = extractPassportFromClientRecord(crmPart);
     if (passport.raw) {
       fields.push({
-        label: "Паспорт",
+        label: "Номер паспорта",
         value: passport.raw,
         source: "Заявки портала",
       });

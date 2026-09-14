@@ -102,6 +102,7 @@ export type SafeClientRecord = {
   clientId: string;
   name: string | null;
   latinName: string | null;
+  passport: string | null;
   email: string | null;
   phone: string | null;
   status: string | null;
@@ -118,6 +119,9 @@ export type SafeClientRecord = {
   citizenship: string | null;
   hasContract: boolean | null;
   contractLabel: string | null;
+  employmentType: string | null;
+  /** Full questionnaire positions for the model (label + value). */
+  fields: Array<{ label: string; value: string | null; empty: boolean }>;
   source: string;
 };
 
@@ -133,10 +137,118 @@ export function projectSafeFromResolved(
   const notes =
     notesRaw == null ? null : truncateChars(notesRaw, 1500).text;
   const contract = display(row.contract);
+  const passport = display(row.passport);
+  const fieldLines = (client.surveyData || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "));
+  const fieldsFromSurvey = fieldLines
+    .map((line) => {
+      const body = line.slice(2);
+      const sep = body.indexOf(":");
+      if (sep < 0) return null;
+      const label = body.slice(0, sep).trim();
+      const raw = body.slice(sep + 1).trim();
+      const empty = !raw || raw === "[не заполнено]";
+      return {
+        label,
+        value: empty ? null : raw,
+        empty,
+      };
+    })
+    .filter(Boolean) as Array<{
+    label: string;
+    value: string | null;
+    empty: boolean;
+  }>;
+
+  const fields =
+    fieldsFromSurvey.length > 0
+      ? fieldsFromSurvey
+      : [
+          { label: "Фамилия", value: display(client.name), empty: !display(client.name) },
+          {
+            label: "Латиница",
+            value: display(row.latinName),
+            empty: !display(row.latinName),
+          },
+          {
+            label: "Номер паспорта",
+            value: passport,
+            empty: passport == null,
+          },
+          {
+            label: "электронная почта",
+            value: display(client.email),
+            empty: !display(client.email),
+          },
+          {
+            label: "Дата подачи",
+            value: display(row.submittedAt ?? client.lastActivity),
+            empty: !display(row.submittedAt ?? client.lastActivity),
+          },
+          {
+            label: "Дата предпологаемого одобрения",
+            value: display(row.expectedApprovalAt),
+            empty: !display(row.expectedApprovalAt),
+          },
+          {
+            label: "Имя референта",
+            value: display(row.referentName ?? client.manager),
+            empty: !display(row.referentName ?? client.manager),
+          },
+          {
+            label: "Адрес букинга",
+            value: display(row.bookingAddress),
+            empty: !display(row.bookingAddress),
+          },
+          {
+            label: "Дата букинга (от и до)",
+            value: display(row.bookingRange),
+            empty: !display(row.bookingRange),
+          },
+          {
+            label: "Дата одобрения ВНЖ",
+            value: display(row.approvalAt),
+            empty: !display(row.approvalAt),
+          },
+          {
+            label: "Заметки",
+            value: notes,
+            empty: notes == null,
+          },
+          {
+            label: "Дата выдачи карточки ВНЖ",
+            value: display(row.residenceCardIssuedAt),
+            empty: !display(row.residenceCardIssuedAt),
+          },
+          {
+            label: "Партнер от кого клиент",
+            value: display(row.partner),
+            empty: !display(row.partner),
+          },
+          {
+            label: "Договор",
+            value: contract,
+            empty: contract == null,
+          },
+          {
+            label: "ТИП ЗАНЯТОСТИ",
+            value: display(row.employmentType),
+            empty: !display(row.employmentType),
+          },
+          {
+            label: "Гражданство",
+            value: display(row.citizenship),
+            empty: !display(row.citizenship),
+          },
+        ];
+
   return {
     clientId,
     name: display(client.name),
     latinName: display(row.latinName),
+    passport,
     email: display(client.email),
     phone: display(client.phone),
     status: display(client.status),
@@ -154,6 +266,8 @@ export function projectSafeFromResolved(
     citizenship: display(row.citizenship),
     hasContract: contract != null,
     contractLabel: contract,
+    employmentType: display(row.employmentType),
+    fields,
     source: PORTAL_INTAKE_SOURCE_LABEL,
   };
 }
@@ -185,11 +299,15 @@ export function projectSafeClient(client: {
   const notes =
     notesRaw == null ? null : truncateChars(notesRaw, 1500).text;
   const contract = display(client.contract);
+  const latinName = display(client.citizenship);
   return {
     clientId: client.id,
     name: display(client.name),
     // Legacy Sheets «citizenship» column historically held Latin FIO.
-    latinName: display(client.citizenship),
+    latinName,
+    passport: display(
+      (client as { passportNumber?: string }).passportNumber,
+    ),
     email: display(client.email),
     phone: display(client.phone),
     status: display(client.status),
@@ -206,6 +324,29 @@ export function projectSafeClient(client: {
     citizenship: null,
     hasContract: contract != null,
     contractLabel: contract,
+    employmentType: null,
+    fields: [
+      {
+        label: "Фамилия",
+        value: display(client.name),
+        empty: !display(client.name),
+      },
+      { label: "Латиница", value: latinName, empty: latinName == null },
+      {
+        label: "Номер паспорта",
+        value: display(
+          (client as { passportNumber?: string }).passportNumber,
+        ),
+        empty: !display(
+          (client as { passportNumber?: string }).passportNumber,
+        ),
+      },
+      {
+        label: "Договор",
+        value: contract,
+        empty: contract == null,
+      },
+    ],
     source: PORTAL_INTAKE_SOURCE_LABEL,
   };
 }
@@ -473,6 +614,7 @@ export async function executeGetCaseContext(
         status: client.status,
         manager: client.manager,
         partner: client.partner,
+        passport: client.passport,
         direction: client.direction,
         submittedAt: client.submittedAt,
         bookingAddress: client.bookingAddress,
@@ -480,6 +622,9 @@ export async function executeGetCaseContext(
         approvalAt: client.approvalAt,
         residenceCardIssuedAt: client.residenceCardIssuedAt,
         expectedApprovalAt: client.expectedApprovalAt,
+        contractLabel: client.contractLabel,
+        citizenship: client.citizenship,
+        latinName: client.latinName,
       },
       notesPreview,
       documentsInventory,

@@ -35,6 +35,10 @@ import {
   answerCitizenshipFromAnswers,
   answerContractFromAnswers,
   answerLatinNameFromAnswers,
+  answerPassportFromAnswers,
+  answerSubmittedAtFromAnswers,
+  buildPortalIntakeFieldCard,
+  formatPortalIntakeFieldCardText,
 } from "@/lib/ai/portal-intake-fields";
 
 export const PORTAL_INTAKE_SOURCE_LABEL = "Заявки портала Emigrant";
@@ -92,27 +96,7 @@ function answerPhone(record: QuestionnaireRecord): string {
 }
 
 function answerPassport(record: QuestionnaireRecord): string {
-  const identity = readLegacyIdentity(record.answers);
-  if (identity?.passportNumber) return identity.passportNumber;
-  for (const key of [
-    "passport_number",
-    "passport",
-    "zagran_passport_number",
-  ]) {
-    const v = clean(record.answers[key]);
-    if (v) return v;
-  }
-  const sheet =
-    record.answers.__legacySheet || record.answers.__formgridSheet;
-  if (sheet && typeof sheet === "object" && !Array.isArray(sheet)) {
-    for (const [key, value] of Object.entries(sheet as Record<string, unknown>)) {
-      if (/паспорт|passport/i.test(key)) {
-        const v = clean(value);
-        if (v && !/^https?:\/\//i.test(v)) return v;
-      }
-    }
-  }
-  return "";
+  return answerPassportFromAnswers(record.answers);
 }
 
 function answerLatinName(record: QuestionnaireRecord): string {
@@ -157,8 +141,14 @@ function answerDirection(record: QuestionnaireRecord): string {
 }
 
 function buildSurveyText(record: QuestionnaireRecord): string {
+  const fieldCard = formatPortalIntakeFieldCardText(
+    buildPortalIntakeFieldCard(record.answers, {
+      recordStatus: record.status,
+      submittedAtFallback: record.submittedAt,
+    }),
+  );
   const rows = buildReviewRows(record.answers, "ru");
-  const lines = rows
+  const extra = rows
     .slice(0, 80)
     .map((row) => {
       const value = clean(row.value);
@@ -166,7 +156,8 @@ function buildSurveyText(record: QuestionnaireRecord): string {
       return `${row.label}: ${value}`;
     })
     .filter(Boolean);
-  return lines.join("\n");
+  if (extra.length === 0) return fieldCard;
+  return `${fieldCard}\n\nДоп. строки анкеты:\n${extra.join("\n")}`;
 }
 
 export function portalCaseToSearchFields(
@@ -271,8 +262,17 @@ export function portalCaseToContext(
       partner: staff.partner,
       contract: answerContract(record),
       passport: answerPassport(record),
-      submittedAt: record.submittedAt || "",
-      expectedApprovalAt: staff.expectedApproval,
+      submittedAt: answerSubmittedAtFromAnswers(
+        record.answers,
+        record.submittedAt,
+      ),
+      expectedApprovalAt:
+        staff.expectedApproval ||
+        clean(
+          (record.answers.__legacySheet as Record<string, string> | undefined)?.[
+            "Дата предпологаемого одобрения"
+          ],
+        ),
       referentName: staff.curator,
       bookingAddress: staff.bookingAddress,
       bookingRange: staff.bookingDate,
@@ -283,6 +283,11 @@ export function portalCaseToContext(
       status: finalStatus,
       intakeSource: sourceTag,
       company: staff.company,
+      employmentType: clean(
+        (record.answers.__legacySheet as Record<string, string> | undefined)?.[
+          "ТИП ЗАНЯТОСТИ"
+        ],
+      ),
       isLegacy: isLegacyCrmImport(record.answers) ? "1" : "0",
       isFormgridImport: isFormgridImport(record.answers) ? "1" : "0",
     },

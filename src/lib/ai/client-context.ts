@@ -275,7 +275,7 @@ export function formatWeakMatchesReply(clients: ResolvedClientContext[]): string
 }
 
 export function formatClientNotFoundReply(): string {
-  return "Клиент не найден в таблицах **Клиенты** и **Новые клиенты**.";
+  return "Клиент не найден в заявках портала Emigrant.";
 }
 
 export function formatDebugClientReply(

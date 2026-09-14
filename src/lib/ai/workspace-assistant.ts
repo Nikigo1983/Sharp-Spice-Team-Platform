@@ -274,7 +274,7 @@ function buildContextBlock(
   if (clientContext) {
     const header = isMergedClientContext(clientContext)
       ? "=== CLIENT CONTEXT (MERGED) ==="
-      : "=== CLIENT CONTEXT (Google Sheets) ===";
+      : "=== CLIENT CONTEXT (Заявки портала Emigrant) ===";
     const clientBody = formatClientContextBlock(clientContext, { desk: deskSlice });
     const titled = isMergedClientContext(clientContext)
       ? clientContext.parts.map((p) => p.name).filter(Boolean).join(" / ") ||

@@ -174,6 +174,42 @@ export function validateSearchKnowledgeBaseArgs(
   };
 }
 
+export type ListClientContractsArgs = {
+  onlyWithContract: boolean;
+  limit: number;
+};
+
+export function validateListClientContractsArgs(
+  raw: unknown,
+): SchemaValidationResult<ListClientContractsArgs> {
+  if (raw == null) {
+    return { ok: true, value: { onlyWithContract: false, limit: 100 } };
+  }
+  if (!isPlainObject(raw)) return reject("Arguments must be an object");
+  const bad = assertOnlyKeys(raw, ["onlyWithContract", "limit"]);
+  if (bad) return bad;
+  let onlyWithContract = false;
+  if ("onlyWithContract" in raw && raw.onlyWithContract != null) {
+    if (typeof raw.onlyWithContract !== "boolean") {
+      return reject("Field onlyWithContract must be a boolean");
+    }
+    onlyWithContract = raw.onlyWithContract;
+  }
+  const limit = readInteger(raw, "limit", {
+    min: 1,
+    max: 200,
+    defaultValue: 100,
+  });
+  if (!limit.ok) return limit;
+  return {
+    ok: true,
+    value: {
+      onlyWithContract,
+      limit: limit.value ?? 100,
+    },
+  };
+}
+
 /** OpenAI-compatible tool parameter schemas for registry. */
 export const SEARCH_CLIENTS_PARAMETERS = {
   type: "object",
@@ -210,6 +246,24 @@ export const GET_CLIENT_PARAMETERS = {
 } as const;
 
 export const GET_CASE_CONTEXT_PARAMETERS = GET_CLIENT_PARAMETERS;
+
+export const LIST_CLIENT_CONTRACTS_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    onlyWithContract: {
+      type: "boolean",
+      description:
+        "If true, return only clients with a Finance contract amount. Default false (all cases; empty amounts marked null).",
+    },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 200,
+      description: "Max rows to return (default 100)",
+    },
+  },
+} as const;
 
 export const SEARCH_KNOWLEDGE_BASE_PARAMETERS = {
   type: "object",

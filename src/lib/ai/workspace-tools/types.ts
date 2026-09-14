@@ -6,6 +6,7 @@ export type WorkspaceToolName =
   | "search_clients"
   | "get_client"
   | "get_case_context"
+  | "list_client_contracts"
   | "search_knowledge_base";
 
 export type WorkspaceToolErrorCode =

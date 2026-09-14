@@ -77,17 +77,23 @@ export function answerCitizenshipFromAnswers(
   return "";
 }
 
-/** Contract label from staff fields or legacy/Formgrid «Договор» column. */
+/** Contract type/name — not the money amount (see finance / Сумма договора). */
 export function answerContractFromAnswers(
   answers: Record<string, unknown>,
 ): string {
   const staff = readStaffFields(answers);
   return (
     clean(staff.contractNumber) ||
-    clean(staff.contractAmount) ||
     readSheetColumnFromAnswers(answers, "Договор", "Contract") ||
     clean(staff.company)
   );
+}
+
+/** Staff-field contract amount text (may be empty; Finance is source of truth for €). */
+export function answerStaffContractAmountFromAnswers(
+  answers: Record<string, unknown>,
+): string {
+  return clean(readStaffFields(answers).contractAmount);
 }
 
 /** Passport number from identity, answers, or sheet «Номер паспорта». */
@@ -324,6 +330,7 @@ export function buildPortalIntakeFieldCard(
     byLabel("Статус процесса", process?.value || ""),
     byLabel("Куратор", staff.curator),
     byLabel("Компания", staff.company),
+    byLabel("Сумма договора (staff)", answerStaffContractAmountFromAnswers(answers)),
   ]) {
     pushUnique(rows, seen, row);
   }
@@ -382,7 +389,8 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 - Дата подачи, Дата предпологаемого одобрения, Имя референта / Куратор.
 - Адрес букинга, Дата букинга (от и до).
 - Дата одобрения ВНЖ, Дата выдачи карточки ВНЖ.
-- Заметки, Партнер от кого клиент, Договор, ТИП ЗАНЯТОСТИ.
+- Договор — тип/название договора или контрагента (например Flant JSC), НЕ денежная сумма.
+- Сумма договора — денежная сумма из Finance (€). Для списков сумм по всем клиентам используй инструмент list_client_contracts.
 - СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ / СПРАВКА О НЕСУДИМОСТИ / ПОДПИСЬ КЛИЕНТА / медстраховка.
 - Статус процесса, Компания.
 
@@ -395,4 +403,5 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 6. Запрос «какое гражданство» = только поле «Гражданство». Адрес проживания — не гражданство и не конфликт.
 7. Запрос «какое место рождения» = только поле «Место рождения».
 8. Не выдумывай «расхождения» между разными полями, если они про разное (гражданство vs адрес).
+9. Запрос «суммы договоров по всем клиентам» — вызови list_client_contracts. Не проси менеджера прислать выгрузку, если инструмент доступен.
 `.trim();

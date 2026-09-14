@@ -45,6 +45,7 @@ export {
   executeSearchClients,
   executeGetClient,
   executeGetCaseContext,
+  executeListClientContracts,
 } from "@/lib/ai/workspace-tools/client-tools";
 
 export { executeSearchKnowledgeBase } from "@/lib/ai/workspace-tools/kb-tools";

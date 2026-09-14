@@ -21,6 +21,11 @@ import {
   portalCaseToContext,
   PORTAL_INTAKE_SOURCE_LABEL,
 } from "@/lib/ai/portal-intake-clients";
+import {
+  getPortalFinanceSnapshot,
+  listPortalFinanceSnapshots,
+} from "@/lib/ai/portal-finance-snapshot";
+import { formatEuroFromCents } from "@/lib/finance/money";
 import { readStaffDocuments } from "@/lib/client-portal/staff-case-meta";
 import {
   deepRedactToolPayload,
@@ -30,6 +35,7 @@ import {
 import {
   validateGetCaseContextArgs,
   validateGetClientArgs,
+  validateListClientContractsArgs,
   validateSearchClientsArgs,
 } from "@/lib/ai/workspace-tools/schemas";
 import type {
@@ -120,6 +126,8 @@ export type SafeClientRecord = {
   placeOfBirth: string | null;
   hasContract: boolean | null;
   contractLabel: string | null;
+  /** Finance € contract amount (authoritative money). */
+  contractAmount: string | null;
   employmentType: string | null;
   /** Full questionnaire positions for the model (label + value). */
   fields: Array<{ label: string; value: string | null; empty: boolean }>;
@@ -243,6 +251,7 @@ export function projectSafeFromResolved(
     placeOfBirth,
     hasContract: contract != null,
     contractLabel: contract,
+    contractAmount: null,
     employmentType: display(row.employmentType),
     fields,
     source: PORTAL_INTAKE_SOURCE_LABEL,
@@ -302,6 +311,7 @@ export function projectSafeClient(client: {
     placeOfBirth: null,
     hasContract: contract != null,
     contractLabel: contract,
+    contractAmount: null,
     employmentType: null,
     fields: [
       {
@@ -511,15 +521,42 @@ export async function executeGetClient(
         sourceTags: ["CLIENT"],
       });
     }
+    const finance = await getPortalFinanceSnapshot(validated.value.clientId);
+    if (finance?.contractAmount) {
+      safe.contractAmount = finance.contractAmount;
+      safe.hasContract = true;
+      if (
+        !safe.fields.some(
+          (f) => f.label === "Сумма договора" && f.value != null,
+        )
+      ) {
+        safe.fields.push({
+          label: "Сумма договора",
+          value: finance.contractAmount,
+          empty: false,
+        });
+      }
+    }
     assertNoSensitiveKeys(safe as unknown as Record<string, unknown>);
 
     return baseResult("get_client", started, {
       ok: true,
       errorCode: null,
       errorMessage: null,
-      data: { client: safe },
+      data: {
+        client: safe,
+        finance: finance
+          ? {
+              contractAmount: finance.contractAmount,
+              paidAmount: finance.paidAmount,
+              balance: finance.balance,
+              paymentStatus: finance.paymentStatus,
+              contractLabel: finance.contractLabel,
+            }
+          : null,
+      },
       resultCount: 1,
-      sourceTags: ["CLIENT"],
+      sourceTags: ["CLIENT", "FINANCE"],
     });
   } catch (error) {
     return baseResult("get_client", started, {
@@ -529,6 +566,74 @@ export async function executeGetClient(
         error instanceof Error ? error.message : "get_client failed",
       data: { error: "SOURCE_UNAVAILABLE" },
       sourceTags: ["CLIENT"],
+    });
+  }
+}
+
+export async function executeListClientContracts(
+  rawArgs: unknown,
+  _ctx: WorkspaceToolContext,
+): Promise<Omit<WorkspaceToolResult, "toolCallId" | "cacheHit">> {
+  const started = Date.now();
+  const validated = validateListClientContractsArgs(rawArgs);
+  if (!validated.ok) {
+    return baseResult("list_client_contracts", started, {
+      ok: false,
+      errorCode: validated.errorCode,
+      errorMessage: validated.message,
+      data: { error: validated.message },
+    });
+  }
+
+  try {
+    const listed = await listPortalFinanceSnapshots({
+      onlyWithContract: validated.value.onlyWithContract,
+      limit: validated.value.limit,
+    });
+    const rows = listed.items.map((row) => ({
+      clientId: row.clientId,
+      name: row.name,
+      contractAmount: row.contractAmount,
+      paidAmount: row.paidAmount,
+      balance: row.balance,
+      paymentStatus: row.paymentStatus,
+      contractLabel: row.contractLabel,
+    }));
+    const totalCents = listed.items.reduce(
+      (sum, row) => sum + (row.contractAmountCents ?? 0),
+      0,
+    );
+
+    return baseResult("list_client_contracts", started, {
+      ok: true,
+      errorCode: null,
+      errorMessage: null,
+      data: {
+        currency: "EUR",
+        source: "Finance + Заявки портала Emigrant",
+        totalCases: listed.totalCases,
+        withContract: listed.withContract,
+        withoutContract: listed.withoutContract,
+        returned: rows.length,
+        totalContractAmount:
+          listed.withContract > 0
+            ? `${(totalCents / 100).toLocaleString("ru-RU")} €`
+            : null,
+        clients: rows,
+      },
+      resultCount: rows.length,
+      sourceTags: ["CLIENT", "FINANCE"],
+    });
+  } catch (error) {
+    return baseResult("list_client_contracts", started, {
+      ok: false,
+      errorCode: "SOURCE_UNAVAILABLE",
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : "list_client_contracts failed",
+      data: { error: "SOURCE_UNAVAILABLE" },
+      sourceTags: ["FINANCE"],
     });
   }
 }
@@ -590,8 +695,23 @@ export async function executeGetCaseContext(
     const notesPreview =
       client.notes == null ? null : truncateChars(client.notes, 800).text;
 
+    const finance = await getPortalFinanceSnapshot(validated.value.clientId);
+    if (finance?.contractAmount) {
+      client.contractAmount = finance.contractAmount;
+      client.hasContract = true;
+    }
+
     let payload: Record<string, unknown> = {
       client,
+      finance: finance
+        ? {
+            contractAmount: finance.contractAmount,
+            paidAmount: finance.paidAmount,
+            balance: finance.balance,
+            paymentStatus: finance.paymentStatus,
+            contractLabel: finance.contractLabel,
+          }
+        : null,
       summary: {
         displayName: client.name,
         status: client.status,
@@ -606,6 +726,7 @@ export async function executeGetCaseContext(
         residenceCardIssuedAt: client.residenceCardIssuedAt,
         expectedApprovalAt: client.expectedApprovalAt,
         contractLabel: client.contractLabel,
+        contractAmount: client.contractAmount,
         citizenship: client.citizenship,
         placeOfBirth: client.placeOfBirth,
         latinName: client.latinName,

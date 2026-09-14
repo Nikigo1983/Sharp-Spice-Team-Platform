@@ -5,12 +5,14 @@
 import {
   executeGetCaseContext,
   executeGetClient,
+  executeListClientContracts,
   executeSearchClients,
 } from "@/lib/ai/workspace-tools/client-tools";
 import { executeSearchKnowledgeBase } from "@/lib/ai/workspace-tools/kb-tools";
 import {
   GET_CASE_CONTEXT_PARAMETERS,
   GET_CLIENT_PARAMETERS,
+  LIST_CLIENT_CONTRACTS_PARAMETERS,
   SEARCH_CLIENTS_PARAMETERS,
   SEARCH_KNOWLEDGE_BASE_PARAMETERS,
 } from "@/lib/ai/workspace-tools/schemas";
@@ -35,7 +37,7 @@ export const WORKSPACE_TOOL_REGISTRY: Record<
   get_client: {
     name: "get_client",
     description:
-      "Load a safe portal intake client record by clientId from search_clients. Never returns passwords or secrets.",
+      "Load a safe portal intake client record by clientId from search_clients, including Finance contract amount when set. Never returns passwords or secrets.",
     parameters: GET_CLIENT_PARAMETERS as unknown as Record<string, unknown>,
     uiStatusLabel: "Получаю данные клиента…",
     execute: executeGetClient,
@@ -43,13 +45,24 @@ export const WORKSPACE_TOOL_REGISTRY: Record<
   get_case_context: {
     name: "get_case_context",
     description:
-      "Bounded case summary for a clientId: safe CRM fields, dates, notes preview, Sheets document inventory metadata only. Does not dump Drive/KB bodies.",
+      "Bounded case summary for a clientId: portal fields, Finance contract amount, notes preview. Does not dump Drive/KB bodies.",
     parameters: GET_CASE_CONTEXT_PARAMETERS as unknown as Record<
       string,
       unknown
     >,
     uiStatusLabel: "Проверяю дело клиента…",
     execute: executeGetCaseContext,
+  },
+  list_client_contracts: {
+    name: "list_client_contracts",
+    description:
+      "List contract amounts (€) for portal Emigrant cases from Finance. Use for «суммы договоров по всем клиентам», totals, who has/doesn't have a contract amount. Returns name, contractAmount, paid, balance.",
+    parameters: LIST_CLIENT_CONTRACTS_PARAMETERS as unknown as Record<
+      string,
+      unknown
+    >,
+    uiStatusLabel: "Собираю суммы договоров…",
+    execute: executeListClientContracts,
   },
   search_knowledge_base: {
     name: "search_knowledge_base",

@@ -8,6 +8,7 @@ import {
   getPortalIntakeCaseById,
   listPortalIntakeCasesForAi,
   portalIntakeDisplayName,
+  portalIntakeEmail,
 } from "@/lib/ai/portal-intake-clients";
 import { answerContractFromAnswers } from "@/lib/ai/portal-intake-fields";
 import { calculateClientFinance } from "@/lib/finance/calculations";
@@ -77,7 +78,7 @@ export function snapshotFromRecord(
   return {
     clientId: record.id,
     name: portalIntakeDisplayName(record),
-    email: record.email,
+    email: portalIntakeEmail(record),
     contractAmount:
       summary.contractAmountCents != null
         ? formatEuroFromCents(summary.contractAmountCents, "ru")

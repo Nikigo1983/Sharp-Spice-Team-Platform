@@ -596,6 +596,7 @@ export async function executeListClientContracts(
     const rows = listed.items.map((row) => ({
       clientId: row.clientId,
       name: row.name,
+      email: row.email?.trim() || null,
       contractAmount: displayContractAmount(row.contractAmount),
       paidAmount: row.paidAmount,
       balance: row.balance,

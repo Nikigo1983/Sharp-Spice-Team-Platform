@@ -22,20 +22,43 @@ export function isFinancePaymentDebtQuery(query: string): boolean {
   );
 }
 
+/** Ask for emails / contacts of debtors. */
+export function wantsDebtorEmails(query: string): boolean {
+  const lower = query.toLowerCase();
+  return (
+    /e-?mail|емейл|имейл|почт|написать|связ/i.test(lower) &&
+    isFinancePaymentDebtQuery(query)
+  );
+}
+
 export type FinanceDebtorRow = {
   name: string;
+  email: string | null;
   balance: string | null;
   contractAmount: string | null;
   paidAmount: string | null;
 };
+
+function displayEmail(email: string | null | undefined): string {
+  const trimmed = email?.trim() ?? "";
+  return trimmed || "email не указан в заявке";
+}
 
 export function formatFinanceDebtorsListReply(params: {
   debtors: FinanceDebtorRow[];
   totalCases: number;
   withContract: number;
   withoutContract: number;
+  /** Lead with emails (for «какие емейлы у должников»). */
+  focusEmails?: boolean;
 }): string {
-  const { debtors, totalCases, withContract, withoutContract } = params;
+  const {
+    debtors,
+    totalCases,
+    withContract,
+    withoutContract,
+    focusEmails = false,
+  } = params;
 
   if (withContract === 0) {
     return (
@@ -53,15 +76,25 @@ export function formatFinanceDebtorsListReply(params: {
     );
   }
 
+  const withEmail = debtors.filter((row) => Boolean(row.email?.trim())).length;
+
   const lines = debtors.map((row, index) => {
+    const email = displayEmail(row.email);
     const balance = row.balance ?? "—";
     const contract = row.contractAmount ?? NO_CONTRACT_YET_LABEL;
     const paid = row.paidAmount ?? "0 €";
-    return `${index + 1}. ${row.name} — долг ${balance} (договор ${contract}, оплачено ${paid})`;
+    if (focusEmails) {
+      return `${index + 1}. ${row.name} — ${email} — долг ${balance}`;
+    }
+    return `${index + 1}. ${row.name} — ${email} — долг ${balance} (договор ${contract}, оплачено ${paid})`;
   });
 
+  const header = focusEmails
+    ? `Email должников по оплате (${debtors.length}, из них с email: ${withEmail}). Источник: Finance + Заявки портала Emigrant.`
+    : `Найдено ${debtors.length} должник(ов) по оплате (Finance, баланс > 0). Источник: Finance + Заявки портала Emigrant.`;
+
   return [
-    `Найдено ${debtors.length} должник(ов) по оплате (Finance, баланс > 0). Источник: Finance + Заявки портала Emigrant.`,
+    header,
     "",
     ...lines,
     "",

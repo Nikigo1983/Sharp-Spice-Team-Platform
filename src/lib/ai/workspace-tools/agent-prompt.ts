@@ -24,7 +24,7 @@ export const WORKSPACE_AGENT_SYSTEM_ADDON = `
 15. Для сумм договоров по всем / списку клиентов вызывай list_client_contracts (Finance €). Не говори, что выгрузка недоступна, и не проси менеджера прислать файл.
 16. Поле «Договор» / contractLabel — тип/название; денежная сумма — contractAmount из Finance.
 17. Если contractAmount = «пока нет договора» или null — пиши менеджеру «пока нет договора». Запрещено писать, что пустое значение «не означает отсутствие договора».
-18. «Кто должник / должник по оплате / кто должен» — list_client_contracts с onlyWithDebt=true (Finance баланс > 0). Это НЕ статус заявки портала.
+18. «Кто должник / должник по оплате / кто должен» — list_client_contracts с onlyWithDebt=true (Finance баланс > 0). Это НЕ статус заявки портала. В ответе указывай email из clients[].email.
 `.trim();
 
 export function buildWorkspaceAgentMessages(params: {

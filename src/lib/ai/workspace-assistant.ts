@@ -87,6 +87,7 @@ import {
 import {
   formatFinanceDebtorsListReply,
   isFinancePaymentDebtQuery,
+  wantsDebtorEmails,
 } from "@/lib/ai/finance-debt-query";
 import { listPortalFinanceSnapshots } from "@/lib/ai/portal-finance-snapshot";
 import {
@@ -705,16 +706,23 @@ async function prepareWorkspaceRequest(
         limit: 100,
       });
       const reply = formatFinanceDebtorsListReply({
-        debtors: listed.items,
+        debtors: listed.items.map((row) => ({
+          name: row.name,
+          email: row.email?.trim() || null,
+          balance: row.balance,
+          contractAmount: row.contractAmount,
+          paidAmount: row.paidAmount,
+        })),
         totalCases: listed.totalCases,
         withContract: listed.withContract,
         withoutContract: listed.withoutContract,
+        focusEmails: wantsDebtorEmails(trimmed),
       });
       trace.selectedRoutes = ["finance_debtors_direct"];
       trace.responseOk = true;
       trace.latencyMs.prepare = Date.now() - started;
       trace.notes.push(
-        `finance_debtors=${listed.items.length};with_contract=${listed.withContract}`,
+        `finance_debtors=${listed.items.length};with_contract=${listed.withContract};emails=${wantsDebtorEmails(trimmed) ? "focus" : "inline"}`,
       );
       logWorkspaceAiTrace(trace);
       return {

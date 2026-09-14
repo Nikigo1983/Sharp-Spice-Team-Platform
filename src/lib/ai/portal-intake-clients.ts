@@ -121,6 +121,11 @@ function answerEmail(record: QuestionnaireRecord): string {
   return record.email;
 }
 
+/** Best-effort contact email from portal intake (legacy / contact / invite). */
+export function portalIntakeEmail(record: QuestionnaireRecord): string {
+  return answerEmail(record);
+}
+
 function answerNotes(record: QuestionnaireRecord): string {
   const staffNotes = readStaffNotes(record.answers);
   const staffText = staffNotes

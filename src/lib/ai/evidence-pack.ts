@@ -437,3 +437,72 @@ export function evidencePackSafeInspect(pack: EvidencePack): Record<string, unkn
     highSensitivityCheck: assertNoHighSensitivityInPack(pack),
   };
 }
+
+/** Phase 2.1 assembly outcome (privacy-safe metadata only). */
+export type EvidencePackAssemblyOutcome =
+  | "NOT_REQUIRED"
+  | "SUCCESS"
+  | "FAILED"
+  | "SKIPPED";
+
+/**
+ * Migrated single-client generative path invariant:
+ * BROAD_CLIENT_CONTEXT_ALLOWED = false.
+ * EvidencePack failure must not compensate with broader client records.
+ */
+export function isMigratedClientModelPath(params: {
+  hasClientRef: boolean;
+  modelRequired: boolean;
+  requiredProjectionCount: number;
+}): boolean {
+  return (
+    params.hasClientRef &&
+    params.modelRequired &&
+    params.requiredProjectionCount > 0
+  );
+}
+
+/**
+ * What client payload may reach Astra on a (possibly migrated) turn.
+ * Never returns broad client context when migratedClientModelPath is true.
+ */
+export function selectClientModelIngress(params: {
+  migratedClientModelPath: boolean;
+  evidencePackText: string | null;
+}): {
+  evidencePackText: string | null;
+  /** Always null on migrated paths — broad CLIENT CONTEXT forbidden. */
+  allowBroadClientContext: boolean;
+  broadClientFallbackToModel: boolean;
+  mustFailSafe: boolean;
+} {
+  if (!params.migratedClientModelPath) {
+    return {
+      evidencePackText: params.evidencePackText,
+      allowBroadClientContext: !params.evidencePackText,
+      broadClientFallbackToModel: false,
+      mustFailSafe: false,
+    };
+  }
+  if (params.evidencePackText) {
+    return {
+      evidencePackText: params.evidencePackText,
+      allowBroadClientContext: false,
+      broadClientFallbackToModel: false,
+      mustFailSafe: false,
+    };
+  }
+  return {
+    evidencePackText: null,
+    allowBroadClientContext: false,
+    broadClientFallbackToModel: false,
+    mustFailSafe: true,
+  };
+}
+
+/** Typed failure code when EvidencePack cannot be assembled for a migrated path. */
+export function evidencePackFailureCode(kind: "null_pack" | "throw"):
+  | "SOURCE_UNAVAILABLE"
+  | "INTERNAL_AI_ERROR" {
+  return kind === "throw" ? "INTERNAL_AI_ERROR" : "SOURCE_UNAVAILABLE";
+}

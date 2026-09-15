@@ -189,6 +189,16 @@ export type WorkspaceAiTrace = {
   modelCalled: boolean | null;
   followUpReusedClientRef: boolean;
   followUpRefetchedFacts: boolean;
+  /** Phase 2 migration / architecture diagnostics (no PII). */
+  pipelineClass: string | null;
+  legacyPreloadUsed: boolean;
+  duplicateResolutionUsed: boolean;
+  clientRefReused: boolean;
+  evidencePackUsed: boolean;
+  /** Phase 2.1: SUCCESS | FAILED | NOT_REQUIRED | SKIPPED — no PII. */
+  evidencePackAssemblyOutcome: string | null;
+  volatileRefetch: boolean;
+  toolMode: string | null;
 };
 
 const TRACE_STORE_MAX = 200;
@@ -273,6 +283,14 @@ export function createEmptyWorkspaceAiTrace(
     modelCalled: null,
     followUpReusedClientRef: false,
     followUpRefetchedFacts: false,
+    pipelineClass: null,
+    legacyPreloadUsed: false,
+    duplicateResolutionUsed: false,
+    clientRefReused: false,
+    evidencePackUsed: false,
+    evidencePackAssemblyOutcome: null,
+    volatileRefetch: false,
+    toolMode: null,
   };
 }
 
@@ -447,6 +465,14 @@ export function serializeWorkspaceAiTraceForLog(
     modelCalled: trace.modelCalled,
     followUpReusedClientRef: trace.followUpReusedClientRef,
     followUpRefetchedFacts: trace.followUpRefetchedFacts,
+    pipelineClass: trace.pipelineClass,
+    legacyPreloadUsed: trace.legacyPreloadUsed,
+    duplicateResolutionUsed: trace.duplicateResolutionUsed,
+    clientRefReused: trace.clientRefReused,
+    evidencePackUsed: trace.evidencePackUsed,
+    evidencePackAssemblyOutcome: trace.evidencePackAssemblyOutcome,
+    volatileRefetch: trace.volatileRefetch,
+    toolMode: trace.toolMode,
   };
 
   return redactForLogging(payload) as Record<string, unknown>;
@@ -502,6 +528,7 @@ export function markTraceDirect(
 ): void {
   trace.requestClass = "DIRECT";
   trace.providerOutcome = "SKIPPED";
+  trace.modelCalled = false;
   if (trace.clientResolutionOutcome === "UNKNOWN") {
     trace.clientResolutionOutcome = clientResolution;
   }

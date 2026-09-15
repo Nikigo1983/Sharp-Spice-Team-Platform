@@ -348,6 +348,36 @@ function assertNoSensitiveKeys(record: Record<string, unknown>): void {
   }
 }
 
+/**
+ * Phase 2: tool outputs must not bypass EvidencePack high-sensitivity policy.
+ * Default: strip passport / DOB / residential address / document content.
+ */
+export function alignClientToolPayloadWithEvidencePolicy(
+  safe: SafeClientRecord,
+): SafeClientRecord {
+  const fields = (safe.fields ?? []).filter((field) => {
+    const label = field.label ?? "";
+    if (/паспорт|passport/i.test(label)) return false;
+    if (/дата\s*рожден|date\s*of\s*birth|\bdob\b/i.test(label)) return false;
+    if (
+      /адрес\s*прожив|адрес\s*букинг|booking\s*address|home\s*address|residence\s*address/i.test(
+        label,
+      )
+    ) {
+      return false;
+    }
+    if (/document\s*content|ocr|текст\s*документ/i.test(label)) return false;
+    return true;
+  });
+  return {
+    ...safe,
+    passport: null,
+    bookingAddress: null,
+    placeOfBirth: null,
+    fields,
+  };
+}
+
 function baseResult(
   tool: string,
   started: number,
@@ -539,14 +569,15 @@ export async function executeGetClient(
         });
       }
     }
-    assertNoSensitiveKeys(safe as unknown as Record<string, unknown>);
+    const aligned = alignClientToolPayloadWithEvidencePolicy(safe);
+    assertNoSensitiveKeys(aligned as unknown as Record<string, unknown>);
 
     return baseResult("get_client", started, {
       ok: true,
       errorCode: null,
       errorMessage: null,
       data: {
-        client: safe,
+        client: aligned,
         finance: finance
           ? {
               contractAmount: displayContractAmount(finance.contractAmount),
@@ -709,8 +740,10 @@ export async function executeGetCaseContext(
       client.hasContract = finance.contractAmountCents != null;
     }
 
+    const aligned = alignClientToolPayloadWithEvidencePolicy(client);
+
     let payload: Record<string, unknown> = {
-      client,
+      client: aligned,
       finance: finance
         ? {
             contractAmount: displayContractAmount(finance.contractAmount),
@@ -721,23 +754,20 @@ export async function executeGetCaseContext(
           }
         : null,
       summary: {
-        displayName: client.name,
-        status: client.status,
-        manager: client.manager,
-        partner: client.partner,
-        passport: client.passport,
-        direction: client.direction,
-        submittedAt: client.submittedAt,
-        bookingAddress: client.bookingAddress,
-        bookingRange: client.bookingRange,
-        approvalAt: client.approvalAt,
-        residenceCardIssuedAt: client.residenceCardIssuedAt,
-        expectedApprovalAt: client.expectedApprovalAt,
-        contractLabel: client.contractLabel,
-        contractAmount: client.contractAmount,
-        citizenship: client.citizenship,
-        placeOfBirth: client.placeOfBirth,
-        latinName: client.latinName,
+        displayName: aligned.name,
+        status: aligned.status,
+        manager: aligned.manager,
+        partner: aligned.partner,
+        direction: aligned.direction,
+        submittedAt: aligned.submittedAt,
+        bookingRange: aligned.bookingRange,
+        approvalAt: aligned.approvalAt,
+        residenceCardIssuedAt: aligned.residenceCardIssuedAt,
+        expectedApprovalAt: aligned.expectedApprovalAt,
+        contractLabel: aligned.contractLabel,
+        contractAmount: aligned.contractAmount,
+        citizenship: aligned.citizenship,
+        latinName: aligned.latinName,
       },
       notesPreview,
       documentsInventory,
@@ -753,7 +783,7 @@ export async function executeGetCaseContext(
       limitations: [
         "Клиентские данные — только из заявок портала Emigrant.",
         "Formgrid / Google Sheets CRM отключены для AI Workspace.",
-        "Phase 1: Emigrant Drive and KB full content not included in get_case_context.",
+        "Phase 2: high-sensitivity fields (passport/DOB/address) omitted from tool payloads by default.",
         "Use search_knowledge_base for program requirements.",
       ],
       partial: false,
@@ -779,7 +809,7 @@ export async function executeGetCaseContext(
       partial = true;
       if (serialized.length > CASE_CONTEXT_MAX_CHARS) {
         payload = {
-          client,
+          client: aligned,
           summary: payload.summary,
           documentCount: documentsInventory.length,
           sourcesAvailable: payload.sourcesAvailable,
@@ -790,7 +820,7 @@ export async function executeGetCaseContext(
       }
     }
 
-    assertNoSensitiveKeys(client as unknown as Record<string, unknown>);
+    assertNoSensitiveKeys(aligned as unknown as Record<string, unknown>);
 
     return baseResult("get_case_context", started, {
       ok: true,

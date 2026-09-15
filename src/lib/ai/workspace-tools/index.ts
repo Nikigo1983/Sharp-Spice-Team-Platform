@@ -42,6 +42,7 @@ export { StreamToolCallAccumulator } from "@/lib/ai/workspace-tools/stream-tool-
 
 export {
   projectSafeClient,
+  alignClientToolPayloadWithEvidencePolicy,
   executeSearchClients,
   executeGetClient,
   executeGetCaseContext,

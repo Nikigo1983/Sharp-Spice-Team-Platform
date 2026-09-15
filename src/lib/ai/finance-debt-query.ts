@@ -123,6 +123,23 @@ export function resolveFinanceDebtNameHint(
   return null;
 }
 
+/**
+ * Debt / balance ask that can reuse a locked ClientRef without a new surname
+ * («Какой долг?», «Сколько должна?», «актуальный баланс»).
+ */
+export function isLockedClientDebtStatusQuery(query: string): boolean {
+  const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!lower || lower.length > 120) return false;
+  if (isFinancePaymentDebtQuery(query)) return false;
+  return (
+    /(?:какой|какая|какое)\s+долг/i.test(lower) ||
+    /сколько\s+(?:должен|должна|должно)/i.test(lower) ||
+    /(?:актуальн\w*\s+)?баланс(?:\s+оплат)?/i.test(lower) ||
+    /долг\s+сейчас/i.test(lower) ||
+    /сейчас\s+(?:какой\s+)?долг/i.test(lower)
+  );
+}
+
 /** Manager asks who owes money — Finance balance, not CRM/portal status. */
 export function isFinancePaymentDebtQuery(query: string): boolean {
   const lower = query.toLowerCase().replace(/\s+/g, " ").trim();

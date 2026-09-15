@@ -1,5 +1,9 @@
 import { streamTask } from "@/lib/ai/stream-task";
-import { AiCompletionError } from "@/lib/ai/errors";
+import {
+  AiCompletionError,
+  aiErrorMessage,
+  classifyAiFailure,
+} from "@/lib/ai/errors";
 import { throwIfAiAborted } from "@/lib/ai/request-scope";
 import {
   AUTHORITATIVE_EVIDENCE_BANNER,
@@ -11,10 +15,15 @@ import {
 import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-task";
 import {
   clientRefFromCaseMemory,
+  lockClientRefIntoCaseMemory,
+  clearClientRefFromCaseMemory,
 } from "@/lib/ai/conversation-client-lock";
 import {
   formatEvidencePackForModel,
   evidencePackTraceMeta,
+  evidencePackFailureCode,
+  isMigratedClientModelPath,
+  selectClientModelIngress,
 } from "@/lib/ai/evidence-pack";
 import { assembleEvidencePack } from "@/lib/ai/evidence-pack-assemble";
 import {
@@ -22,10 +31,13 @@ import {
   formatFollowUpTransformContext,
 } from "@/lib/ai/follow-up-transform";
 import {
+  resolveClient,
   clientRefFromResolved,
   querySuggestsDifferentClient,
+  toTraceClientResolutionOutcome,
 } from "@/lib/ai/resolve-client";
 import type { ClientRef } from "@/lib/ai/client-ref";
+import { queryRequiresVolatileRefetch } from "@/lib/ai/volatile-facts";
 import { getAiRuntimeConfig } from "@/lib/ai/config";
 import { decideKbGrounding } from "@/lib/ai/kb-grounding";
 import {
@@ -45,6 +57,7 @@ import {
   createEmptyWorkspaceAiTrace,
   estimateChars,
   logWorkspaceAiTrace,
+  markTraceDirect,
   markTraceProviderResult,
   skippedDriveMeta,
   type WorkspaceAiTrace,
@@ -90,6 +103,7 @@ import {
 import {
   analyzeClientSearchIntent,
   formatClientSearchIntentForAi,
+  isClientListQuery,
   resolveClientSearchIntentType,
   shouldOfferClientSelection,
   type ClientSearchIntent,
@@ -107,6 +121,7 @@ import {
   formatFinanceClientDebtReply,
   formatFinanceDebtorsListReply,
   isFinancePaymentDebtQuery,
+  isLockedClientDebtStatusQuery,
   resolveFinanceDebtNameHint,
   wantsDebtorEmails,
 } from "@/lib/ai/finance-debt-query";
@@ -356,7 +371,7 @@ function buildContextBlock(
   if (intent.needsEmigrantDrive) {
     contextParts.push(`=== ЭМИГРАНТ (документы клиентов) ===\n${context.emigrantDriveText}`);
   }
-  if (intent.needsClients && !clientContext && !clientCandidates?.length) {
+  if (intent.needsClients && !clientContext && !clientCandidates?.length && !evidencePackText) {
     contextParts.push(`=== КЛИЕНТЫ ===\n${context.clientsText}`);
   }
   if (intent.needsEmigrantDesk && !deskSlice) {
@@ -600,6 +615,7 @@ function buildDirectStructuredListResult(params: {
     pageSize: LIST_QUERY_FULL_RETURN_LIMIT,
   });
   params.trace.selectedRoutes = ["client_list_direct"];
+  markTraceDirect(params.trace, "NOT_REQUIRED");
   params.trace.responseOk = true;
   params.trace.latencyMs.prepare = Date.now() - params.started;
   params.trace.notes.push(
@@ -803,20 +819,41 @@ async function prepareWorkspaceRequest(
 
   const financeDebtNameHint =
     !followUp ? resolveFinanceDebtNameHint(trimmed, history) : null;
-  if (financeDebtNameHint) {
+  const lockedDebtStatusAsk =
+    !followUp &&
+    Boolean(lockedClientRef) &&
+    isLockedClientDebtStatusQuery(trimmed);
+  if (financeDebtNameHint || lockedDebtStatusAsk) {
     try {
       const hint = financeDebtNameHint;
-      // Phase 1: reuse locked ClientRef when the debt hint matches the lock.
+      const resolvedDebt = await resolveClient({
+        query: trimmed,
+        lockedClientRef,
+        pendingCandidates: safePendingCandidates,
+        history: recentHistory,
+      });
+      trace.clientResolutionOutcome = toTraceClientResolutionOutcome(
+        resolvedDebt.outcome,
+      );
+      trace.clientRefReused = resolvedDebt.reusedLock;
+      trace.followUpReusedClientRef = resolvedDebt.reusedLock;
+      trace.pipelineClass = "CANONICAL_PIPELINE";
+      trace.duplicateResolutionUsed = false;
+
       if (
-        lockedClientRef &&
-        lockedClientRef.displayLabel &&
-        clientFactSurnameMatches(lockedClientRef.displayLabel, hint)
+        (resolvedDebt.outcome === "RESOLVED" ||
+          resolvedDebt.outcome === "RESOLVED_LOCKED") &&
+        resolvedDebt.clientRef
       ) {
-        const finance = await getPortalFinanceSnapshot(lockedClientRef.clientId);
-        const record = await getPortalIntakeCaseById(lockedClientRef.clientId);
+        const finance = await getPortalFinanceSnapshot(
+          resolvedDebt.clientRef.clientId,
+        );
+        const record = await getPortalIntakeCaseById(
+          resolvedDebt.clientRef.clientId,
+        );
         const name =
-          lockedClientRef.displayLabel ||
-          (record ? portalIntakeDisplayName(record) : hint);
+          resolvedDebt.clientRef.displayLabel ||
+          (record ? portalIntakeDisplayName(record) : hint || "клиент");
         const reply = formatFinanceClientDebtReply({
           name,
           email: finance?.email ?? record?.email ?? null,
@@ -825,46 +862,25 @@ async function prepareWorkspaceRequest(
           paidAmount: finance?.paidAmount ?? null,
           balance: finance?.balance ?? null,
           balanceCents: finance?.balanceCents ?? null,
-          nameHint: hint,
+          nameHint: hint || name,
         });
+        caseMemory = lockClientRefIntoCaseMemory(
+          caseMemory,
+          resolvedDebt.clientRef,
+        );
         trace.selectedRoutes = ["finance_client_debt_direct"];
-        trace.responseOk = true;
-        trace.latencyMs.prepare = Date.now() - started;
-        trace.followUpReusedClientRef = true;
-        trace.clientResolutionOutcome = "RESOLVED";
         trace.clientRefPresent = true;
-        trace.notes.push("finance_client_debt=locked_ref");
-        logWorkspaceAiTrace(trace);
-        return {
-          kind: "direct",
-          reply: redactSensitiveText(reply),
-          sources: ["Finance", "Заявки портала Emigrant"],
-          requestId,
-          trace,
-        };
-      }
-      const cases = await listPortalIntakeCasesForAi();
-      const matches = cases.filter((record) =>
-        clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
-      );
-      if (matches.length === 1) {
-        const record = matches[0];
-        const finance = await getPortalFinanceSnapshot(record.id);
-        const name = portalIntakeDisplayName(record);
-        const reply = formatFinanceClientDebtReply({
-          name,
-          email: finance?.email ?? record.email ?? null,
-          contractAmount: finance?.contractAmount ?? null,
-          contractAmountCents: finance?.contractAmountCents ?? null,
-          paidAmount: finance?.paidAmount ?? null,
-          balance: finance?.balance ?? null,
-          balanceCents: finance?.balanceCents ?? null,
-          nameHint: hint,
-        });
-        trace.selectedRoutes = ["finance_client_debt_direct"];
+        trace.notes.push(
+          resolvedDebt.reusedLock
+            ? "finance_client_debt=locked_ref"
+            : "finance_client_debt=resolve_client",
+        );
+        if (queryRequiresVolatileRefetch(trimmed)) {
+          trace.volatileRefetch = true;
+        }
+        markTraceDirect(trace, "RESOLVED");
         trace.responseOk = true;
         trace.latencyMs.prepare = Date.now() - started;
-        trace.notes.push(`finance_client_debt=${name}`);
         logWorkspaceAiTrace(trace);
         return {
           kind: "direct",
@@ -874,13 +890,17 @@ async function prepareWorkspaceRequest(
           trace,
         };
       }
-      if (matches.length > 1) {
-        const names = matches
+      if (resolvedDebt.outcome === "AMBIGUOUS") {
+        const names = resolvedDebt.candidates
           .slice(0, 8)
-          .map((record) => portalIntakeDisplayName(record))
+          .map((c) => c.displayLabel)
+          .filter(Boolean)
           .join(", ");
-        const reply = `Нашёл несколько клиентов по «${hint}»: ${names}. Уточните, чей долг нужен.`;
+        const reply = names
+          ? `Нашёл несколько клиентов${hint ? ` по «${hint}»` : ""}: ${names}. Уточните, чей долг нужен.`
+          : `Нашёл несколько клиентов. Уточните, чей долг нужен.`;
         trace.selectedRoutes = ["finance_client_debt_ambiguous"];
+        markTraceDirect(trace, "AMBIGUOUS");
         trace.responseOk = true;
         trace.latencyMs.prepare = Date.now() - started;
         logWorkspaceAiTrace(trace);
@@ -892,8 +912,11 @@ async function prepareWorkspaceRequest(
           trace,
         };
       }
-      const reply = `Клиент «${hint}» не найден в заявках портала Emigrant — долг в Finance не проверить.`;
+      const reply = hint
+        ? `Клиент «${hint}» не найден в заявках портала Emigrant — долг в Finance не проверить.`
+        : `Клиент не найден в заявках портала Emigrant — долг в Finance не проверить.`;
       trace.selectedRoutes = ["finance_client_debt_not_found"];
+      markTraceDirect(trace, "NOT_FOUND");
       trace.responseOk = true;
       trace.latencyMs.prepare = Date.now() - started;
       logWorkspaceAiTrace(trace);
@@ -933,6 +956,7 @@ async function prepareWorkspaceRequest(
         focusEmails: wantsDebtorEmails(trimmed),
       });
       trace.selectedRoutes = ["finance_debtors_direct"];
+      markTraceDirect(trace, "NOT_REQUIRED");
       trace.responseOk = true;
       trace.latencyMs.prepare = Date.now() - started;
       trace.notes.push(
@@ -960,61 +984,98 @@ async function prepareWorkspaceRequest(
       const hint =
         extractClientNameFromLetterQuery(trimmed) ||
         resolveFinanceDebtNameHint(trimmed, history);
-      if (hint) {
-        const cases = await listPortalIntakeCasesForAi();
-        const matches = cases.filter((record) =>
-          clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
+      const resolvedLetter = await resolveClient({
+        query: trimmed,
+        lockedClientRef,
+        pendingCandidates: safePendingCandidates,
+        history: recentHistory,
+      });
+      trace.clientResolutionOutcome = toTraceClientResolutionOutcome(
+        resolvedLetter.outcome,
+      );
+      trace.clientRefReused = resolvedLetter.reusedLock;
+      trace.followUpReusedClientRef = resolvedLetter.reusedLock;
+      trace.pipelineClass = "CANONICAL_PIPELINE";
+      trace.duplicateResolutionUsed = false;
+
+      if (
+        (resolvedLetter.outcome === "RESOLVED" ||
+          resolvedLetter.outcome === "RESOLVED_LOCKED") &&
+        resolvedLetter.clientRef
+      ) {
+        const finance = await getPortalFinanceSnapshot(
+          resolvedLetter.clientRef.clientId,
         );
-        if (matches.length === 1) {
-          const record = matches[0];
-          const finance = await getPortalFinanceSnapshot(record.id);
-          const name = portalIntakeDisplayName(record);
-          const reply = formatDebtReminderLetter({
-            displayName: name,
-            email: finance?.email ?? record.email ?? null,
-            contractAmount: finance?.contractAmount ?? null,
-            contractAmountCents: finance?.contractAmountCents ?? null,
-            paidAmount: finance?.paidAmount ?? null,
-            balance: finance?.balance ?? null,
-            balanceCents: finance?.balanceCents ?? null,
-            nameHint: hint,
-            mentionResidencePermit: /внж|residence|вид\s+на\s+жител/i.test(
-              trimmed,
-            ),
-          });
-          trace.selectedRoutes = ["client_debt_letter_direct"];
-          trace.responseOk = true;
-          trace.latencyMs.prepare = Date.now() - started;
-          trace.notes.push(`debt_letter=${name}`);
-          logWorkspaceAiTrace(trace);
-          return {
-            kind: "direct",
-            reply: redactSensitiveText(reply),
-            sources: ["Finance", "Заявки портала Emigrant"],
-            requestId,
-            trace,
-          };
-        }
-        if (matches.length > 1) {
-          const names = matches
-            .slice(0, 8)
-            .map((record) => portalIntakeDisplayName(record))
-            .join(", ");
-          const reply = `Нашёл несколько клиентов по «${hint}»: ${names}. Уточните, кому писать письмо.`;
-          trace.selectedRoutes = ["client_debt_letter_ambiguous"];
-          trace.responseOk = true;
-          trace.latencyMs.prepare = Date.now() - started;
-          logWorkspaceAiTrace(trace);
-          return {
-            kind: "direct",
-            reply: redactSensitiveText(reply),
-            sources: ["Заявки портала Emigrant"],
-            requestId,
-            trace,
-          };
-        }
-        const reply = `Клиент «${hint}» не найден в заявках портала Emigrant — письмо с суммой долга составить нельзя.`;
+        const record = await getPortalIntakeCaseById(
+          resolvedLetter.clientRef.clientId,
+        );
+        const name =
+          resolvedLetter.clientRef.displayLabel ||
+          (record ? portalIntakeDisplayName(record) : hint || "клиент");
+        const reply = formatDebtReminderLetter({
+          displayName: name,
+          email: finance?.email ?? record?.email ?? null,
+          contractAmount: finance?.contractAmount ?? null,
+          contractAmountCents: finance?.contractAmountCents ?? null,
+          paidAmount: finance?.paidAmount ?? null,
+          balance: finance?.balance ?? null,
+          balanceCents: finance?.balanceCents ?? null,
+          nameHint: hint || name,
+          mentionResidencePermit: /внж|residence|вид\s+на\s+жител/i.test(
+            trimmed,
+          ),
+        });
+        caseMemory = lockClientRefIntoCaseMemory(
+          caseMemory,
+          resolvedLetter.clientRef,
+        );
+        trace.selectedRoutes = ["client_debt_letter_direct"];
+        trace.clientRefPresent = true;
+        trace.notes.push(
+          resolvedLetter.reusedLock
+            ? "debt_letter=locked_ref"
+            : "debt_letter=resolve_client",
+        );
+        markTraceDirect(trace, "RESOLVED");
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: redactSensitiveText(reply),
+          sources: ["Finance", "Заявки портала Emigrant"],
+          requestId,
+          trace,
+        };
+      }
+      if (resolvedLetter.outcome === "AMBIGUOUS") {
+        const names = resolvedLetter.candidates
+          .slice(0, 8)
+          .map((c) => c.displayLabel)
+          .filter(Boolean)
+          .join(", ");
+        const reply = names
+          ? `Нашёл несколько клиентов${hint ? ` по «${hint}»` : ""}: ${names}. Уточните, кому писать письмо.`
+          : `Нашёл несколько клиентов. Уточните, кому писать письмо.`;
+        trace.selectedRoutes = ["client_debt_letter_ambiguous"];
+        markTraceDirect(trace, "AMBIGUOUS");
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: redactSensitiveText(reply),
+          sources: ["Заявки портала Emigrant"],
+          requestId,
+          trace,
+        };
+      }
+      if (hint || resolvedLetter.outcome === "NOT_FOUND") {
+        const reply = hint
+          ? `Клиент «${hint}» не найден в заявках портала Emigrant — письмо с суммой долга составить нельзя.`
+          : `Клиент не найден в заявках портала Emigrant — письмо с суммой долга составить нельзя.`;
         trace.selectedRoutes = ["client_debt_letter_not_found"];
+        markTraceDirect(trace, "NOT_FOUND");
         trace.responseOk = true;
         trace.latencyMs.prepare = Date.now() - started;
         logWorkspaceAiTrace(trace);
@@ -1096,32 +1157,100 @@ async function prepareWorkspaceRequest(
 
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
-  } else if (
-    lockedClientRef &&
-    !querySuggestsDifferentClient(trimmed, lockedClientRef) &&
-    (taskRequiresClientRef(currentTask) ||
-      intent.needsClients ||
-      intent.fastClientLookup ||
-      isDocFillIntent(trimmed))
-  ) {
-    try {
-      const record = await getPortalIntakeCaseById(lockedClientRef.clientId);
-      if (record) {
-        clientContext = portalCaseToContext(record, 100, ["client_lock"]);
-        trace.followUpReusedClientRef = true;
-        trace.clientResolutionOutcome = "RESOLVED";
-        trace.clientRefPresent = true;
-        trace.notes.push("client_ref_lock_reuse");
-      }
-    } catch (error) {
-      console.error(
-        `[workspace-ai][${requestId}] locked ClientRef load failed`,
-        error,
-      );
-      trace.notes.push("CLIENT_REF_LOCK_LOAD_ERROR");
+    const selectedRef = clientRefFromResolved(clientContext);
+    if (
+      selectedRef &&
+      lockedClientRef &&
+      selectedRef.clientId !== lockedClientRef.clientId
+    ) {
+      // Explicit ambiguity pick switches ClientRef — clear incompatible memory.
+      caseMemory = clearClientRefFromCaseMemory(caseMemory);
+      trace.notes.push("client_ref_switched_via_selection");
     }
   }
 
+  const isListLike =
+    isClientListQuery(trimmed) || isClientListContinuationQuery(trimmed);
+
+  const needsClientResolve =
+    !followUp &&
+    !isListLike &&
+    (taskRequiresClientRef(currentTask) ||
+      intent.needsClients ||
+      intent.fastClientLookup ||
+      isDocFillIntent(trimmed));
+
+  const volatileRefetch = queryRequiresVolatileRefetch(trimmed);
+  if (volatileRefetch) {
+    trace.volatileRefetch = true;
+  }
+
+  if (needsClientResolve && !clientContext) {
+    try {
+      const resolved = await resolveClient({
+        query: trimmed,
+        lockedClientRef,
+        pendingCandidates: safePendingCandidates,
+        history: recentHistory,
+        // Volatile asks re-fetch Finance/case facts; do not re-resolve identity.
+        forceResolve: false,
+      });
+      trace.clientResolutionOutcome = toTraceClientResolutionOutcome(
+        resolved.outcome,
+      );
+      trace.clientRefReused = resolved.reusedLock;
+      trace.followUpReusedClientRef = resolved.reusedLock;
+      trace.pipelineClass = "CANONICAL_PIPELINE";
+
+      if (
+        (resolved.outcome === "RESOLVED" ||
+          resolved.outcome === "RESOLVED_LOCKED") &&
+        resolved.clientRef
+      ) {
+        if (
+          lockedClientRef &&
+          resolved.clientRef.clientId !== lockedClientRef.clientId &&
+          !resolved.reusedLock
+        ) {
+          caseMemory = clearClientRefFromCaseMemory(caseMemory);
+          trace.notes.push("client_ref_switched");
+        }
+        trace.clientRefPresent = true;
+        if (resolved.client) {
+          clientContext = resolved.client;
+        } else {
+          const record = await getPortalIntakeCaseById(
+            resolved.clientRef.clientId,
+          );
+          if (record) {
+            clientContext = portalCaseToContext(record, 100, ["resolve_client"]);
+          }
+        }
+        // Persist lock into case memory for subsequent turns.
+        if (resolved.clientRef) {
+          caseMemory = lockClientRefIntoCaseMemory(
+            caseMemory,
+            resolved.clientRef,
+          );
+        }
+      } else if (resolved.outcome === "AMBIGUOUS") {
+        clientCandidates = [];
+        // Fall through to structured search for candidate UI below.
+        trace.notes.push("resolve_client_ambiguous");
+      } else if (resolved.outcome === "NOT_FOUND") {
+        trace.notes.push("resolve_client_not_found");
+      }
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] resolveClient failed`,
+        error,
+      );
+      trace.notes.push("RESOLVE_CLIENT_ERROR");
+    }
+  }
+
+  // List / structured search still uses lookup when no locked single client,
+  // or when list intent / ambiguity needs candidate presentation.
   if (
     !clientContext &&
     !followUp &&
@@ -1240,6 +1369,7 @@ async function prepareWorkspaceRequest(
   );
   if (structuredFact) {
     trace.selectedRoutes = ["client_fact_direct"];
+    markTraceDirect(trace, clientContext ? "RESOLVED" : "NOT_REQUIRED");
     trace.responseOk = true;
     trace.latencyMs.prepare = Date.now() - started;
     logWorkspaceAiTrace(trace);
@@ -1477,7 +1607,8 @@ async function prepareWorkspaceRequest(
         ? `Client record — table (${context.meta.clientsTotal})`
         : null;
 
-  // Phase 1: purpose-bound EvidencePack for generative client tasks.
+  // Phase 1/2.1: purpose-bound EvidencePack for generative client tasks.
+  // Migrated path invariant: BROAD_CLIENT_CONTEXT_ALLOWED = false.
   let evidencePackText: string | null = null;
   let activeClientRef: ClientRef | null = lockedClientRef;
   if (clientContext) {
@@ -1490,18 +1621,24 @@ async function prepareWorkspaceRequest(
       }
     }
   }
-  if (
-    activeClientRef &&
-    currentTask.requiredProjections.length > 0 &&
-    currentTask.modelRequired
-  ) {
+  const migratedClientModelPath = isMigratedClientModelPath({
+    hasClientRef: Boolean(activeClientRef),
+    modelRequired: currentTask.modelRequired,
+    requiredProjectionCount: currentTask.requiredProjections.length,
+  });
+  trace.evidencePackAssemblyOutcome = migratedClientModelPath
+    ? "SKIPPED"
+    : "NOT_REQUIRED";
+
+  if (migratedClientModelPath && activeClientRef) {
     try {
       const pack = await assembleEvidencePack({
         task: currentTask,
         clientRef: activeClientRef,
-        freshnessClass: trace.followUpReusedClientRef
-          ? "LOCKED_REFETCH"
-          : "LIVE_FETCH",
+        freshnessClass:
+          volatileRefetch || trace.followUpReusedClientRef
+            ? "LOCKED_REFETCH"
+            : "LIVE_FETCH",
       });
       if (pack) {
         evidencePackText = formatEvidencePackForModel(pack);
@@ -1510,21 +1647,79 @@ async function prepareWorkspaceRequest(
         trace.evidenceFactCount = meta.evidenceFactCount;
         trace.evidencePackChars = meta.evidenceChars;
         trace.evidenceFreshnessClass = meta.evidenceFreshnessClass;
+        trace.evidencePackUsed = true;
+        trace.evidencePackAssemblyOutcome = "SUCCESS";
+        trace.pipelineClass = "CANONICAL_PIPELINE";
+        trace.legacyPreloadUsed = false;
         trace.notes.push("evidence_pack_attached");
+      } else {
+        const code = evidencePackFailureCode("null_pack");
+        trace.evidencePackAssemblyOutcome = "FAILED";
+        trace.evidencePackUsed = false;
+        trace.legacyPreloadUsed = false;
+        trace.pipelineClass = "CANONICAL_PIPELINE";
+        trace.failureClass = classifyAiFailure(code);
+        trace.selectedRoutes = ["evidence_pack_unavailable"];
+        trace.notes.push("EVIDENCE_PACK_NULL");
+        markTraceDirect(trace);
+        trace.responseOk = false;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: aiErrorMessage(code),
+          sources: [],
+          requestId,
+          trace,
+        };
       }
     } catch (error) {
       console.error(
         `[workspace-ai][${requestId}] EvidencePack assemble failed`,
         error,
       );
+      const code = evidencePackFailureCode("throw");
+      trace.evidencePackAssemblyOutcome = "FAILED";
+      trace.evidencePackUsed = false;
+      trace.legacyPreloadUsed = false;
+      trace.pipelineClass = "CANONICAL_PIPELINE";
+      trace.failureClass = classifyAiFailure(code);
+      trace.selectedRoutes = ["evidence_pack_error"];
       trace.notes.push("EVIDENCE_PACK_ERROR");
+      markTraceDirect(trace);
+      trace.responseOk = false;
+      trace.latencyMs.prepare = Date.now() - started;
+      logWorkspaceAiTrace(trace);
+      return {
+        kind: "direct",
+        reply: aiErrorMessage(code),
+        sources: [],
+        requestId,
+        trace,
+      };
     }
   }
 
+  const ingress = selectClientModelIngress({
+    migratedClientModelPath,
+    evidencePackText,
+  });
+  // Defense-in-depth: never attach broad CLIENT CONTEXT on migrated model paths.
+  const modelClientContext = ingress.allowBroadClientContext
+    ? clientContext
+    : null;
+
   const sources = buildSources(context, intent, {
-    clientLabel: clientAttrLabel,
+    clientLabel:
+      evidencePackText || modelClientContext || clientCandidates?.length
+        ? clientAttrLabel
+        : intent.needsClients && context.meta.clientsTotal > 0
+          ? clientAttrLabel
+          : null,
     deskLabel:
-      intent.needsEmigrantDesk && !clientContext && context.meta.emigrantDeskTotal > 0
+      intent.needsEmigrantDesk &&
+      !modelClientContext &&
+      context.meta.emigrantDeskTotal > 0
         ? `Emigrant Desk — cases (${context.meta.emigrantDeskTotal})`
         : null,
     internetLabel:
@@ -1537,7 +1732,7 @@ async function prepareWorkspaceRequest(
   const contextBlock = buildContextBlock(
     context,
     intent,
-    clientContext,
+    modelClientContext,
     clientCandidates,
     candidateScenario,
     clientSearchIntentNote,
@@ -1546,6 +1741,14 @@ async function prepareWorkspaceRequest(
     webSearch?.text ?? null,
     evidencePackText,
   );
+  if (evidencePackText) {
+    trace.legacyPreloadUsed = false;
+  } else if (modelClientContext) {
+    trace.legacyPreloadUsed = true;
+    trace.notes.push("legacy_client_context_preload");
+  } else {
+    trace.legacyPreloadUsed = false;
+  }
 
   const questionnaireMode = isQuestionnaireAnswerIntent(trimmed);
   const effectiveMode: WorkspaceResponseMode = questionnaireMode
@@ -1700,11 +1903,12 @@ function clientSnapshotFromResolved(
     return null;
   };
 
+  // Phase 2: canonical questionnaire UUID only — never Sheets-style row keys.
+  const ref = clientRefFromResolved(client);
+  const canonicalId = ref?.clientId ?? null;
+
   return {
-    id:
-      client.source === "merged"
-        ? `merged:${client.rowIndex}`
-        : `${client.source}:${client.rowIndex}`,
+    id: canonicalId,
     name: client.name ?? null,
     citizenship: pick(/^(гражданств|citizenship)$/i),
     latinName: pick(/латиниц|latinName|^latin$/i),
@@ -1785,6 +1989,7 @@ async function executeAgentPrepared(params: {
 
   prepared.trace.agentMode = true;
   prepared.trace.astraCalled = true;
+  prepared.trace.modelCalled = true;
 
   try {
     const loop = await runWorkspaceAgentToolLoop({
@@ -1969,6 +2174,7 @@ export async function runWorkspaceAi(
       legacy.trace.latencyMs.model = completion.latencyMs;
       legacy.trace.openRouterOk = completion.ok;
       legacy.trace.astraCalled = true;
+      legacy.trace.modelCalled = true;
       legacy.trace.latencyMs.total = Date.now() - totalStarted;
       if (!completion.ok) {
         markTraceProviderResult(legacy.trace, {
@@ -2033,6 +2239,7 @@ export async function runWorkspaceAi(
   prepared.trace.latencyMs.model = completion.latencyMs;
   prepared.trace.openRouterOk = completion.ok;
   prepared.trace.astraCalled = true;
+  prepared.trace.modelCalled = true;
   prepared.trace.latencyMs.total = Date.now() - totalStarted;
 
   if (completion.ok && completion.content) {
@@ -2231,6 +2438,7 @@ export async function* runWorkspaceAiStream(
       if (!event.result.ok) throw new AiCompletionError(event.result.error);
       legacy.trace.notes.push("agent_fallback_legacy_stream");
       legacy.trace.astraCalled = true;
+      legacy.trace.modelCalled = true;
       legacy.trace.openRouterOk = event.result.ok;
       legacy.trace.responseOk = event.result.ok;
       logWorkspaceAiTrace(legacy.trace);
@@ -2286,6 +2494,8 @@ export async function* runWorkspaceAiStream(
     prepared.trace.usageOutputTokens = event.result.usage.outputTokens;
     prepared.trace.latencyMs.model = event.result.latencyMs;
     prepared.trace.openRouterOk = event.result.ok;
+    prepared.trace.astraCalled = true;
+    prepared.trace.modelCalled = true;
     prepared.trace.latencyMs.total = Date.now() - totalStarted;
 
     if (!event.result.ok) {

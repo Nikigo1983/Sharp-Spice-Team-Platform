@@ -45,6 +45,7 @@ import { isEmigrantDrivePrimaryQuery } from "@/lib/ai/query-intent";
 import {
   getRecentClientSearches,
   recordClientSearch,
+  buildSafeClientSearchHistoryEntry,
 } from "@/lib/ai/client-search-history";
 import {
   listPortalIntakeCasesForAi,
@@ -175,20 +176,21 @@ function logSearchResult(
   allMatches: ClientContext[],
 ): void {
   const topScore = allMatches[0]?.score ?? 0;
-  recordClientSearch({
-    query,
-    at: new Date().toISOString(),
-    resultKind: result.kind,
-    topScore,
-    matchCount: allMatches.length,
-    matches: allMatches.slice(0, 5).map((match) => ({
-      name: match.name,
-      score: match.score,
-      source: match.sourceLabel,
-      rowIndex: match.rowIndex,
-      matchedFields: match.matchedFields,
-    })),
-  });
+  recordClientSearch(
+    buildSafeClientSearchHistoryEntry({
+      query,
+      resultKind: result.kind,
+      topScore,
+      matchCount: allMatches.length,
+      matches: allMatches.slice(0, 5).map((match) => ({
+        name: match.name,
+        score: match.score,
+        source: match.sourceLabel,
+        rowIndex: match.rowIndex,
+        matchedFields: match.matchedFields,
+      })),
+    }),
+  );
 }
 
 export function isDebugClientCommand(query: string): boolean {

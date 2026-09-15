@@ -92,6 +92,24 @@ export function sanitizeCaseMemory(value: unknown): WorkspaceCaseMemory | null {
   return hasAny ? next : null;
 }
 
+/**
+ * SSE/UI ownership for caseMemory on a single response:
+ * - key absent → no change
+ * - non-null → set (authoritative lock)
+ * - null → do not wipe an already-received non-null lock in the same stream
+ *   (early meta must omit the key; explicit clear is a separate unlock path)
+ */
+export function mergeStreamCaseMemoryUpdate(
+  current: WorkspaceCaseMemory | null | undefined,
+  incoming: WorkspaceCaseMemory | null | undefined,
+  keyPresent: boolean,
+): WorkspaceCaseMemory | null | undefined {
+  if (!keyPresent) return current;
+  if (incoming != null) return incoming;
+  if (current != null) return current;
+  return null;
+}
+
 export function caseMemoryHasFacts(
   memory: WorkspaceCaseMemory | null | undefined,
 ): boolean {

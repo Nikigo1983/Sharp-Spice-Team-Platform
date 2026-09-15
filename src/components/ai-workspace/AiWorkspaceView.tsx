@@ -21,6 +21,7 @@ import {
   WORKSPACE_RECENT_HISTORY_TURNS,
 } from "@/lib/ai/workspace-conversation-memory";
 import type { WorkspaceCaseMemory } from "@/lib/ai/workspace-case-memory";
+import { mergeStreamCaseMemoryUpdate } from "@/lib/ai/workspace-case-memory";
 
 import type {
 
@@ -593,7 +594,11 @@ export function AiWorkspaceView() {
             streamSummaryThrough = meta.summaryThroughMessageCount;
           }
           if (meta.caseMemory !== undefined) {
-            streamCaseMemory = meta.caseMemory;
+            streamCaseMemory = mergeStreamCaseMemoryUpdate(
+              streamCaseMemory,
+              meta.caseMemory,
+              true,
+            );
           }
 
           if (meta.needsClientSelection && meta.pendingClientCandidates) {

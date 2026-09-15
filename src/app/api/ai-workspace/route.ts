@@ -135,7 +135,10 @@ async function handlePost(request: Request) {
                   conversationSummary: chunk.conversationSummary ?? null,
                   summaryThroughMessageCount:
                     chunk.summaryThroughMessageCount ?? null,
-                  caseMemory: chunk.caseMemory ?? null,
+                  // Ownership: omit key when unset so early meta cannot wipe a lock.
+                  ...(chunk.caseMemory !== undefined
+                    ? { caseMemory: chunk.caseMemory }
+                    : {}),
                 })}\n\n`,
               ),
             );

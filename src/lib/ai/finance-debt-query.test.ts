@@ -53,6 +53,12 @@ describe("isFinanceNamedClientDebtQuery", () => {
     );
     assert.equal(extractNameFromDebtQuery("долг у Ивановой"), "Ивановой");
   });
+
+  it("does not treat pronouns as client names", () => {
+    assert.equal(extractNameFromDebtQuery("Какой у него долг?"), null);
+    assert.equal(extractNameFromDebtQuery("Какой у неё долг?"), null);
+    assert.equal(isFinanceNamedClientDebtQuery("Какой у него долг?"), false);
+  });
 });
 
 describe("finance debt follow-ups", () => {

@@ -122,6 +122,7 @@ import {
   formatFinanceDebtorsListReply,
   isFinancePaymentDebtQuery,
   isLockedClientDebtStatusQuery,
+  isPronounDebtFollowUpQuery,
   resolveFinanceDebtNameHint,
   wantsDebtorEmails,
 } from "@/lib/ai/finance-debt-query";
@@ -255,6 +256,10 @@ export type WorkspaceAiStreamMeta = {
   clientListContinuation?: ClientListContinuationState | null;
   conversationSummary?: string | null;
   summaryThroughMessageCount?: number;
+  /**
+   * Omit from early SSE meta. Only set on the authoritative post-resolve meta.
+   * `undefined` = no change; non-null = lock; explicit null = clear.
+   */
   caseMemory?: WorkspaceCaseMemory | null;
 };
 
@@ -652,6 +657,8 @@ async function prepareWorkspaceRequest(
       pendingClientCandidates?: ClientContext[];
       needsClientSelection?: boolean;
       clientListContinuation?: ClientListContinuationState | null;
+      /** Locked ClientRef state to round-trip to the UI. */
+      caseMemory?: WorkspaceCaseMemory | null;
       requestId: string;
       trace: WorkspaceAiTrace;
       groundingBlocked?: boolean;
@@ -677,6 +684,8 @@ async function prepareWorkspaceRequest(
       contextBlock: string;
       trimmed: string;
       clientContext: ResolvedClientContext | null;
+      /** Locked ClientRef after resolve — must round-trip to UI. */
+      caseMemory: WorkspaceCaseMemory | null;
       pendingClientCandidates?: ClientContext[];
       needsClientSelection?: boolean;
       requestId: string;
@@ -739,6 +748,7 @@ async function prepareWorkspaceRequest(
       contextBlock: transformBlock,
       trimmed,
       clientContext: null,
+      caseMemory,
       requestId,
       trace,
     };
@@ -819,10 +829,32 @@ async function prepareWorkspaceRequest(
 
   const financeDebtNameHint =
     !followUp ? resolveFinanceDebtNameHint(trimmed, history) : null;
+  const pronounDebtFollowUp =
+    !followUp && isPronounDebtFollowUpQuery(trimmed);
   const lockedDebtStatusAsk =
     !followUp &&
     Boolean(lockedClientRef) &&
-    isLockedClientDebtStatusQuery(trimmed);
+    (isLockedClientDebtStatusQuery(trimmed) || pronounDebtFollowUp);
+
+  // Pronoun debt with no lock: never resolve «него» / «она» as a client name.
+  if (pronounDebtFollowUp && !lockedClientRef && !financeDebtNameHint) {
+    const reply =
+      "Не выбран клиент для уточнения долга. Укажите ФИО или сначала найдите клиента, затем спросите про долг.";
+    trace.selectedRoutes = ["finance_client_debt_missing_lock"];
+    markTraceDirect(trace, "NOT_FOUND");
+    trace.responseOk = true;
+    trace.latencyMs.prepare = Date.now() - started;
+    logWorkspaceAiTrace(trace);
+    return {
+      kind: "direct",
+      reply: redactSensitiveText(reply),
+      sources: ["Finance", "Заявки портала Emigrant"],
+      requestId,
+      trace,
+      caseMemory,
+    };
+  }
+
   if (financeDebtNameHint || lockedDebtStatusAsk) {
     try {
       const hint = financeDebtNameHint;
@@ -888,6 +920,7 @@ async function prepareWorkspaceRequest(
           sources: ["Finance", "Заявки портала Emigrant"],
           requestId,
           trace,
+          caseMemory,
         };
       }
       if (resolvedDebt.outcome === "AMBIGUOUS") {
@@ -1283,6 +1316,15 @@ async function prepareWorkspaceRequest(
         candidateScenario = "structured";
       } else if (clientLookup.kind === "single") {
         clientContext = clientLookup.client;
+        const searchRef = clientRefFromResolved(clientContext);
+        if (searchRef) {
+          caseMemory = lockClientRefIntoCaseMemory(caseMemory, searchRef);
+          trace.clientRefPresent = true;
+          if (trace.clientResolutionOutcome === "UNKNOWN") {
+            trace.clientResolutionOutcome = "RESOLVED";
+          }
+          trace.notes.push("client_ref_locked_from_search_single");
+        }
       } else if (clientLookup.kind === "multiple") {
         clientCandidates = clientLookup.clients;
         candidateScenario = aiSearch.usedStructuredSearch ? "structured" : "multiple";
@@ -1816,6 +1858,7 @@ async function prepareWorkspaceRequest(
     contextBlock: fillAwareContextBlock,
     trimmed,
     clientContext,
+    caseMemory,
     pendingClientCandidates: pendingCandidatesForTransport(pendingForUi),
     needsClientSelection,
     requestId,
@@ -2126,7 +2169,10 @@ export async function runWorkspaceAi(
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
       clientListContinuation: prepared.clientListContinuation ?? null,
-      ...memory,
+      conversationSummary: memory.conversationSummary,
+      summaryThroughMessageCount: memory.summaryThroughMessageCount,
+      // Prefer prepare lock over store refresh — never drop a just-created ClientRef.
+      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
     };
   }
 
@@ -2269,7 +2315,9 @@ export async function runWorkspaceAi(
       requestId: prepared.requestId,
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
-      ...memory,
+      conversationSummary: memory.conversationSummary,
+      summaryThroughMessageCount: memory.summaryThroughMessageCount,
+      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
     };
   }
 
@@ -2344,7 +2392,9 @@ export async function* runWorkspaceAiStream(
       pendingClientCandidates: prepared.pendingClientCandidates,
       needsClientSelection: prepared.needsClientSelection,
       clientListContinuation: prepared.clientListContinuation ?? null,
-      ...memory,
+      conversationSummary: memory.conversationSummary,
+      summaryThroughMessageCount: memory.summaryThroughMessageCount,
+      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
     };
     yield prepared.reply;
     return;
@@ -2537,20 +2587,19 @@ export async function* runWorkspaceAiStream(
         assistantReply: finalAnswer,
         clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
       });
-      if (
-        memory.conversationSummary != null ||
-        memory.summaryThroughMessageCount != null ||
-        memory.caseMemory != null
-      ) {
-        yield {
-          sources: prepared.sources,
-          demo: false,
-          requestId: prepared.requestId,
-          pendingClientCandidates: prepared.pendingClientCandidates,
-          needsClientSelection: prepared.needsClientSelection,
-          ...memory,
-        };
-      }
+      const caseMemory = memory.caseMemory ?? prepared.caseMemory ?? null;
+      // Always emit final meta when a ClientRef lock exists — never rely only on
+      // store refresh succeeding. Early meta intentionally omits caseMemory.
+      yield {
+        sources: prepared.sources,
+        demo: false,
+        requestId: prepared.requestId,
+        pendingClientCandidates: prepared.pendingClientCandidates,
+        needsClientSelection: prepared.needsClientSelection,
+        conversationSummary: memory.conversationSummary,
+        summaryThroughMessageCount: memory.summaryThroughMessageCount,
+        caseMemory,
+      };
     }
   }
 

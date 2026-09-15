@@ -7,12 +7,50 @@ import { formatRussianNamePossessiveU } from "@/lib/ai/russian-name-morphology";
 /** Shown when Finance has no contract amount yet. */
 export const NO_CONTRACT_YET_LABEL = "пока нет договора";
 
+/** Pronouns that must never become client lookup terms. */
+const CLIENT_PRONOUN_TOKEN_RE =
+  /^(?:него|неё|нее|них|он|она|оно|его|её|ее|ему|ей|им|ими)$/iu;
+
+export function isClientPronounToken(token: string | null | undefined): boolean {
+  const t = token?.trim() ?? "";
+  return Boolean(t) && CLIENT_PRONOUN_TOKEN_RE.test(t);
+}
+
+function rejectPronounName(token: string | null | undefined): string | null {
+  const t = token?.trim() ?? "";
+  if (!t || isClientPronounToken(t) || /^клиент/i.test(t)) return null;
+  return t;
+}
+
+/**
+ * Debt ask that refers to a locked client via pronoun
+ * («Какой у него долг?», «Сколько она должна?»).
+ */
+export function isPronounDebtFollowUpQuery(query: string): boolean {
+  const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!lower || lower.length > 120) return false;
+  // Debtor-list asks are not pronoun follow-ups.
+  if (/должник/i.test(lower)) return false;
+  if (/кто\s+(?:должен|должна)/i.test(lower)) return false;
+  const hasDebtCue =
+    /долг|баланс|оплат/i.test(lower) ||
+    /сколько\s+(?:он|она)\s+(?:должен|должна)/i.test(lower) ||
+    /(?:он|она)\s+(?:должен|должна)/i.test(lower);
+  if (!hasDebtCue) return false;
+  return (
+    /(?<!\p{L})(?:у\s+)?(?:него|неё|нее|них)(?!\p{L})/u.test(lower) ||
+    /(?<!\p{L})(?:он|она)(?!\p{L})/u.test(lower)
+  );
+}
+
 /**
  * Debt for a named client — «какой долг у Мазуриной», not the full debtor list.
+ * Pronoun-only asks are not named-client lookups.
  */
 export function isFinanceNamedClientDebtQuery(query: string): boolean {
   const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
   if (!lower) return false;
+  if (isPronounDebtFollowUpQuery(query)) return false;
   return (
     /(?:какой|какая|какое)\s+долг\s+у\s+/i.test(lower) ||
     /долг\s+у\s+[а-яёa-z\-']/i.test(lower) ||
@@ -28,21 +66,21 @@ export function extractNameFromDebtQuery(query: string): string | null {
   const afterU = query.match(
     /(?:долг|баланс|оплат\w*)\s+у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterU?.[1]) return afterU[1];
+  if (afterU?.[1]) return rejectPronounName(afterU[1]);
 
   const afterKakoy = query.match(
     /(?:какой|какая|какое)\s+долг\s+у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterKakoy?.[1]) return afterKakoy[1];
+  if (afterKakoy?.[1]) return rejectPronounName(afterKakoy[1]);
 
   const afterSkolko = query.match(
     /сколько\s+(?:должен|должна|должно)\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
   );
-  if (afterSkolko?.[1]) return afterSkolko[1];
+  if (afterSkolko?.[1]) return rejectPronounName(afterSkolko[1]);
 
   const bareU = query.match(/(?<!\p{L})у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu);
-  if (bareU?.[1] && !/^клиент/i.test(bareU[1]) && /долг|баланс|оплат/i.test(query)) {
-    return bareU[1];
+  if (bareU?.[1] && /долг|баланс|оплат/i.test(query)) {
+    return rejectPronounName(bareU[1]);
   }
   return null;
 }
@@ -71,9 +109,7 @@ export function extractNameFromDebtFollowUp(query: string): string | null {
   );
   if (afterU?.[1]) return afterU[1];
   const afterA = trimmed.match(/^а\s+([А-ЯЁA-Za-zа-яё\-']{3,})\??[.!]?$/iu);
-  if (afterA?.[1] && !/^(долг|клиент|неё|него|них)$/i.test(afterA[1])) {
-    return afterA[1];
-  }
+  if (afterA?.[1]) return rejectPronounName(afterA[1]);
   return null;
 }
 
@@ -125,12 +161,13 @@ export function resolveFinanceDebtNameHint(
 
 /**
  * Debt / balance ask that can reuse a locked ClientRef without a new surname
- * («Какой долг?», «Сколько должна?», «актуальный баланс»).
+ * («Какой долг?», «Сколько должна?», «Какой у него долг?», «актуальный баланс»).
  */
 export function isLockedClientDebtStatusQuery(query: string): boolean {
   const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
   if (!lower || lower.length > 120) return false;
   if (isFinancePaymentDebtQuery(query)) return false;
+  if (isPronounDebtFollowUpQuery(query)) return true;
   return (
     /(?:какой|какая|какое)\s+долг/i.test(lower) ||
     /сколько\s+(?:должен|должна|должно)/i.test(lower) ||

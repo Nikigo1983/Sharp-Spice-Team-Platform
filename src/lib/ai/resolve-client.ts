@@ -21,6 +21,7 @@ import {
 import { resolveClientSelectionFollowUp } from "@/lib/ai/client-selection-followup";
 import { extractClientEntityFromQuery } from "@/lib/ai/client-entity-extract";
 import { morphNameMatch } from "@/lib/ai/russian-name-morphology";
+import { isPronounDebtFollowUpQuery } from "@/lib/ai/finance-debt-query";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -91,6 +92,8 @@ export function querySuggestsDifferentClient(
   locked: ClientRef | null | undefined,
 ): boolean {
   if (!locked?.displayLabel) return false;
+  // Pronoun debt/status follow-ups never name a new client.
+  if (isPronounDebtFollowUpQuery(query)) return false;
   const extraction = extractClientEntityFromQuery(query);
   const phrase =
     extraction?.searchPhrase?.trim() ||

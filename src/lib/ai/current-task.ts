@@ -50,8 +50,12 @@ export type CurrentTask = {
 const FOLLOW_UP_TRANSFORM_RE =
   /^(?:\s*)(?:сделай\s+(?:короче|теплее|мягче|жёстче|жестче|официальнее|дружелюбнее|короткий|теплый)|перепиши|переформулируй|переведи(?:\s+на\s+\w+)?|укороти|сократи|make\s+(?:it\s+)?(?:shorter|warmer|more\s+formal|friendlier)|rewrite|translate|polish)(?!\p{L})/iu;
 
+/**
+ * Natural RU/EN “full client profile” asks.
+ * Match lemma stem + case forms (вся/всю/всей информация) — not fixed sentences.
+ */
 const FULL_PROFILE_RE =
-  /вся\s+информац|все\s+(?:данные|поля)|полный\s+(?:профиль|сводк)|full\s+(?:profile|info)|everything\s+about\s+(?:the\s+)?client|все\s+по\s+клиент/i;
+  /(?:вся|всю|всей)\s+информац|все\s+(?:данные|поля)|полн\w*\s+(?:профиль|сводк)|full\s+(?:profile|info)|everything\s+about\s+(?:the\s+)?client|все\s+по\s+клиент/i;
 
 const SUMMARY_RE =
   /резюме|сводк|summary|расскажи\s+о\s+клиент|что\s+по\s+клиент|профиль\s+клиент/i;

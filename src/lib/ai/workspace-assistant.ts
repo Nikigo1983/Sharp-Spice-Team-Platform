@@ -85,11 +85,17 @@ import {
   type ClientListContinuationState,
 } from "@/lib/ai/client-list-reply";
 import {
+  extractNameFromDebtQuery,
+  formatFinanceClientDebtReply,
   formatFinanceDebtorsListReply,
+  isFinanceNamedClientDebtQuery,
   isFinancePaymentDebtQuery,
   wantsDebtorEmails,
 } from "@/lib/ai/finance-debt-query";
-import { listPortalFinanceSnapshots } from "@/lib/ai/portal-finance-snapshot";
+import {
+  getPortalFinanceSnapshot,
+  listPortalFinanceSnapshots,
+} from "@/lib/ai/portal-finance-snapshot";
 import {
   formatConversationSummaryForPrompt,
   selectRecentHistoryTurns,
@@ -696,6 +702,80 @@ async function prepareWorkspaceRequest(
         logWorkspaceAiTrace(trace);
         return { ...direct, requestId, trace };
       }
+    }
+  }
+
+  if (!followUp && isFinanceNamedClientDebtQuery(trimmed)) {
+    try {
+      const hint = extractNameFromDebtQuery(trimmed);
+      if (hint) {
+        const cases = await listPortalIntakeCasesForAi();
+        const matches = cases.filter((record) =>
+          clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
+        );
+        if (matches.length === 1) {
+          const record = matches[0];
+          const finance = await getPortalFinanceSnapshot(record.id);
+          const name = portalIntakeDisplayName(record);
+          const reply = formatFinanceClientDebtReply({
+            name,
+            email: finance?.email ?? record.email ?? null,
+            contractAmount: finance?.contractAmount ?? null,
+            contractAmountCents: finance?.contractAmountCents ?? null,
+            paidAmount: finance?.paidAmount ?? null,
+            balance: finance?.balance ?? null,
+            balanceCents: finance?.balanceCents ?? null,
+          });
+          trace.selectedRoutes = ["finance_client_debt_direct"];
+          trace.responseOk = true;
+          trace.latencyMs.prepare = Date.now() - started;
+          trace.notes.push(`finance_client_debt=${name}`);
+          logWorkspaceAiTrace(trace);
+          return {
+            kind: "direct",
+            reply: redactSensitiveText(reply),
+            sources: ["Finance", "Заявки портала Emigrant"],
+            requestId,
+            trace,
+          };
+        }
+        if (matches.length > 1) {
+          const names = matches
+            .slice(0, 8)
+            .map((record) => portalIntakeDisplayName(record))
+            .join(", ");
+          const reply = `Нашёл несколько клиентов по «${hint}»: ${names}. Уточните, чей долг нужен.`;
+          trace.selectedRoutes = ["finance_client_debt_ambiguous"];
+          trace.responseOk = true;
+          trace.latencyMs.prepare = Date.now() - started;
+          logWorkspaceAiTrace(trace);
+          return {
+            kind: "direct",
+            reply: redactSensitiveText(reply),
+            sources: ["Заявки портала Emigrant"],
+            requestId,
+            trace,
+          };
+        }
+        const reply = `Клиент «${hint}» не найден в заявках портала Emigrant — долг в Finance не проверить.`;
+        trace.selectedRoutes = ["finance_client_debt_not_found"];
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: redactSensitiveText(reply),
+          sources: ["Заявки портала Emigrant"],
+          requestId,
+          trace,
+        };
+      }
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] finance client debt failed`,
+        error,
+      );
+      trace.notes.push("FINANCE_CLIENT_DEBT_ERROR");
     }
   }
 

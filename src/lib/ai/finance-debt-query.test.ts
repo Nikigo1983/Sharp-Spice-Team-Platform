@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  extractNameFromDebtQuery,
+  formatFinanceClientDebtReply,
   formatFinanceDebtorsListReply,
+  isFinanceNamedClientDebtQuery,
   isFinancePaymentDebtQuery,
   NO_CONTRACT_YET_LABEL,
   wantsDebtorEmails,
@@ -20,10 +23,33 @@ describe("isFinancePaymentDebtQuery", () => {
     );
   });
 
-  it("ignores unrelated queries", () => {
+  it("ignores unrelated and named-client debt queries", () => {
     assert.equal(isFinancePaymentDebtQuery("кто в работе"), false);
     assert.equal(isFinancePaymentDebtQuery("статус адрес отправлен"), false);
     assert.equal(isFinancePaymentDebtQuery("клиенты менеджера Лена"), false);
+    assert.equal(
+      isFinancePaymentDebtQuery("Скажи какой долг у Мазуриной"),
+      false,
+    );
+  });
+});
+
+describe("isFinanceNamedClientDebtQuery", () => {
+  it("detects named debt questions", () => {
+    assert.equal(
+      isFinanceNamedClientDebtQuery("Скажи какой долг у Мазуриной"),
+      true,
+    );
+    assert.equal(isFinanceNamedClientDebtQuery("долг у Ивановой"), true);
+    assert.equal(isFinanceNamedClientDebtQuery("сколько должна Петрова"), true);
+  });
+
+  it("extracts the client name", () => {
+    assert.equal(
+      extractNameFromDebtQuery("Скажи какой долг у Мазуриной"),
+      "Мазуриной",
+    );
+    assert.equal(extractNameFromDebtQuery("долг у Ивановой"), "Ивановой");
   });
 });
 
@@ -98,5 +124,35 @@ describe("formatFinanceDebtorsListReply", () => {
     assert.match(reply, /из них с email: 1/);
     assert.match(reply, /ivanov@example.com/);
     assert.match(reply, /email не указан в заявке/);
+  });
+});
+
+describe("formatFinanceClientDebtReply", () => {
+  it("says пока нет договора when no Finance amount", () => {
+    const reply = formatFinanceClientDebtReply({
+      name: "Мазурина",
+      email: "m@example.com",
+      contractAmount: null,
+      contractAmountCents: null,
+      paidAmount: null,
+      balance: null,
+      balanceCents: null,
+    });
+    assert.match(reply, /Мазурина/);
+    assert.match(reply, new RegExp(NO_CONTRACT_YET_LABEL));
+    assert.match(reply, /m@example.com/);
+  });
+
+  it("reports outstanding balance", () => {
+    const reply = formatFinanceClientDebtReply({
+      name: "Мазурина",
+      email: null,
+      contractAmount: "2 000 €",
+      contractAmountCents: 200000,
+      paidAmount: "1 000 €",
+      balance: "1 000 €",
+      balanceCents: 100000,
+    });
+    assert.match(reply, /долг \*\*1 000 €\*\*/);
   });
 });

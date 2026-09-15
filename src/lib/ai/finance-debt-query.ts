@@ -5,10 +5,52 @@
 /** Shown when Finance has no contract amount yet. */
 export const NO_CONTRACT_YET_LABEL = "пока нет договора";
 
+/**
+ * Debt for a named client — «какой долг у Мазуриной», not the full debtor list.
+ */
+export function isFinanceNamedClientDebtQuery(query: string): boolean {
+  const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!lower) return false;
+  return (
+    /(?:какой|какая|какое)\s+долг\s+у\s+/i.test(lower) ||
+    /долг\s+у\s+[а-яёa-z\-']/i.test(lower) ||
+    /сколько\s+(?:должен|должна|должно)(?:\s|$|[.,!?])/i.test(lower) ||
+    /баланс\s+(?:оплат\w*\s+)?у\s+[а-яёa-z\-']/i.test(lower) ||
+    (/долг/i.test(lower) &&
+      /(?<!\p{L})у\s+[А-ЯЁA-Za-zа-яё\-']{3,}/u.test(query))
+  );
+}
+
+/** Surname / name token from a named debt question. */
+export function extractNameFromDebtQuery(query: string): string | null {
+  const afterU = query.match(
+    /(?:долг|баланс|оплат\w*)\s+у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+  );
+  if (afterU?.[1]) return afterU[1];
+
+  const afterKakoy = query.match(
+    /(?:какой|какая|какое)\s+долг\s+у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+  );
+  if (afterKakoy?.[1]) return afterKakoy[1];
+
+  const afterSkolko = query.match(
+    /сколько\s+(?:должен|должна|должно)\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu,
+  );
+  if (afterSkolko?.[1]) return afterSkolko[1];
+
+  const bareU = query.match(/(?<!\p{L})у\s+([А-ЯЁA-Za-zа-яё\-']{3,})/iu);
+  if (bareU?.[1] && !/^клиент/i.test(bareU[1]) && /долг|баланс|оплат/i.test(query)) {
+    return bareU[1];
+  }
+  return null;
+}
+
 /** Manager asks who owes money — Finance balance, not CRM/portal status. */
 export function isFinancePaymentDebtQuery(query: string): boolean {
   const lower = query.toLowerCase().replace(/\s+/g, " ").trim();
   if (!lower) return false;
+  // Named client debt is handled separately — do not dump the full debtor list.
+  if (isFinanceNamedClientDebtQuery(query)) return false;
   return (
     /должник/i.test(lower) ||
     /кто\s+должен(?:\s|$|[.,!?])/i.test(lower) ||
@@ -100,4 +142,39 @@ export function formatFinanceDebtorsListReply(params: {
     "",
     `Всего с договором: ${withContract}. Без суммы договора: ${withoutContract}.`,
   ].join("\n");
+}
+
+export function formatFinanceClientDebtReply(params: {
+  name: string;
+  email: string | null;
+  contractAmount: string | null;
+  contractAmountCents: number | null;
+  paidAmount: string | null;
+  balance: string | null;
+  balanceCents: number | null;
+}): string {
+  const { name, email, contractAmount, contractAmountCents, paidAmount, balance, balanceCents } =
+    params;
+  const emailLine = email?.trim()
+    ? ` Email: ${email.trim()}.`
+    : " Email в заявке не указан.";
+
+  if (contractAmountCents == null) {
+    return (
+      `У **${name}** в Finance ${NO_CONTRACT_YET_LABEL} — долг по оплате не определён.` +
+      `${emailLine} Источник: Finance + Заявки портала Emigrant.`
+    );
+  }
+
+  if ((balanceCents ?? 0) <= 0) {
+    return (
+      `У **${name}** долга нет: договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}, баланс 0.` +
+      `${emailLine} Источник: Finance + Заявки портала Emigrant.`
+    );
+  }
+
+  return (
+    `У **${name}** долг **${balance}** (договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}).` +
+    `${emailLine} Источник: Finance + Заявки портала Emigrant.`
+  );
 }

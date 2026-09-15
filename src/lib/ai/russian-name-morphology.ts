@@ -294,3 +294,245 @@ export function formatNormalizedQueryDebug(parts: NormalizedNameParts): string {
   }
   return lines.join("\n");
 }
+
+export type RussianNameGender = "female" | "male" | "unknown";
+
+function preserveNameCase(sample: string, inflected: string): string {
+  if (!sample || !inflected) return inflected;
+  if (sample === sample.toUpperCase() && /[А-ЯЁA-Z]/.test(sample)) {
+    return inflected.toLocaleUpperCase("ru-RU");
+  }
+  if (sample === sample.toLowerCase()) {
+    return inflected.toLocaleLowerCase("ru-RU");
+  }
+  // Title-case each word from inflected, keep sample's per-word style when possible.
+  const sampleWords = sample.split(/\s+/);
+  const outWords = inflected.split(/\s+/);
+  return outWords
+    .map((word, index) => {
+      const src = sampleWords[index] ?? sampleWords[0] ?? word;
+      if (src === src.toUpperCase() && /[А-ЯЁA-Z]/.test(src)) {
+        return word.toLocaleUpperCase("ru-RU");
+      }
+      if (src[0] && src[0] === src[0].toLocaleUpperCase("ru-RU")) {
+        return (
+          word.charAt(0).toLocaleUpperCase("ru-RU") +
+          word.slice(1).toLocaleLowerCase("ru-RU")
+        );
+      }
+      return word;
+    })
+    .join(" ");
+}
+
+function replaceSuffixCaseAware(
+  word: string,
+  fromSuffix: string,
+  toSuffix: string,
+): string {
+  if (word.length < fromSuffix.length) return word;
+  const stem = word.slice(0, -fromSuffix.length);
+  return preserveNameCase(word, stem + toSuffix);
+}
+
+/** Infer gender from FIO and/or the form used in the manager query. */
+export function inferRussianPersonGender(
+  displayName: string,
+  queryHint?: string | null,
+): RussianNameGender {
+  const hint = queryHint?.trim().toLowerCase() ?? "";
+  if (hint) {
+    if (/(?:овой|евой|иной|ыной|ской|цкой|ую|ей)$/i.test(hint)) {
+      return "female";
+    }
+    if (/(?:ову|еву|ину|ыну|ского|скому|ским)$/i.test(hint)) {
+      return "male";
+    }
+  }
+
+  const tokens = displayName
+    .trim()
+    .split(/[^\p{L}\p{N}\-']+/u)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+
+  for (const token of tokens) {
+    const t = token.toLowerCase();
+    if (/(?:ова|ева|ина|ына|ая|яя|ская|цкая)$/i.test(t)) return "female";
+  }
+  for (const token of tokens) {
+    const t = token.toLowerCase();
+    if (/(?:ский|цкой|ян)$/i.test(t)) return "male";
+    if (/(?:ов|ев|ин|ын)$/i.test(t) && !/(?:ова|ева|ина|ына)$/i.test(t)) {
+      return "male";
+    }
+  }
+
+  for (const token of tokens) {
+    const t = token.toLowerCase();
+    if (
+      /^(?:анна|мария|марья|елена|ольга|наталья|татьяна|ирина|екатерина|юлия|дарья|алина|виктория|полина|ксения|софья|софия|любовь|надежда|вера|галина|лариса|светлана|валентина|людмила|марина|нина|зинаида|евгения|александра)$/i.test(
+        t,
+      ) ||
+      /(?:ия|ья|на|ра|ла|са|та|ка|га|да|ва|ша|ня)$/i.test(t)
+    ) {
+      // Avoid treating surname stems as first names when already classified.
+      if (!/(?:ов|ев|ин|ын|ский)$/i.test(t)) return "female";
+    }
+    if (
+      /^(?:александр|алексей|андрей|борис|вадим|василий|виктор|владимир|дмитрий|евгений|иван|игорь|кирилл|константин|леонид|максим|михаил|николай|олег|павел|пётр|петр|роман|сергей|степан|фёдор|федор|юрий|яков)$/i.test(
+        t,
+      )
+    ) {
+      return "male";
+    }
+  }
+
+  return "unknown";
+}
+
+function inflectSurnameToGenitive(
+  surname: string,
+  gender: RussianNameGender,
+): string {
+  const lower = surname.toLowerCase();
+
+  const asFemale =
+    gender === "female" ||
+    (gender === "unknown" &&
+      /(?:ова|ева|ина|ына|ая|яя|ская|цкая)$/i.test(lower));
+  const asMale =
+    gender === "male" ||
+    (gender === "unknown" &&
+      /(?:ов|ев|ин|ын|ский|цкий|ян)$/i.test(lower) &&
+      !/(?:ова|ева|ина|ына)$/i.test(lower));
+
+  if (asFemale) {
+    if (/ова$/i.test(surname)) return replaceSuffixCaseAware(surname, "ова", "овой");
+    if (/ева$/i.test(surname)) return replaceSuffixCaseAware(surname, "ева", "евой");
+    if (/ёва$/i.test(surname)) return replaceSuffixCaseAware(surname, "ёва", "ёвой");
+    if (/ина$/i.test(surname)) return replaceSuffixCaseAware(surname, "ина", "иной");
+    if (/ына$/i.test(surname)) return replaceSuffixCaseAware(surname, "ына", "ыной");
+    if (/ская$/i.test(surname)) return replaceSuffixCaseAware(surname, "ская", "ской");
+    if (/цкая$/i.test(surname)) return replaceSuffixCaseAware(surname, "цкая", "цкой");
+    if (/ая$/i.test(surname)) return replaceSuffixCaseAware(surname, "ая", "ой");
+    if (/яя$/i.test(surname)) return replaceSuffixCaseAware(surname, "яя", "ей");
+  }
+
+  if (asMale) {
+    if (/ский$/i.test(surname)) return replaceSuffixCaseAware(surname, "ский", "ского");
+    if (/цкий$/i.test(surname)) return replaceSuffixCaseAware(surname, "цкий", "цкого");
+    if (/ой$/i.test(surname)) return replaceSuffixCaseAware(surname, "ой", "ого");
+    if (/ов$/i.test(surname)) return replaceSuffixCaseAware(surname, "ов", "ова");
+    if (/ев$/i.test(surname)) return replaceSuffixCaseAware(surname, "ев", "ева");
+    if (/ёв$/i.test(surname)) return replaceSuffixCaseAware(surname, "ёв", "ёва");
+    if (/ин$/i.test(surname)) return replaceSuffixCaseAware(surname, "ин", "ина");
+    if (/ын$/i.test(surname)) return replaceSuffixCaseAware(surname, "ын", "ына");
+    if (/ян$/i.test(surname)) return replaceSuffixCaseAware(surname, "ян", "яна");
+  }
+
+  return surname;
+}
+
+function inflectGivenNameToGenitive(
+  name: string,
+  gender: RussianNameGender,
+): string {
+  const lower = name.toLowerCase();
+  if (gender === "female" || /(?:а|я)$/i.test(lower)) {
+    if (/ия$/i.test(name)) return replaceSuffixCaseAware(name, "ия", "ии");
+    if (/ья$/i.test(name)) return replaceSuffixCaseAware(name, "ья", "ьи");
+    if (/а$/i.test(name)) {
+      // Анна → Анны, Ольга → Ольги
+      if (/[гкхжшщч]$/i.test(name.slice(0, -1))) {
+        return replaceSuffixCaseAware(name, "а", "и");
+      }
+      return replaceSuffixCaseAware(name, "а", "ы");
+    }
+    if (/я$/i.test(name)) return replaceSuffixCaseAware(name, "я", "и");
+    if (/ь$/i.test(name)) return replaceSuffixCaseAware(name, "ь", "и");
+  }
+  if (gender === "male" || gender === "unknown") {
+    if (/ий$/i.test(name)) return replaceSuffixCaseAware(name, "ий", "ия");
+    if (/ей$/i.test(name)) return replaceSuffixCaseAware(name, "ей", "ея");
+    if (/ай$/i.test(name)) return replaceSuffixCaseAware(name, "ай", "ая");
+    if (/й$/i.test(name)) return replaceSuffixCaseAware(name, "й", "я");
+    if (/ь$/i.test(name)) return replaceSuffixCaseAware(name, "ь", "я");
+    if (/[бвгджзклмнпрстфхцчшщ]$/i.test(name)) {
+      return preserveNameCase(name, `${name}а`);
+    }
+  }
+  return name;
+}
+
+function tokenLooksLikeSurname(token: string): boolean {
+  return /(?:ова|ева|ина|ына|ая|ская|цкая|ский|цкой|ян|ов|ев|ин|ын)$/i.test(
+    token,
+  );
+}
+
+/**
+ * Genitive (родительный) for phrases like «У … долг».
+ * Uses FIO heuristics and optional query hint («Пермяковой» → female).
+ */
+export function inflectRussianPersonNameGenitive(
+  displayName: string,
+  queryHint?: string | null,
+): string {
+  const trimmed = displayName.trim().replace(/\s+/g, " ");
+  if (!trimmed) return trimmed;
+
+  const gender = inferRussianPersonGender(trimmed, queryHint);
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length === 1) {
+    const only = tokens[0]!;
+    return tokenLooksLikeSurname(only)
+      ? inflectSurnameToGenitive(only, gender)
+      : inflectGivenNameToGenitive(only, gender);
+  }
+
+  // Typical CRM: «Фамилия Имя» or «Фамилия Имя Отчество»
+  const [first, ...rest] = tokens;
+  if (tokenLooksLikeSurname(first!)) {
+    return [
+      inflectSurnameToGenitive(first!, gender),
+      ...rest.map((token, index) => {
+        if (index === 0) return inflectGivenNameToGenitive(token, gender);
+        if (/овна$/i.test(token)) return replaceSuffixCaseAware(token, "овна", "овны");
+        if (/евна$/i.test(token)) return replaceSuffixCaseAware(token, "евна", "евны");
+        if (/ична$/i.test(token)) return replaceSuffixCaseAware(token, "ична", "ичны");
+        if (/(?:ович|евич)$/i.test(token)) return preserveNameCase(token, `${token}а`);
+        if (/ич$/i.test(token)) return preserveNameCase(token, `${token}а`);
+        return token;
+      }),
+    ].join(" ");
+  }
+
+  // «Имя Фамилия»
+  if (rest.length >= 1 && tokenLooksLikeSurname(rest[rest.length - 1]!)) {
+    const surname = rest[rest.length - 1]!;
+    const given = [first!, ...rest.slice(0, -1)];
+    return [
+      ...given.map((token) => inflectGivenNameToGenitive(token, gender)),
+      inflectSurnameToGenitive(surname, gender),
+    ].join(" ");
+  }
+
+  return tokens
+    .map((token, index) =>
+      index === 0
+        ? inflectGivenNameToGenitive(token, gender)
+        : tokenLooksLikeSurname(token)
+          ? inflectSurnameToGenitive(token, gender)
+          : token,
+    )
+    .join(" ");
+}
+
+/** «У Пермяковой» / «У Иванова» with correct gender/case. */
+export function formatRussianNamePossessiveU(
+  displayName: string,
+  queryHint?: string | null,
+): string {
+  return `У **${inflectRussianPersonNameGenitive(displayName, queryHint)}**`;
+}

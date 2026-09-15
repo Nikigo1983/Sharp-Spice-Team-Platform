@@ -2,6 +2,7 @@ import {
   formatStatusForAiContext,
   sanitizeCrmClientStatus,
 } from "@/lib/ai/client-status";
+import { formatRussianNamePossessiveU } from "@/lib/ai/russian-name-morphology";
 import type { Client } from "@/lib/google-sheets/types";
 
 function displayField(value: string | undefined): string {
@@ -147,5 +148,5 @@ export function formatPassportMissingReply(
   rowIndex?: number,
 ): string {
   const row = rowIndex && rowIndex > 0 ? ` (строка ${rowIndex})` : "";
-  return `У **${clientName}** в заявках портала Emigrant поле «Номер паспорта» пустое${row}.`;
+  return `${formatRussianNamePossessiveU(clientName)} в заявках портала Emigrant поле «Номер паспорта» пустое${row}.`;
 }

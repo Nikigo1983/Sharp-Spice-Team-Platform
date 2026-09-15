@@ -2,6 +2,8 @@
  * Detect Finance «должник по оплате» queries and format deterministic replies.
  */
 
+import { formatRussianNamePossessiveU } from "@/lib/ai/russian-name-morphology";
+
 /** Shown when Finance has no contract amount yet. */
 export const NO_CONTRACT_YET_LABEL = "пока нет договора";
 
@@ -228,29 +230,40 @@ export function formatFinanceClientDebtReply(params: {
   paidAmount: string | null;
   balance: string | null;
   balanceCents: number | null;
+  /** Query token like «Пермяковой» — helps gender/case. */
+  nameHint?: string | null;
 }): string {
-  const { name, email, contractAmount, contractAmountCents, paidAmount, balance, balanceCents } =
-    params;
+  const {
+    name,
+    email,
+    contractAmount,
+    contractAmountCents,
+    paidAmount,
+    balance,
+    balanceCents,
+    nameHint = null,
+  } = params;
   const emailLine = email?.trim()
     ? ` Email: ${email.trim()}.`
     : " Email в заявке не указан.";
+  const who = formatRussianNamePossessiveU(name, nameHint);
 
   if (contractAmountCents == null) {
     return (
-      `У **${name}** в Finance ${NO_CONTRACT_YET_LABEL} — долг по оплате не определён.` +
+      `${who} в Finance ${NO_CONTRACT_YET_LABEL} — долг по оплате не определён.` +
       `${emailLine} Источник: Finance + Заявки портала Emigrant.`
     );
   }
 
   if ((balanceCents ?? 0) <= 0) {
     return (
-      `У **${name}** долга нет: договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}, баланс 0.` +
+      `${who} долга нет: договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}, баланс 0.` +
       `${emailLine} Источник: Finance + Заявки портала Emigrant.`
     );
   }
 
   return (
-    `У **${name}** долг **${balance}** (договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}).` +
+    `${who} долг **${balance}** (договор ${contractAmount}, оплачено ${paidAmount ?? "0 €"}).` +
     `${emailLine} Источник: Finance + Заявки портала Emigrant.`
   );
 }

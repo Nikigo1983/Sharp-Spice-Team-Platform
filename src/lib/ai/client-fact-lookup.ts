@@ -5,7 +5,7 @@
 
 import type { ClientContext, ResolvedClientContext } from "@/lib/ai/client-context";
 import { isMergedClientContext } from "@/lib/ai/client-context";
-import { morphNameMatch, getRussianNameLemmaVariants } from "@/lib/ai/russian-name-morphology";
+import { morphNameMatch, getRussianNameLemmaVariants, formatRussianNamePossessiveU } from "@/lib/ai/russian-name-morphology";
 import type { Client } from "@/lib/google-sheets/types";
 
 export type ClientFactFieldId =
@@ -199,7 +199,7 @@ export function formatStructuredClientFactReply(params: {
       ? ` · строка ${params.rowIndex}`
       : "";
   if (!params.present) {
-    return `У **${params.clientName}** в заявках портала Emigrant поле «${spec.label}» пустое (не заполнено)${row}.`;
+    return `${formatRussianNamePossessiveU(params.clientName)} в заявках портала Emigrant поле «${spec.label}» пустое (не заполнено)${row}.`;
   }
   return `**${params.value}** — ${spec.label.toLowerCase()} **${params.clientName}** · Заявки портала Emigrant${row}`;
 }

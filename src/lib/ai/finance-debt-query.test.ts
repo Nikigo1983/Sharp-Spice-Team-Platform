@@ -166,21 +166,23 @@ describe("formatFinanceClientDebtReply", () => {
       balance: null,
       balanceCents: null,
     });
-    assert.match(reply, /Мазурина/);
+    assert.match(reply, /У \*\*Мазуриной\*\*/);
     assert.match(reply, new RegExp(NO_CONTRACT_YET_LABEL));
     assert.match(reply, /m@example.com/);
   });
 
-  it("reports outstanding balance", () => {
+  it("reports outstanding balance with feminine genitive", () => {
     const reply = formatFinanceClientDebtReply({
-      name: "Мазурина",
+      name: "ПЕРМЯКОВА",
       email: null,
       contractAmount: "2 000 €",
       contractAmountCents: 200000,
       paidAmount: "1 000 €",
       balance: "1 000 €",
       balanceCents: 100000,
+      nameHint: "Пермяковой",
     });
+    assert.match(reply, /У \*\*ПЕРМЯКОВОЙ\*\*/);
     assert.match(reply, /долг \*\*1 000 €\*\*/);
   });
 });

@@ -725,6 +725,7 @@ async function prepareWorkspaceRequest(
           paidAmount: finance?.paidAmount ?? null,
           balance: finance?.balance ?? null,
           balanceCents: finance?.balanceCents ?? null,
+          nameHint: hint,
         });
         trace.selectedRoutes = ["finance_client_debt_direct"];
         trace.responseOk = true;

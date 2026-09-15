@@ -96,10 +96,16 @@ import {
   listPortalFinanceSnapshots,
 } from "@/lib/ai/portal-finance-snapshot";
 import {
+  clipHistoryTurnsForModel,
   formatConversationSummaryForPrompt,
   selectRecentHistoryTurns,
   sanitizeConversationSummary,
 } from "@/lib/ai/workspace-conversation-memory";
+import {
+  extractClientNameFromLetterQuery,
+  formatDebtReminderLetter,
+  isClientDebtReminderLetterQuery,
+} from "@/lib/ai/client-debt-letter";
 import {
   buildDocFillPack,
   buildDocFillPromptAddon,
@@ -346,7 +352,9 @@ function buildChatMessages(
   conversationSummary: string | null = null,
   caseMemory: WorkspaceCaseMemory | null = null,
 ): ChatMessage[] {
-  const historyMessages: ChatMessage[] = selectRecentHistoryTurns(history).map(
+  const historyMessages: ChatMessage[] = clipHistoryTurnsForModel(
+    selectRecentHistoryTurns(history),
+  ).map(
     (turn) => ({
       role: turn.role,
       content: turn.content,
@@ -818,6 +826,86 @@ async function prepareWorkspaceRequest(
         error,
       );
       trace.notes.push("FINANCE_DEBTORS_ERROR");
+    }
+  }
+
+  if (!followUp && isClientDebtReminderLetterQuery(trimmed)) {
+    try {
+      const hint =
+        extractClientNameFromLetterQuery(trimmed) ||
+        resolveFinanceDebtNameHint(trimmed, history);
+      if (hint) {
+        const cases = await listPortalIntakeCasesForAi();
+        const matches = cases.filter((record) =>
+          clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
+        );
+        if (matches.length === 1) {
+          const record = matches[0];
+          const finance = await getPortalFinanceSnapshot(record.id);
+          const name = portalIntakeDisplayName(record);
+          const reply = formatDebtReminderLetter({
+            displayName: name,
+            email: finance?.email ?? record.email ?? null,
+            contractAmount: finance?.contractAmount ?? null,
+            contractAmountCents: finance?.contractAmountCents ?? null,
+            paidAmount: finance?.paidAmount ?? null,
+            balance: finance?.balance ?? null,
+            balanceCents: finance?.balanceCents ?? null,
+            nameHint: hint,
+            mentionResidencePermit: /внж|residence|вид\s+на\s+жител/i.test(
+              trimmed,
+            ),
+          });
+          trace.selectedRoutes = ["client_debt_letter_direct"];
+          trace.responseOk = true;
+          trace.latencyMs.prepare = Date.now() - started;
+          trace.notes.push(`debt_letter=${name}`);
+          logWorkspaceAiTrace(trace);
+          return {
+            kind: "direct",
+            reply: redactSensitiveText(reply),
+            sources: ["Finance", "Заявки портала Emigrant"],
+            requestId,
+            trace,
+          };
+        }
+        if (matches.length > 1) {
+          const names = matches
+            .slice(0, 8)
+            .map((record) => portalIntakeDisplayName(record))
+            .join(", ");
+          const reply = `Нашёл несколько клиентов по «${hint}»: ${names}. Уточните, кому писать письмо.`;
+          trace.selectedRoutes = ["client_debt_letter_ambiguous"];
+          trace.responseOk = true;
+          trace.latencyMs.prepare = Date.now() - started;
+          logWorkspaceAiTrace(trace);
+          return {
+            kind: "direct",
+            reply: redactSensitiveText(reply),
+            sources: ["Заявки портала Emigrant"],
+            requestId,
+            trace,
+          };
+        }
+        const reply = `Клиент «${hint}» не найден в заявках портала Emigrant — письмо с суммой долга составить нельзя.`;
+        trace.selectedRoutes = ["client_debt_letter_not_found"];
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: redactSensitiveText(reply),
+          sources: ["Заявки портала Emigrant"],
+          requestId,
+          trace,
+        };
+      }
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] debt letter draft failed`,
+        error,
+      );
+      trace.notes.push("DEBT_LETTER_ERROR");
     }
   }
 
@@ -1457,7 +1545,9 @@ async function executeAgentPrepared(params: {
   statusEvents: AgentToolStatusEvent[];
 } | null> {
   const { prepared } = params;
-  const recent = selectRecentHistoryTurns(prepared.history).map((turn) => ({
+  const recent = clipHistoryTurnsForModel(
+    selectRecentHistoryTurns(prepared.history),
+  ).map((turn) => ({
     role: turn.role,
     content: turn.content,
   }));

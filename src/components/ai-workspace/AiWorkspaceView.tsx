@@ -16,6 +16,7 @@ import {
   resolveClientListContinuationFromHistory,
 } from "@/lib/ai/client-list-continuation";
 import {
+  clipHistoryTurnsForModel,
   selectRecentHistoryTurns,
   WORKSPACE_RECENT_HISTORY_TURNS,
 } from "@/lib/ai/workspace-conversation-memory";
@@ -709,7 +710,9 @@ export function AiWorkspaceView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          history: selectRecentHistoryTurns(history, WORKSPACE_RECENT_HISTORY_TURNS).map(turn => ({ role: turn.role, content: turn.content })),
+          history: clipHistoryTurnsForModel(
+            selectRecentHistoryTurns(history, WORKSPACE_RECENT_HISTORY_TURNS),
+          ).map(turn => ({ role: turn.role, content: turn.content })),
           mode: responseMode, chatId,
           conversationSummary: conversationSummary ?? undefined,
           caseMemory: caseMemory ?? undefined,

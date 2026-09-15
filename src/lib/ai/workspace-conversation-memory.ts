@@ -9,6 +9,8 @@ import {
 } from "@/lib/ai/workspace-case-memory";
 
 export const WORKSPACE_RECENT_HISTORY_TURNS = 20;
+/** Cap each history turn so giant debtor lists do not blow model context. */
+export const WORKSPACE_HISTORY_TURN_MAX_CHARS = 900;
 /** Refresh rolling summary after this many new turns since last summary. */
 export const WORKSPACE_SUMMARY_EVERY_TURNS = 12;
 /** First summary once the chat reaches this many turns. */
@@ -39,6 +41,26 @@ export function selectRecentHistoryTurns<T>(
   if (limit <= 0) return [];
   if (history.length <= limit) return history;
   return history.slice(-limit);
+}
+
+/** Truncate long turn bodies before sending history to the model. */
+export function clipHistoryTurnsForModel<
+  T extends { role?: string; content?: string },
+>(
+  turns: T[],
+  maxChars: number = WORKSPACE_HISTORY_TURN_MAX_CHARS,
+): T[] {
+  if (maxChars <= 0) return turns;
+  return turns.map((turn) => {
+    const content = turn.content;
+    if (typeof content !== "string" || content.length <= maxChars) {
+      return turn;
+    }
+    return {
+      ...turn,
+      content: `${content.slice(0, maxChars)}\n…[сокращено для контекста]`,
+    };
+  });
 }
 
 export function shouldRefreshConversationSummary(

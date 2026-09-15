@@ -132,6 +132,14 @@ describe("production booking address bug — structured fact lookup", () => {
     assert.equal(clientFactSurnameMatches("АНТОНОВА", "Петровой"), false);
   });
 
+  it("matches masculine genitive Музыкина to Музыкин without false Антонов", () => {
+    assert.equal(clientFactSurnameMatches("Музыкин", "Музыкина"), true);
+    assert.equal(clientFactSurnameMatches("МУЗЫКИН", "Музыкина"), true);
+    assert.equal(clientFactSurnameMatches("Музыкина", "Музыкина"), true);
+    assert.equal(clientFactSurnameMatches("АНТОНОВ", "Антоновой"), false);
+    assert.equal(clientFactSurnameMatches("Сергей Музыкин", "Музыкина"), true);
+  });
+
   it("strict fact surname match keeps Antonova unique among loose morph hits", () => {
     const hint = "Антоновой";
     const names = ["АНТОНОВА", "АНТОНОВ", "АНТОН", "ПЕТРОВА"];

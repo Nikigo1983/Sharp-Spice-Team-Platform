@@ -222,9 +222,11 @@ export function clientNameMatchesQueryToken(
 }
 
 /**
- * Stricter surname match for structured facts.
- * Avoids morph startsWith / shared-stem false-positives (АНТОНОВ vs АНТОНОВА)
- * that make listClients multi-match and skip the direct CRM answer.
+ * Stricter surname match for structured facts / Finance debt lookup.
+ * Supports Russian case forms and matches any FIO token (surname or given name).
+ *
+ * - «Антоновой» → only feminine АНТОНОВА (not АНТОНОВ)
+ * - «Музыкина» (genitive of Музыкин OR nominative Музыкина) → Музыкин and/or Музыкина
  */
 export function clientFactSurnameMatches(
   clientName: string,
@@ -232,29 +234,65 @@ export function clientFactSurnameMatches(
 ): boolean {
   const needle = hint.trim().toLowerCase();
   if (needle.length < 3) return false;
-  const primary =
-    clientName
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}\-]+/u)
-      .filter(Boolean)[0] ?? "";
-  if (!primary) return false;
-  if (primary === needle) return true;
+  const parts = clientName
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}\-]+/u)
+    .filter(Boolean);
+  if (parts.length === 0) return false;
+
+  const lockFemale = /(?:овой|евой|иной|ыной|ской|цкой|ую)$/i.test(needle);
+  const lockMale =
+    /(?:ову|еву|ину|ыну|ского|скому|ским|ым|ом)$/i.test(needle) &&
+    !/(?:овой|евой|иной|ыной)/i.test(needle);
+
+  const looksFeminine = (word: string) =>
+    /(?:ова|ева|ина|ына|ая|яя|ская|цкая)$/i.test(word);
+  const looksMasculine = (word: string) =>
+    /(?:ов|ев|ин|ын|ский|цкий|ян)$/i.test(word) && !looksFeminine(word);
 
   const hintVariants = getRussianNameLemmaVariants(needle);
-  const nameVariants = new Set(getRussianNameLemmaVariants(primary));
 
-  const feminineNominatives = hintVariants.filter((variant) =>
-    /(?:ова|ева|ина|ая|ская|цкая)$/i.test(variant),
-  );
-  if (feminineNominatives.length > 0) {
-    return feminineNominatives.some(
-      (variant) => nameVariants.has(variant) || primary === variant,
-    );
+  for (const part of parts) {
+    if (part === needle) return true;
+    if (lockFemale && looksMasculine(part)) continue;
+    if (lockMale && looksFeminine(part)) continue;
+
+    const nameVariants = new Set(getRussianNameLemmaVariants(part));
+
+    if (lockFemale) {
+      if (
+        hintVariants
+          .filter(looksFeminine)
+          .some((variant) => nameVariants.has(variant) || part === variant)
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    if (lockMale) {
+      if (
+        hintVariants
+          .filter(looksMasculine)
+          .some((variant) => nameVariants.has(variant) || part === variant)
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    // Ambiguous endings («Музыкина»): lemma overlap across genders.
+    if (
+      hintVariants.some(
+        (variant) => variant.length >= 4 && nameVariants.has(variant),
+      )
+    ) {
+      return true;
+    }
+    if (morphNameMatch(needle, part)) return true;
   }
 
-  return hintVariants.some(
-    (variant) => variant.length >= 5 && nameVariants.has(variant),
-  );
+  return false;
 }
 
 export function extractClientNameHintFromFactQuery(query: string): string | null {

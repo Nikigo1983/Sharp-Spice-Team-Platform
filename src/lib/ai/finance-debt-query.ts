@@ -45,6 +45,82 @@ export function extractNameFromDebtQuery(query: string): string | null {
   return null;
 }
 
+/**
+ * Short follow-up after a debt answer: «А у Пермяковой?», «у Ивановой».
+ * Requires recent Finance-debt context in chat history.
+ */
+export function isFinanceDebtFollowUpQuery(query: string): boolean {
+  const trimmed = query.trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.length > 80) return false;
+  if (/долг|должник|баланс|оплат|email|емейл|паспорт|статус/i.test(trimmed)) {
+    // Explicit debt/other topics are handled elsewhere.
+    return false;
+  }
+  return (
+    /^(?:а\s+)?у\s+[А-ЯЁA-Za-zа-яё\-']{3,}\??[.!]?$/iu.test(trimmed) ||
+    /^а\s+[А-ЯЁA-Za-zа-яё\-']{3,}\??[.!]?$/iu.test(trimmed)
+  );
+}
+
+export function extractNameFromDebtFollowUp(query: string): string | null {
+  const trimmed = query.trim().replace(/\s+/g, " ");
+  const afterU = trimmed.match(
+    /^(?:а\s+)?у\s+([А-ЯЁA-Za-zа-яё\-']{3,})\??[.!]?$/iu,
+  );
+  if (afterU?.[1]) return afterU[1];
+  const afterA = trimmed.match(/^а\s+([А-ЯЁA-Za-zа-яё\-']{3,})\??[.!]?$/iu);
+  if (afterA?.[1] && !/^(долг|клиент|неё|него|них)$/i.test(afterA[1])) {
+    return afterA[1];
+  }
+  return null;
+}
+
+export function looksLikeFinanceDebtAssistantReply(content: string): boolean {
+  return (
+    /Источник:\s*Finance/i.test(content) ||
+    /должник(?:ов)?\s+по\s+оплате/i.test(content) ||
+    /Всего с договором:/i.test(content) ||
+    (/долг/i.test(content) && /Finance/i.test(content)) ||
+    (/пока нет договора/i.test(content) && /Finance/i.test(content))
+  );
+}
+
+export function recentHistoryHasFinanceDebtContext(
+  history: Array<{ role: string; content: string }>,
+  lookback = 8,
+): boolean {
+  const slice = history.slice(-Math.max(1, lookback));
+  return slice.some((turn) => {
+    if (turn.role === "assistant") {
+      return looksLikeFinanceDebtAssistantReply(turn.content);
+    }
+    if (turn.role === "user") {
+      return (
+        isFinanceNamedClientDebtQuery(turn.content) ||
+        isFinancePaymentDebtQuery(turn.content)
+      );
+    }
+    return false;
+  });
+}
+
+/** Resolve client name for debt lookup, including chat follow-ups. */
+export function resolveFinanceDebtNameHint(
+  query: string,
+  history: Array<{ role: string; content: string }> = [],
+): string | null {
+  if (isFinanceNamedClientDebtQuery(query)) {
+    return extractNameFromDebtQuery(query);
+  }
+  if (
+    isFinanceDebtFollowUpQuery(query) &&
+    recentHistoryHasFinanceDebtContext(history)
+  ) {
+    return extractNameFromDebtFollowUp(query);
+  }
+  return null;
+}
+
 /** Manager asks who owes money — Finance balance, not CRM/portal status. */
 export function isFinancePaymentDebtQuery(query: string): boolean {
   const lower = query.toLowerCase().replace(/\s+/g, " ").trim();

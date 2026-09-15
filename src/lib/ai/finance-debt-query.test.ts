@@ -5,9 +5,11 @@ import {
   extractNameFromDebtQuery,
   formatFinanceClientDebtReply,
   formatFinanceDebtorsListReply,
+  isFinanceDebtFollowUpQuery,
   isFinanceNamedClientDebtQuery,
   isFinancePaymentDebtQuery,
   NO_CONTRACT_YET_LABEL,
+  resolveFinanceDebtNameHint,
   wantsDebtorEmails,
 } from "@/lib/ai/finance-debt-query";
 
@@ -50,6 +52,32 @@ describe("isFinanceNamedClientDebtQuery", () => {
       "Мазуриной",
     );
     assert.equal(extractNameFromDebtQuery("долг у Ивановой"), "Ивановой");
+  });
+});
+
+describe("finance debt follow-ups", () => {
+  it("detects «А у Пермяковой?» style follow-ups", () => {
+    assert.equal(isFinanceDebtFollowUpQuery("А у Пермяковой?"), true);
+    assert.equal(isFinanceDebtFollowUpQuery("у Ивановой"), true);
+    assert.equal(isFinanceDebtFollowUpQuery("а Петрова"), true);
+    assert.equal(isFinanceDebtFollowUpQuery("кто должник по оплате"), false);
+    assert.equal(isFinanceDebtFollowUpQuery("какой долг у Мазуриной"), false);
+  });
+
+  it("resolves name from follow-up only with debt context in history", () => {
+    const history = [
+      { role: "user", content: "Скажи какой долг у Мазуриной" },
+      {
+        role: "assistant",
+        content:
+          "У **МАЗУРИНА** долг **1 000 €** (договор 2 000 €, оплачено 1 000 €). Источник: Finance + Заявки портала Emigrant.",
+      },
+    ];
+    assert.equal(
+      resolveFinanceDebtNameHint("А у Пермяковой?", history),
+      "Пермяковой",
+    );
+    assert.equal(resolveFinanceDebtNameHint("А у Пермяковой?", []), null);
   });
 });
 

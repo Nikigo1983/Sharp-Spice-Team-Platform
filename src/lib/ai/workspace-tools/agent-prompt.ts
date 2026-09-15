@@ -26,6 +26,7 @@ export const WORKSPACE_AGENT_SYSTEM_ADDON = `
 17. Если contractAmount = «пока нет договора» или null — пиши менеджеру «пока нет договора». Запрещено писать, что пустое значение «не означает отсутствие договора».
 18. «Кто должник / должник по оплате / кто должен» — list_client_contracts с onlyWithDebt=true (Finance баланс > 0). Это НЕ статус заявки портала. В ответе указывай email из clients[].email.
 19. «Какой долг у X» — get_client / Finance по этому клиенту. Если суммы нет — «пока нет договора», не общая ошибка AI.
+20. Follow-up «А у Y?» после ответа про долг — тот же Finance-путь по Y, без вызова LLM.
 `.trim();
 
 export function buildWorkspaceAgentMessages(params: {

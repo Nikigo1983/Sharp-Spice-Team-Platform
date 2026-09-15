@@ -23,6 +23,7 @@ import {
   type WorkspaceRouterDecision,
 } from "@/lib/ai/workspace-router-types";
 import type { WorkspaceQueryIntent } from "@/lib/ai/query-intent";
+import { queryLooksLikeClientPii } from "@/lib/ai/client-pii-signals";
 
 const VALID_INTENTS = new Set<WorkspaceRouteIntentLabel>([
   "knowledge",
@@ -130,6 +131,7 @@ async function classifyWithRouterModel(
       temperature: 0,
       maxTokens: 300,
       model,
+      containsClientData: queryLooksLikeClientPii(query),
     },
   );
   if (!result.ok || !result.content) {

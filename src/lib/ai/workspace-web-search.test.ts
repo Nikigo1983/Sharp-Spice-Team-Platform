@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   shouldUseInternetSearch,
+  searchWebForWorkspace,
+  isExternalWebSearchAllowedForClientPiiTask,
 } from "@/lib/ai/workspace-web-search";
+import { queryLooksLikeClientPii } from "@/lib/ai/client-pii-signals";
 
 describe("workspace web search intent", () => {
   it("enables internet for explicit / currency asks", () => {
@@ -33,8 +36,30 @@ describe("workspace web search intent", () => {
       false,
     );
     assert.equal(
-      shouldUseInternetSearch("Какие документы нужны для Digital Nomad в Хорватии?"),
+      shouldUseInternetSearch(
+        "Проверь в интернете email клиента Иванова и его паспорт",
+      ),
       false,
     );
+    assert.equal(
+      shouldUseInternetSearch("Сколько должна Коровякова?"),
+      false,
+    );
+  });
+
+  it("blocks client-PII queries even with explicit internet wording", async () => {
+    assert.equal(isExternalWebSearchAllowedForClientPiiTask(), false);
+    assert.equal(queryLooksLikeClientPii("Найди в интернете email Ивановой"), true);
+    assert.equal(
+      shouldUseInternetSearch("Найди в интернете email Ивановой"),
+      false,
+    );
+    const blocked = await searchWebForWorkspace(
+      "Найди в интернете телефон Тестова + паспорт",
+    );
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.error, "CLIENT_PII_WEB_SEARCH_BLOCKED");
+    assert.equal(blocked.query, "");
+    assert.equal(blocked.hits.length, 0);
   });
 });

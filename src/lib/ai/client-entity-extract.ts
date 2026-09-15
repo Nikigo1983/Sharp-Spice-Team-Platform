@@ -7,7 +7,6 @@ import {
   lemmatizeRussianNameWord,
   type NormalizedNameParts,
 } from "@/lib/ai/russian-name-morphology";
-import { redactForLogging } from "@/lib/ai/context-redaction";
 import { normalizeText } from "@/lib/ai/search-normalize";
 
 const QUERY_STOP_WORDS = new Set([
@@ -200,23 +199,8 @@ export function logClientEntityExtraction(
   extraction: ClientEntityExtraction | null,
   result?: { kind: string; clientName?: string },
 ): void {
-  console.log("=== CLIENT LOOKUP ===");
-  console.log("Запрос:", redactForLogging(rawQuery));
-  console.log("Извлечено:", extraction?.extractedPhrase ?? "—");
-  console.log("Нормализовано:", extraction?.normalizedPhrase ?? "—");
-  console.log("Поиск:", extraction?.searchPhrase ?? "—");
-
-  if (result?.kind === "single" && result.clientName) {
-    console.log("Результат:", `Найден клиент ${result.clientName}`);
-  } else if (result?.kind === "not_found") {
-    console.log("Результат:", "Клиент не найден");
-  } else if (result?.kind === "multiple") {
-    console.log("Результат:", "Найдено несколько клиентов");
-  } else if (result?.kind === "weak") {
-    console.log("Результат:", "Слабые совпадения");
-  } else if (result?.kind === "skip") {
-    console.log("Результат:", "Поиск клиента пропущен");
-  }
-
-  console.log("==========================");
+  // Privacy: never log raw query, extracted name phrases, or FIO.
+  console.log(
+    `[client-entity-extract] queryPresent=${Boolean(rawQuery.trim())} queryLength=${rawQuery.trim().length} extractionPresent=${Boolean(extraction?.extractedPhrase)} searchPhrasePresent=${Boolean(extraction?.searchPhrase)} resolutionOutcome=${result?.kind ?? "none"}`,
+  );
 }

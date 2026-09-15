@@ -237,17 +237,21 @@ function logAiSearchAudit(payload: {
   sentToClaude: number;
   structuredCount: number;
 }): void {
-  console.log(`AI SEARCH RESULTS COUNT: ${payload.structuredCount}`);
-  console.log(`Found clients: ${payload.foundClients}`);
-  console.log(`Sent to Claude: ${payload.sentToClaude}`);
-  console.log(`Intent type: ${payload.intentType}`);
-  console.log("[ai-client-search]", redactForLogging({
-    query: payload.query,
-    intentType: payload.intentType,
-    foundClients: payload.foundClients,
-    sentToClaude: payload.sentToClaude,
-    structuredCount: payload.structuredCount,
-  }));
+  // Privacy: never log raw query (may contain names/passport/email).
+  console.log(
+    `[ai-client-search] queryPresent=true queryLength=${payload.query.length} foundClients=${payload.foundClients} sentToModel=${payload.sentToClaude} intentType=${payload.intentType} structuredCount=${payload.structuredCount}`,
+  );
+  console.log(
+    "[ai-client-search]",
+    redactForLogging({
+      queryPresent: true,
+      queryLength: payload.query.length,
+      intentType: payload.intentType,
+      foundClients: payload.foundClients,
+      sentToModel: payload.sentToClaude,
+      structuredCount: payload.structuredCount,
+    }),
+  );
 }
 
 function structuredToLookupResult(

@@ -90,12 +90,8 @@ export function logClientStatusDebug(params: {
 }): void {
   if (!DEBUG_STATUS_NAMES.test(params.name)) return;
 
-  console.log("CLIENT DEBUG");
-  console.log(`ФИО: ${params.name}`);
-  console.log(`SOURCE: ${params.source}`);
-  console.log(`RAW STATUS: ${params.rawStatus || CLIENT_STATUS_UNSPECIFIED}`);
-  if (params.derivation) {
-    console.log(`DERIVATION: ${params.derivation}`);
-  }
-  console.log(`FINAL STATUS: ${params.finalStatus}`);
+  // Privacy: never log FIO / raw status text — metadata only.
+  console.log(
+    `[client-status-debug] namePresent=true nameLength=${params.name.trim().length} source=${params.source} rawStatusPresent=${Boolean(params.rawStatus?.trim())} finalStatusPresent=${Boolean(params.finalStatus?.trim())} derivation=${params.derivation ?? "none"}`,
+  );
 }

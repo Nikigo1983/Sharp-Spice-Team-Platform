@@ -9,6 +9,7 @@ import { isDocFillIntent } from "@/lib/ai/workspace-doc-fill";
 import { isPassportNumberLookupQuery } from "@/lib/ai/query-intent-signals";
 import { isClientListQuery } from "@/lib/ai/client-search-intent";
 import { isQuestionnaireAnswerIntent } from "@/lib/ai/workspace-questionnaire-answers";
+import { queryLooksLikeClientPii } from "@/lib/ai/client-pii-signals";
 
 export type WebSearchHit = {
   title: string;
@@ -49,6 +50,7 @@ export function isWebSearchConfigured(): boolean {
 /**
  * Internet is last: only for explicit / currency-external asks,
  * never for CRM/list/passport/doc-fill.
+ * Security Gate 1: never send client PII queries to external web search by default.
  */
 export function shouldUseInternetSearch(query: string): boolean {
   const trimmed = query.trim();
@@ -57,11 +59,18 @@ export function shouldUseInternetSearch(query: string): boolean {
   if (isQuestionnaireAnswerIntent(trimmed)) return false;
   if (isPassportNumberLookupQuery(trimmed)) return false;
   if (isClientListQuery(trimmed)) return false;
+  // Default: externalWebSearchAllowed = false for client-data tasks.
+  if (queryLooksLikeClientPii(trimmed)) return false;
   if (INTERNAL_ONLY_RE.test(trimmed) && !EXPLICIT_INTERNET_RE.test(trimmed)) {
     return false;
   }
   if (EXPLICIT_INTERNET_RE.test(trimmed)) return true;
   if (CURRENCY_EXTERNAL_RE.test(trimmed)) return true;
+  return false;
+}
+
+/** Explicit policy flag for callers / tests. */
+export function isExternalWebSearchAllowedForClientPiiTask(): boolean {
   return false;
 }
 
@@ -328,6 +337,19 @@ export async function searchWebForWorkspace(
       text: "",
       hits: [],
       error: "EMPTY_QUERY",
+    };
+  }
+
+  if (queryLooksLikeClientPii(trimmed)) {
+    return {
+      ok: false,
+      configured: isWebSearchConfigured(),
+      provider: "none",
+      // Do not echo PII-bearing query into downstream payloads.
+      query: "",
+      text: "",
+      hits: [],
+      error: "CLIENT_PII_WEB_SEARCH_BLOCKED",
     };
   }
 

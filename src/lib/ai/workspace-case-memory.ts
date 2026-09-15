@@ -133,7 +133,8 @@ export function mergeCaseMemoryFromClientSnapshot(
   fromClient.linkedClientId = cleanField(client.id, 120);
   fromClient.clientName = cleanField(client.name, 200);
   fromClient.citizenship = cleanField(client.citizenship, 200);
-  fromClient.passport = cleanField(client.passportNumber, 120);
+  // Security Gate 1: do not persist passport in conversational case memory.
+  fromClient.passport = null;
   fromClient.applicationPlace =
     cleanField(client.direction, 200) ?? cleanField(client.country, 200);
   const dateBits = [
@@ -142,36 +143,58 @@ export function mergeCaseMemoryFromClientSnapshot(
     client.bookingRange ? `букинг: ${client.bookingRange}` : null,
   ].filter(Boolean);
   fromClient.dates = dateBits.length > 0 ? dateBits.join("; ") : null;
-  fromClient.employers = cleanField(client.bookingAddress, 400);
+  // Do not persist booking/home address into employers (high-sensitivity).
+  fromClient.employers = null;
   fromClient.specialNotes = cleanField(client.notes, 800);
   // Dialogue/base wins on conflicts; CRM only fills empty slots.
-  return mergeCaseMemory(fromClient, base);
+  const merged = mergeCaseMemory(fromClient, base);
+  if (!merged) return null;
+  // Never keep passport in durable conversational memory going forward.
+  return { ...merged, passport: null };
 }
 
 export function formatCaseMemoryForPrompt(
   memory: WorkspaceCaseMemory | null | undefined,
+  options?: { includePassport?: boolean },
 ): string {
   const sanitized = sanitizeCaseMemory(memory);
   if (!sanitized) return "";
+  // Security Gate 1: legacy stored passport must not enter model context by default.
+  const includePassport = Boolean(options?.includePassport);
   const lines = [
     `Клиент: ${sanitized.clientName ?? "не указано"}`,
     `Гражданство: ${sanitized.citizenship ?? "не указано"}`,
-    `Паспорт: ${sanitized.passport ?? "не указано"}`,
+    includePassport
+      ? `Паспорт: ${sanitized.passport ?? "не указано"}`
+      : null,
     `Куда подаётся / виза: ${sanitized.applicationPlace ?? "не указано"}`,
     `ВНЖ других стран: ${sanitized.priorResidency ?? "не указано"}`,
     `Работодатели / адреса: ${sanitized.employers ?? "не указано"}`,
     `Даты: ${sanitized.dates ?? "не указано"}`,
     `Особые комментарии / запреты: ${sanitized.specialNotes ?? "не указано"}`,
     `Открытые вопросы: ${sanitized.openQuestions ?? "не указано"}`,
-  ];
+  ].filter((line): line is string => Boolean(line));
   if (sanitized.linkedClientId) {
     lines.push(`Linked client id: ${sanitized.linkedClientId}`);
   }
   return [
     "=== ПАМЯТЬ КЕЙСА (структурированная) ===",
     "Это накопленные факты текущего диалога. При конфликте с CLIENT CONTEXT / authoritative-блоками приоритет у них; факты только из диалога оставляй.",
+    "Паспорт и высокочувствительные поля не хранятся/не подставляются из памяти по умолчанию — запрашивай актуальные данные через инструменты при необходимости.",
     ...lines,
   ].join("\n");
+}
+
+/** Strip high-sensitivity fields before any model-bound use of stored memory. */
+export function prepareCaseMemoryForModelContext(
+  memory: WorkspaceCaseMemory | null | undefined,
+): WorkspaceCaseMemory | null {
+  const sanitized = sanitizeCaseMemory(memory);
+  if (!sanitized) return null;
+  return {
+    ...sanitized,
+    passport: null,
+  };
 }
 
 export function buildCaseMemoryExtractPrompt(params: {
@@ -208,7 +231,7 @@ export function buildCaseMemoryExtractPrompt(params: {
       null,
       2,
     ),
-    "Правила: не выдумывай; сохраняй прежние факты, если новые их не опровергают; не включай пароли/секреты/appPassword.",
+    "Правила: не выдумывай; сохраняй прежние факты, если новые их не опровергают; не включай пароли/секреты/appPassword; не сохраняй номер паспорта (passport всегда null).",
     `Текущая память:\n${previousJson}`,
     "",
     "Диалог:",
@@ -234,7 +257,8 @@ export function parseCaseMemoryFromModelText(
         : {}),
       updatedAt: new Date().toISOString(),
     });
-    return sanitized;
+    if (!sanitized) return null;
+    return { ...sanitized, passport: null };
   } catch {
     return null;
   }

@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai/client-fact-lookup";
 import type { ClientContext } from "@/lib/ai/client-context";
 import { crmClientToContext, formatClientContextBlock } from "@/lib/ai/client-context";
+import { resolveClientContextAttribution } from "@/lib/ai/client-field-sources";
 import { routeWorkspaceQueryByRules } from "@/lib/ai/workspace-router-rules";
 import { parseCroatiaExternalClientsRows } from "@/lib/google-sheets/parse";
 import { getClientSheetFields } from "@/lib/google-sheets/client-detail-fields";
@@ -189,8 +190,15 @@ describe("production booking address bug — structured fact lookup", () => {
       (f) => f.label === "Адрес букинга",
     );
     assert.equal(ui?.value, "Vranyczanyeva 4");
+    // Attribution / fact readers keep the canonical value for direct answers.
+    const attribution = resolveClientContextAttribution([crmCtx(client)]);
+    assert.equal(
+      attribution.fields.find((f) => f.label === "Адрес букинга")?.value,
+      "Vranyczanyeva 4",
+    );
+    // Model-bound CLIENT CONTEXT omits residential address unless capability granted.
     const aiBlock = formatClientContextBlock(crmCtx(client));
-    assert.match(aiBlock, /Vranyczanyeva 4/);
+    assert.doesNotMatch(aiBlock, /Vranyczanyeva 4/);
     const fact = readClientFactFromCrmContext(crmCtx(client), "bookingAddress");
     assert.equal(fact.value, ui?.value);
   });

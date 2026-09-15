@@ -123,9 +123,11 @@ import {
 import {
   caseMemoryHasFacts,
   formatCaseMemoryForPrompt,
+  prepareCaseMemoryForModelContext,
   sanitizeCaseMemory,
   type WorkspaceCaseMemory,
 } from "@/lib/ai/workspace-case-memory";
+import { queryLooksLikeClientPii } from "@/lib/ai/client-pii-signals";
 import {
   searchWebForWorkspace,
   shouldUseInternetSearch,
@@ -366,7 +368,9 @@ function buildChatMessages(
   );
 
   const summaryBlock = formatConversationSummaryForPrompt(conversationSummary);
-  const caseBlock = formatCaseMemoryForPrompt(caseMemory);
+  const caseBlock = formatCaseMemoryForPrompt(
+    prepareCaseMemoryForModelContext(caseMemory),
+  );
   const memoryBlocks = [caseBlock, summaryBlock].filter(Boolean).join("\n\n");
   const contextWithMemory = memoryBlocks
     ? `${memoryBlocks}\n\n${contextBlock}`
@@ -429,6 +433,16 @@ function getCompletionOptions(
     model: workspaceConfig.model,
     ...overrides,
   };
+}
+
+function completionOptionsForWorkspaceTurn(params: {
+  hasClientData: boolean;
+  overrides?: Partial<ChatCompletionOptions>;
+}): ChatCompletionOptions {
+  return getCompletionOptions({
+    containsClientData: params.hasClientData,
+    ...params.overrides,
+  });
 }
 
 function findRecentPassportQuestion(
@@ -995,7 +1009,7 @@ async function prepareWorkspaceRequest(
       }
 
       console.log(
-        `[workspace-ai][${requestId}] Found clients: ${aiSearch.foundClients}, Sent to Claude: ${aiSearch.sentToClaude}, Intent type: ${aiSearch.intentType}`,
+        `[workspace-ai][${requestId}] clientSearch foundClients=${aiSearch.foundClients} sentToModel=${aiSearch.sentToClaude} intentType=${aiSearch.intentType}`,
       );
 
       if (
@@ -1577,7 +1591,9 @@ async function executeAgentPrepared(params: {
   if (caseMemoryHasFacts(prepared.caseMemory)) {
     messages.splice(1, 0, {
       role: "system",
-      content: formatCaseMemoryForPrompt(prepared.caseMemory!),
+      content: formatCaseMemoryForPrompt(
+        prepareCaseMemoryForModelContext(prepared.caseMemory),
+      ),
     });
   }
 
@@ -1595,7 +1611,9 @@ async function executeAgentPrepared(params: {
     const loop = await runWorkspaceAgentToolLoop({
       messages,
       context: toolContext,
-      completionOptions: getCompletionOptions(),
+      completionOptions: completionOptionsForWorkspaceTurn({
+        hasClientData: true,
+      }),
       streamFinalAnswer: params.stream,
       onStatus: params.onStatus,
       onFinalDelta: params.onFinalDelta,
@@ -1756,9 +1774,14 @@ export async function runWorkspaceAi(
       legacy.trace.fallbackActivated = true;
       const completion = await createChatCompletionResult(
         legacy.messages,
-        getCompletionOptions(
-          legacy.maxTokens ? { maxTokens: legacy.maxTokens } : undefined,
-        ),
+        completionOptionsForWorkspaceTurn({
+          hasClientData:
+            Boolean(legacy.clientContext) ||
+            queryLooksLikeClientPii(legacy.trimmed),
+          overrides: legacy.maxTokens
+            ? { maxTokens: legacy.maxTokens }
+            : undefined,
+        }),
       );
       legacy.trace.requestedModel = completion.requestedModel;
       legacy.trace.returnedModel = completion.returnedModel;
@@ -1815,9 +1838,14 @@ export async function runWorkspaceAi(
 
   const completion = await createChatCompletionResult(
     prepared.messages,
-    getCompletionOptions(
-      prepared.maxTokens ? { maxTokens: prepared.maxTokens } : undefined,
-    ),
+    completionOptionsForWorkspaceTurn({
+      hasClientData:
+        Boolean(prepared.clientContext) ||
+        queryLooksLikeClientPii(prepared.trimmed),
+      overrides: prepared.maxTokens
+        ? { maxTokens: prepared.maxTokens }
+        : undefined,
+    }),
   );
   prepared.trace.requestedModel = completion.requestedModel;
   prepared.trace.returnedModel = completion.returnedModel;
@@ -2007,9 +2035,14 @@ export async function* runWorkspaceAiStream(
     let streamed = "";
     for await (const event of streamChatCompletionResult(
       legacy.messages,
-      getCompletionOptions(
-        legacy.maxTokens ? { maxTokens: legacy.maxTokens } : undefined,
-      ),
+      completionOptionsForWorkspaceTurn({
+        hasClientData:
+          Boolean(legacy.clientContext) ||
+          queryLooksLikeClientPii(legacy.trimmed),
+        overrides: legacy.maxTokens
+          ? { maxTokens: legacy.maxTokens }
+          : undefined,
+      }),
     )) {
       if (event.type === "delta") {
         streamed += event.content;
@@ -2048,9 +2081,14 @@ export async function* runWorkspaceAiStream(
   let hasContent = false;
   for await (const event of streamChatCompletionResult(
     prepared.messages,
-    getCompletionOptions(
-      prepared.maxTokens ? { maxTokens: prepared.maxTokens } : undefined,
-    ),
+    completionOptionsForWorkspaceTurn({
+      hasClientData:
+        Boolean(prepared.clientContext) ||
+        queryLooksLikeClientPii(prepared.trimmed),
+      overrides: prepared.maxTokens
+        ? { maxTokens: prepared.maxTokens }
+        : undefined,
+    }),
   )) {
     if (event.type === "delta") {
       hasContent = true;

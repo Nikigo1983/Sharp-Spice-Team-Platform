@@ -5,6 +5,11 @@ import {
   aiErrorCode,
   providerHttpErrorCode,
 } from "@/lib/ai/errors";
+import {
+  privacyDecisionTraceFields,
+  resolveProviderPrivacyForRequest,
+  type OpenRouterProviderPreferences,
+} from "@/lib/ai/provider-privacy-policy";
 import { createAiDeadline, currentAiSignal } from "@/lib/ai/request-scope";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -54,6 +59,11 @@ export type ChatCompletionOptions = {
   model?: string;
   tools?: ChatToolDefinition[];
   tool_choice?: ChatToolChoice;
+  /**
+   * When true, request must satisfy client-PII privacy policy (OpenRouter ZDR +
+   * data_collection deny + no unsafe provider fallback). Fail closed otherwise.
+   */
+  containsClientData?: boolean;
 };
 
 export type ChatCompletionUsage = {
@@ -136,6 +146,7 @@ function buildRequestBody(
   messages: ChatMessage[],
   options: ChatCompletionOptions | undefined,
   stream: boolean,
+  openRouterProvider?: OpenRouterProviderPreferences,
 ): string {
   const safeMessages = sanitizeChatMessagesForProvider(messages);
   assertOpenRouterPayloadSafe(safeMessages);
@@ -165,9 +176,43 @@ function buildRequestBody(
     }
   }
 
+  if (
+    config.provider === "openrouter" &&
+    openRouterProvider &&
+    Object.keys(openRouterProvider).length > 0
+  ) {
+    payload.provider = openRouterProvider;
+  }
+
   if (stream) payload.stream_options = { include_usage: true };
   return JSON.stringify(payload);
 }
+
+/**
+ * Resolve privacy for a completion call. Never silently downgrades client-PII policy.
+ * Returns null openRouterProvider for non-client or policy-off paths.
+ */
+export function resolveCompletionPrivacy(params: {
+  containsClientData?: boolean;
+  provider: "openai" | "openrouter";
+}): {
+  decision: ReturnType<typeof resolveProviderPrivacyForRequest>;
+  openRouterProvider?: OpenRouterProviderPreferences;
+} {
+  const decision = resolveProviderPrivacyForRequest({
+    containsClientData: Boolean(params.containsClientData),
+    provider: params.provider,
+  });
+  if (!decision.ok) {
+    return { decision };
+  }
+  return {
+    decision,
+    openRouterProvider: decision.openRouterProvider,
+  };
+}
+
+export { privacyDecisionTraceFields };
 
 function parseToolCalls(raw: unknown): ChatToolFunctionCall[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
@@ -283,7 +328,26 @@ export async function createChatCompletionResult(messages: ChatMessage[], option
     const config = getAiRuntimeConfig();
     if (!config) return failure(started, requestedModel, "AI_NOT_CONFIGURED");
     requestedModel = resolveModel(config, options);
-    const response = await postCompletion(config, buildRequestBody(config, messages, options, false), deadline.signal);
+
+    const privacy = resolveCompletionPrivacy({
+      containsClientData: options?.containsClientData,
+      provider: config.provider,
+    });
+    if (!privacy.decision.ok) {
+      return failure(started, requestedModel, privacy.decision.errorCode);
+    }
+
+    const response = await postCompletion(
+      config,
+      buildRequestBody(
+        config,
+        messages,
+        options,
+        false,
+        privacy.openRouterProvider,
+      ),
+      deadline.signal,
+    );
     const data = await response.json() as {
       model?: string; usage?: unknown; error?: unknown;
       choices?: { finish_reason?: string; message?: { content?: string; tool_calls?: unknown; refusal?: string } }[];
@@ -360,7 +424,26 @@ export async function* streamChatCompletionResult(messages: ChatMessage[], optio
     const config = getAiRuntimeConfig();
     if (!config) throw new AiCompletionError("AI_NOT_CONFIGURED");
     requestedModel = resolveModel(config, options);
-    const response = await postCompletion(config, buildRequestBody(config, messages, options, true), deadline.signal);
+
+    const privacy = resolveCompletionPrivacy({
+      containsClientData: options?.containsClientData,
+      provider: config.provider,
+    });
+    if (!privacy.decision.ok) {
+      throw new AiCompletionError(privacy.decision.errorCode);
+    }
+
+    const response = await postCompletion(
+      config,
+      buildRequestBody(
+        config,
+        messages,
+        options,
+        true,
+        privacy.openRouterProvider,
+      ),
+      deadline.signal,
+    );
     if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
       throw new AiCompletionError("MODEL_PROVIDER_ERROR");
     }

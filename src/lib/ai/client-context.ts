@@ -223,14 +223,22 @@ export function formatClientContextBlock(
   if (isMergedClientContext(client)) {
     return formatMergedClientContextBlock(client, options);
   }
-  return formatSingleClientContextWithSources(client, options?.desk);
+  return formatSingleClientContextWithSources(
+    client,
+    options?.desk,
+    options?.highSensitivityAllow,
+  );
 }
 
 export function formatMergedClientContextBlock(
   merged: MergedClientContext,
   options?: FormatClientContextOptions,
 ): string {
-  return formatMergedClientContextWithSources(merged, options?.desk);
+  return formatMergedClientContextWithSources(
+    merged,
+    options?.desk,
+    options?.highSensitivityAllow,
+  );
 }
 
 export function formatMultipleClientsReply(

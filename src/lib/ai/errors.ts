@@ -28,7 +28,8 @@ export type AiFailureClass =
   | "INTERNAL_AI_ERROR"
   | "AI_CANCELLED"
   | "AI_NOT_CONFIGURED"
-  | "MODEL_CONTENT_FILTER";
+  | "MODEL_CONTENT_FILTER"
+  | "AI_PRIVACY_POLICY_UNAVAILABLE";
 
 const FAILURE_CLASS_SET = new Set<string>([
   "CLIENT_NOT_FOUND",
@@ -46,6 +47,7 @@ const FAILURE_CLASS_SET = new Set<string>([
   "AI_CANCELLED",
   "AI_NOT_CONFIGURED",
   "MODEL_CONTENT_FILTER",
+  "AI_PRIVACY_POLICY_UNAVAILABLE",
 ]);
 
 /** Normalize raw provider / legacy codes into stable internal codes. */
@@ -173,6 +175,8 @@ const USER_MESSAGES: Record<AiFailureClass, string> = {
     "AI недоступен из-за настроек подключения. Обратитесь к администратору.",
   MODEL_CONTENT_FILTER:
     "AI не смог завершить ответ из-за ограничения обработки содержимого. Попробуйте переформулировать вопрос.",
+  AI_PRIVACY_POLICY_UNAVAILABLE:
+    "AI временно недоступен: не выполнены требования политики конфиденциальности для обработки клиентских данных. Повторите позже или обратитесь к администратору.",
 };
 
 export function aiErrorMessage(code: string): string {
@@ -186,6 +190,7 @@ export function aiErrorStatus(code: string): number {
   if (failureClass === "AI_CANCELLED") return 499;
   if (failureClass === "MODEL_RATE_LIMIT") return 429;
   if (failureClass === "AI_NOT_CONFIGURED") return 503;
+  if (failureClass === "AI_PRIVACY_POLICY_UNAVAILABLE") return 503;
   if (
     failureClass === "CLIENT_NOT_FOUND" ||
     failureClass === "CLIENT_AMBIGUOUS" ||

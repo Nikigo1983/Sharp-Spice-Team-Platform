@@ -4,6 +4,12 @@ import type {
   MergedClientContext,
 } from "@/lib/ai/client-context";
 import { extractPassportFromClientRecord } from "@/lib/ai/client-passport";
+import {
+  EMPTY_HIGH_SENSITIVITY_ALLOW,
+  capabilityForFieldLabel,
+  filterFieldRowsForModelContext,
+  type HighSensitivityAllowSet,
+} from "@/lib/ai/high-sensitivity-gate";
 
 export type DataSourceLabel =
   | "CRM"
@@ -417,6 +423,17 @@ export function formatFieldConflicts(conflicts: FieldConflict[]): string[] {
   return lines;
 }
 
+function filterConflictsForModelContext(
+  conflicts: FieldConflict[],
+  allow: HighSensitivityAllowSet,
+): FieldConflict[] {
+  return conflicts.filter((conflict) => {
+    const cap = capabilityForFieldLabel(conflict.field);
+    if (!cap) return true;
+    return allow.has(cap);
+  });
+}
+
 export function formatPartsTechnicalBlocks(
   parts: ClientContext[],
   crmData: string,
@@ -470,14 +487,21 @@ export function formatPartsTechnicalBlocks(
 
 export type FormatClientContextOptions = {
   desk?: EmigrantDeskContextSlice | null;
+  /** Explicit high-sensitivity capabilities for model context (default: none). */
+  highSensitivityAllow?: HighSensitivityAllowSet;
 };
 
 export function formatSingleClientContextWithSources(
   client: ClientContext,
   desk?: EmigrantDeskContextSlice | null,
+  highSensitivityAllow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
 ): string {
   const source = partSourceLabel(client);
   const attribution = resolveClientContextAttribution([client], desk);
+  const modelFields = filterFieldRowsForModelContext(
+    attribution.fields,
+    highSensitivityAllow,
+  );
 
   const lines = [
     `Клиент: ${client.name}`,
@@ -489,12 +513,16 @@ export function formatSingleClientContextWithSources(
     "",
     `Строка таблицы (${source}): ${client.rowIndex}`,
     "",
-    ...attribution.fields.flatMap((field) => ["", formatAttributedField(field)]),
-    ...formatFieldConflicts(attribution.conflicts).map((line) =>
-      line === "" ? "" : line,
-    ),
+    ...modelFields.flatMap((field) => ["", formatAttributedField(field)]),
+    ...formatFieldConflicts(
+      filterConflictsForModelContext(
+        attribution.conflicts,
+        highSensitivityAllow,
+      ),
+    ).map((line) => (line === "" ? "" : line)),
   ];
 
+  // surveyData is already gated via formatClientForAi default allow=empty.
   if (client.surveyData) {
     lines.push("", client.surveyData);
   }
@@ -505,8 +533,13 @@ export function formatSingleClientContextWithSources(
 export function formatMergedClientContextWithSources(
   merged: MergedClientContext,
   desk?: EmigrantDeskContextSlice | null,
+  highSensitivityAllow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
 ): string {
   const attribution = resolveClientContextAttribution(merged.parts, desk);
+  const modelFields = filterFieldRowsForModelContext(
+    attribution.fields,
+    highSensitivityAllow,
+  );
   const allConflicts = [
     ...attribution.conflicts,
     ...merged.conflicts.map((conflict) => ({
@@ -541,8 +574,10 @@ export function formatMergedClientContextWithSources(
       ? `Объединено по: ${merged.mergeReasons.join(", ")}`
       : "",
     "",
-    ...attribution.fields.flatMap((field) => [formatAttributedField(field), ""]),
-    ...formatFieldConflicts(dedupedConflicts),
+    ...modelFields.flatMap((field) => [formatAttributedField(field), ""]),
+    ...formatFieldConflicts(
+      filterConflictsForModelContext(dedupedConflicts, highSensitivityAllow),
+    ),
     ...formatPartsTechnicalBlocks(
       merged.parts,
       merged.crmData,

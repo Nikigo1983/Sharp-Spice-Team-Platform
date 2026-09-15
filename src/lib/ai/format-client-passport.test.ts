@@ -47,11 +47,16 @@ describe("formatClientForAi", () => {
     assert.match(text, /Латиница: Belavus Katsiaryna/);
     assert.match(text, /Партнер от кого клиент: ЛЕНА МОСКВА/);
     assert.match(text, /Договор: дог\.оказания услуг/);
+    // Security Gate 1: passport gated unless capability granted.
+    assert.doesNotMatch(text, /Паспорт:/);
   });
 
   it("includes submission, approval and residence card dates", async () => {
     const { formatClientForAi, buildCrmClientDebugRow } = await import(
       "@/lib/ai/format-client"
+    );
+    const { createHighSensitivityAllow } = await import(
+      "@/lib/ai/high-sensitivity-gate"
     );
     const client = {
       id: "КВ2719292",
@@ -81,6 +86,15 @@ describe("formatClientForAi", () => {
     assert.match(text, /Дата одобрения ВНЖ: 18\.06\.2025/);
     assert.match(text, /Дата выдачи карточки ВНЖ: 01\.07\.2025/);
     assert.match(text, /Имя референта: Злата/);
+    assert.doesNotMatch(text, /Паспорт:/);
+    assert.doesNotMatch(text, /Адрес букинга:/);
+
+    const allowed = formatClientForAi(
+      client,
+      createHighSensitivityAllow(["passport_number", "residential_address"]),
+    );
+    assert.match(allowed, /Паспорт: КВ2719292/);
+    assert.match(allowed, /Адрес букинга: Zagreb/);
 
     const debugRow = buildCrmClientDebugRow(client);
     assert.equal(debugRow.submittedAt, "15.03.2025");

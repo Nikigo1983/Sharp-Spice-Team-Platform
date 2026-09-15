@@ -186,6 +186,8 @@ async function runToolLoop(params: {
     ...params.completionOptions,
     tools,
     tool_choice: "auto",
+    // Agent tool results include client data — never downgrade privacy.
+    containsClientData: true,
   };
 
   while (astraRounds < limits.maxToolRounds) {

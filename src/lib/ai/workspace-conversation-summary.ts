@@ -42,6 +42,7 @@ async function extractCaseMemoryFromTurns(params: {
       model: getWorkspaceAiConfig().model,
       temperature: 0.1,
       maxTokens: 500,
+      containsClientData: true,
     },
   );
   return completion.ok ? parseCaseMemoryFromModelText(completion.content) : null;
@@ -127,6 +128,7 @@ export async function maybeRefreshWorkspaceConversationMemory(params: {
           model: getWorkspaceAiConfig().model,
           temperature: 0.2,
           maxTokens: 700,
+          containsClientData: true,
         },
       );
       const summary = completion.ok ? sanitizeConversationSummary(completion.content) : null;

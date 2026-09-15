@@ -4,6 +4,12 @@ import {
 } from "@/lib/ai/client-status";
 import { formatRussianNamePossessiveU } from "@/lib/ai/russian-name-morphology";
 import type { Client } from "@/lib/google-sheets/types";
+import {
+  createHighSensitivityAllow,
+  type HighSensitivityAllowSet,
+  EMPTY_HIGH_SENSITIVITY_ALLOW,
+  isHighSensitivityAllowed,
+} from "@/lib/ai/high-sensitivity-gate";
 
 function displayField(value: string | undefined): string {
   const trimmed = value?.trim();
@@ -54,23 +60,28 @@ function crmExtraFieldLines(client: Client): string[] {
   ].filter(Boolean);
 }
 
-/** Поля клиента для AI — все колонки таблицы «Клиенты Хорватия». */
-export function formatClientForAi(client: Client): string {
+/** Поля клиента для AI — колонки таблицы «Клиенты Хорватия» (high-sensitivity gated). */
+export function formatClientForAi(
+  client: Client,
+  allow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
+): string {
   const referent =
     displayField(client.referentName) || displayField(client.manager);
+  const allowPassport = isHighSensitivityAllowed("passport_number", allow);
+  const allowAddress = isHighSensitivityAllowed("residential_address", allow);
   const lines = [
     `ФИО/фамилия: ${client.name}`,
     ...crmExtraFieldLines(client),
-    client.passportNumber && client.passportNumber !== "—"
+    allowPassport && client.passportNumber && client.passportNumber !== "—"
       ? `Паспорт: ${client.passportNumber}`
       : "",
     client.email && client.email !== "—" ? `Email: ${client.email}` : "",
     `Направление: ${client.direction}`,
     `Статус: ${formatStatusForAiContext(sanitizeCrmClientStatus(client.status), "clients")}`,
     referent ? `Имя референта: ${referent}` : "",
-    client.bookingAddress && client.bookingAddress !== "—"
+    allowAddress && client.bookingAddress && client.bookingAddress !== "—"
       ? `Адрес букинга: ${client.bookingAddress}`
-      : "Адрес букинга: не указан",
+      : "",
     client.bookingRange && client.bookingRange !== "—"
       ? `Даты букинга: ${client.bookingRange}`
       : "",
@@ -94,11 +105,18 @@ export function formatClientForAi(client: Client): string {
   return lines.join("\n");
 }
 
-export function formatClientOneLiner(client: Client): string {
+export function formatClientOneLiner(
+  client: Client,
+  allow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
+): string {
+  const allowPassport = isHighSensitivityAllowed("passport_number", allow);
+  const allowAddress = isHighSensitivityAllowed("residential_address", allow);
   const address =
-    client.bookingAddress && client.bookingAddress !== "—"
+    allowAddress && client.bookingAddress && client.bookingAddress !== "—"
       ? client.bookingAddress
-      : "адрес не указан";
+      : allowAddress
+        ? "адрес не указан"
+        : "адрес скрыт";
   const dates =
     client.bookingRange && client.bookingRange !== "—"
       ? client.bookingRange
@@ -119,8 +137,14 @@ export function formatClientOneLiner(client: Client): string {
     client.contract && client.contract !== "—"
       ? client.contract
       : "договор не указан";
-  return `- ${client.name} | латиница ${latin} | паспорт ${client.passportNumber ?? "—"} | партнер ${partner} | договор ${contract} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
+  const passportBit = allowPassport
+    ? `паспорт ${client.passportNumber ?? "—"}`
+    : "паспорт скрыт";
+  return `- ${client.name} | латиница ${latin} | ${passportBit} | партнер ${partner} | договор ${contract} | адрес букинга: ${address} | даты букинга: ${dates} | статус ${status}`;
 }
+
+/** Explicit allow helper for future EvidencePack / task projections. */
+export { createHighSensitivityAllow };
 
 /** Отсекает латиницу ФИО, ошибочно попавшую в колонку паспорта. */
 export function looksLikePassportNumber(value: string): boolean {

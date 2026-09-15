@@ -51,11 +51,30 @@ describe("workspace case memory", () => {
     );
     assert.equal(merged?.clientName, "Иван");
     assert.equal(merged?.citizenship, "РФ");
-    assert.equal(merged?.passport, "AA123");
+    // Security Gate 1: passport is cleared on snapshot merge.
+    assert.equal(merged?.passport, null);
     assert.equal(merged?.applicationPlace, "Подгорица");
     assert.equal(merged?.priorResidency, "не было");
     assert.equal(merged?.specialNotes, "Не указывать прежний адрес");
     assert.equal(merged?.linkedClientId, "client-1");
+  });
+
+  it("does not put legacy passport into model prompt by default", () => {
+    const block = formatCaseMemoryForPrompt({
+      clientName: "Иван",
+      citizenship: "РФ",
+      passport: "LEGACY-PASSPORT-999",
+      applicationPlace: null,
+      priorResidency: null,
+      employers: null,
+      dates: null,
+      specialNotes: null,
+      openQuestions: null,
+      linkedClientId: "client-1",
+      updatedAt: new Date().toISOString(),
+    });
+    assert.doesNotMatch(block, /LEGACY-PASSPORT-999/);
+    assert.doesNotMatch(block, /^Паспорт:/m);
   });
 
   it("parses JSON from model output", () => {

@@ -62,9 +62,9 @@ test("all direct OpenAI workloads use the direct model, ignoring OpenRouter defa
 test("invalid provider/model never sends a request", async () => {
   globalThis.fetch = async () => assert.fail("must not fetch");
   process.env.AI_PROVIDER = "typo";
-  assert.equal((await createChatCompletionResult(messages)).error, "AI_INVALID_CONFIG");
+  assert.equal((await createChatCompletionResult(messages)).error, "AI_NOT_CONFIGURED");
   process.env.AI_PROVIDER = "openai";
-  assert.equal((await createChatCompletionResult(messages, { model: "anthropic/example" })).error, "AI_INVALID_CONFIG");
+  assert.equal((await createChatCompletionResult(messages, { model: "anthropic/example" })).error, "AI_NOT_CONFIGURED");
 });
 
 test("OpenAI body uses direct model and max_completion_tokens", async () => {
@@ -128,18 +128,18 @@ test("SSE handles frames and UTF-8 split across arbitrary bytes", async () => {
 
 test("EOF without DONE is incomplete even after a finish reason", async () => {
   const result = await streamResult(frame(delta("partial")) + frame(stop()));
-  assert.equal(result.ok, false); assert.equal(result.error, "MODEL_STREAM_INTERRUPTED");
+  assert.equal(result.ok, false); assert.equal(result.error, "STREAM_INTERRUPTED");
   assert.equal(result.content, "partial");
 });
 
 test("truncation is not success and incomplete tool calls cannot execute", async () => {
   const result = await streamResult(frame(JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call1", type: "function", function: { name: "get_client", arguments: '{"id":' } }] }, finish_reason: null }] })) + frame(stop("length")) + frame("[DONE]"));
-  assert.equal(result.ok, false); assert.equal(result.error, "MODEL_LENGTH_LIMIT");
+  assert.equal(result.ok, false); assert.equal(result.error, "CONTEXT_LIMIT");
   assert.equal(result.toolCalls, undefined);
 });
 
 test("malformed SSE and in-band errors are explicit failures", async () => {
-  assert.equal((await streamResult(frame(delta("partial")) + frame("{broken"))).error, "MODEL_INVALID_RESPONSE");
+  assert.equal((await streamResult(frame(delta("partial")) + frame("{broken"))).error, "MODEL_PROVIDER_ERROR");
   assert.equal((await streamResult(frame(JSON.stringify({ error: { message: "provider internal error" } })))).ok, false);
   assert.equal((await streamResult(frame(stop("content_filter")) + frame("[DONE]"))).error, "MODEL_CONTENT_FILTER");
 });
@@ -147,14 +147,14 @@ test("malformed SSE and in-band errors are explicit failures", async () => {
 test("non-stream length failures do not flow through string-only convenience wrapper", async () => {
   globalThis.fetch = async () => Response.json({ choices: [{ finish_reason: "length", message: { content: "unfinished" } }] });
   const result = await createChatCompletionResult(messages);
-  assert.equal(result.ok, false); assert.equal(result.error, "MODEL_LENGTH_LIMIT");
+  assert.equal(result.ok, false); assert.equal(result.error, "CONTEXT_LIMIT");
   assert.equal(await createChatCompletion(messages), null);
 });
 
 test("non-stream failures report actual provider; authentication is not retried", async () => {
   let calls = 0;
   globalThis.fetch = async () => { calls++; return new Response("not authorized", { status: 401 }); };
-  assert.equal((await createChatCompletionResult(messages)).error, "OPENAI_HTTP_401");
+  assert.equal((await createChatCompletionResult(messages)).error, "AI_NOT_CONFIGURED");
   assert.equal(calls, 1);
 });
 
@@ -178,7 +178,7 @@ test("deadline aborts an in-flight model call", async () => {
   globalThis.fetch = async (_url, init) => new Promise((_resolve, reject) => {
     init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });
   });
-  assert.equal((await createChatCompletionResult(messages, { timeoutMs: 15 })).error, "AI_TIMEOUT");
+  assert.equal((await createChatCompletionResult(messages, { timeoutMs: 15 })).error, "MODEL_TIMEOUT");
 });
 
 test("cancellation while reading SSE retains partial text and stops transport", async () => {

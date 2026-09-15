@@ -22,6 +22,17 @@ export async function resolve(specifier, context, nextResolve) {
     };
   }
 
+  // Next.js package exports omit extension; Node ESM needs an explicit path in tests.
+  if (specifier === "next/headers") {
+    const headersJs = path.join(root, "node_modules", "next", "headers.js");
+    if (existsSync(headersJs)) {
+      return {
+        shortCircuit: true,
+        url: pathToFileURL(headersJs).href,
+      };
+    }
+  }
+
   if (specifier.startsWith("@/")) {
     const rel = specifier.slice(2);
     const href = resolveWithExtensions(path.join(root, "src", rel));

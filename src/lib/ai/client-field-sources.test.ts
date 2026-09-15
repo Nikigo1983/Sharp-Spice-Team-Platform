@@ -199,7 +199,7 @@ describe("formatMergedClientContextWithSources", () => {
     assert.match(text, /✅ Заявки портала|✅ CRM/);
     assert.match(text, /✅ Formgrid/);
     assert.match(text, /Email:\nloladav1409@gmail.com\nИсточник: Formgrid/);
-    assert.match(text, /Технические блоки по источникам/);
+    assert.match(text, /Полные поля заявки по источникам|Технические блоки по источникам/);
   });
 });
 

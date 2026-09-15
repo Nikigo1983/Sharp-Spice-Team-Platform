@@ -89,7 +89,7 @@ export async function buildFormgridContextForAi(
   _userQuery: string,
 ): Promise<{ text: string; rowCount: number }> {
   return {
-    text: "Новые клиенты / Formgrid отключены для AI Workspace. Используйте заявки клиентского портала Emigrant.",
+    text: "Новые клиенты / Formgrid отключены как канонический источник AI Workspace. Используйте заявки клиентского портала Emigrant.",
     rowCount: 0,
   };
 }
@@ -153,8 +153,8 @@ export async function buildWorkspaceContext(
     emigrantDeskText: emigrantDesk.text,
     emigrantDriveText: emigrantDrive.text,
     formgridText: intent.needsFormgrid
-      ? "Formgrid / Новые лиды / Новые клиенты отключены. Клиентские данные — только из заявок портала Emigrant (блок CLIENT CONTEXT)."
-      : "Formgrid: не запрашивался.",
+      ? "Отдельный Formgrid / Новые лиды отключён как источник AI Workspace. Недавние заявки — из заявок портала Emigrant (блок CLIENT CONTEXT / recent portal)."
+      : "Недавние заявки портала: не запрашивались.",
     knowledgeBaseText: knowledgeBase.text,
     kbRetrieval: knowledgeBase.meta,
     emigrantDriveRetrieval: emigrantDrive.meta,

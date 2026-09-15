@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { redactForLogging, redactSensitiveText } from "@/lib/ai/context-redaction";
+import { WORKSPACE_AI_PROMPT_VERSION } from "@/lib/ai/canonical-source-contract";
+import { classifyAiFailure, type AiFailureClass } from "@/lib/ai/errors";
 import type { WorkspaceQueryIntent } from "@/lib/ai/query-intent";
 import type { WorkspaceRouterDecision } from "@/lib/ai/workspace-router-types";
 import { sanitizeToolCallTraceList } from "@/lib/ai/workspace-tools/trace-sanitize";
@@ -72,6 +74,32 @@ export type DriveRetrievalMeta = {
   retrievalLatencyMs?: number;
 };
 
+/** Phase 0 privacy-safe request classification. */
+export type WorkspaceRequestClass =
+  | "RETRIEVAL"
+  | "GENERATION"
+  | "FOLLOW_UP_GENERATION"
+  | "DIRECT"
+  | "AGENT"
+  | "UNKNOWN";
+
+export type WorkspaceProviderOutcome =
+  | "OK"
+  | "ERROR"
+  | "TIMEOUT"
+  | "EMPTY"
+  | "RATE_LIMIT"
+  | "STREAM_INTERRUPTED"
+  | "SKIPPED"
+  | "UNKNOWN";
+
+export type WorkspaceClientResolutionOutcome =
+  | "RESOLVED"
+  | "AMBIGUOUS"
+  | "NOT_FOUND"
+  | "NOT_REQUIRED"
+  | "UNKNOWN";
+
 export type WorkspaceAiTrace = {
   requestId: string;
   timestamp: string;
@@ -142,6 +170,15 @@ export type WorkspaceAiTrace = {
   totalToolChars: number;
   finalSourceSet: string[];
   astraCalled: boolean;
+  /** Phase 0 diagnostics (no PII). */
+  requestClass: WorkspaceRequestClass;
+  failureClass: AiFailureClass | null;
+  providerOutcome: WorkspaceProviderOutcome;
+  historyClipped: boolean;
+  contextTruncated: boolean;
+  evidencePackChars: number | null;
+  promptVersion: string;
+  clientResolutionOutcome: WorkspaceClientResolutionOutcome;
 };
 
 const TRACE_STORE_MAX = 200;
@@ -209,6 +246,14 @@ export function createEmptyWorkspaceAiTrace(
     totalToolChars: 0,
     finalSourceSet: [],
     astraCalled: false,
+    requestClass: "UNKNOWN",
+    failureClass: null,
+    providerOutcome: "UNKNOWN",
+    historyClipped: false,
+    contextTruncated: false,
+    evidencePackChars: null,
+    promptVersion: WORKSPACE_AI_PROMPT_VERSION,
+    clientResolutionOutcome: "UNKNOWN",
   };
 }
 
@@ -366,18 +411,97 @@ export function serializeWorkspaceAiTraceForLog(
     totalToolChars: trace.totalToolChars,
     finalSourceSet: trace.finalSourceSet,
     astraCalled: trace.astraCalled,
+    requestClass: trace.requestClass,
+    failureClass: trace.failureClass,
+    providerOutcome: trace.providerOutcome,
+    historyClipped: trace.historyClipped,
+    contextTruncated: trace.contextTruncated,
+    evidencePackChars: trace.evidencePackChars,
+    promptVersion: trace.promptVersion,
+    clientResolutionOutcome: trace.clientResolutionOutcome,
   };
 
   return redactForLogging(payload) as Record<string, unknown>;
 }
 
 export function logWorkspaceAiTrace(trace: WorkspaceAiTrace): void {
+  // Infer Phase 0 request class when callers forgot to set it.
+  if (trace.requestClass === "UNKNOWN") {
+    if (trace.agentMode) trace.requestClass = "AGENT";
+    else if (
+      trace.responseOk &&
+      !trace.astraCalled &&
+      trace.selectedRoutes.some(
+        (route) =>
+          route.includes("direct") ||
+          route === "debug_client" ||
+          route.startsWith("finance_") ||
+          route.startsWith("client_") ||
+          route.startsWith("passport_") ||
+          route.startsWith("formgrid_") ||
+          route.startsWith("emigrant_") ||
+          route.startsWith("doc_fill"),
+      )
+    ) {
+      trace.requestClass = "DIRECT";
+      if (trace.providerOutcome === "UNKNOWN") trace.providerOutcome = "SKIPPED";
+    } else if (trace.astraCalled) {
+      const generation =
+        trace.routingIntentLabel === "generation" ||
+        (trace.selectedRoutes.length === 0 && !trace.needsClients);
+      trace.requestClass = generation ? "GENERATION" : "RETRIEVAL";
+    }
+  }
+  if (
+    trace.evidencePackChars == null &&
+    typeof trace.contextCharsEstimate === "number" &&
+    trace.contextCharsEstimate > 0
+  ) {
+    trace.evidencePackChars = trace.contextCharsEstimate;
+  }
   const safe = serializeWorkspaceAiTraceForLog(trace);
   console.info(
     `[ai-workspace-trace] ${trace.requestId}`,
     redactSensitiveText(JSON.stringify(safe)),
   );
   rememberWorkspaceAiTrace(trace);
+}
+
+/** Mark a deterministic Workspace answer (no OpenRouter for the final reply). */
+export function markTraceDirect(
+  trace: WorkspaceAiTrace,
+  clientResolution: WorkspaceClientResolutionOutcome = "NOT_REQUIRED",
+): void {
+  trace.requestClass = "DIRECT";
+  trace.providerOutcome = "SKIPPED";
+  if (trace.clientResolutionOutcome === "UNKNOWN") {
+    trace.clientResolutionOutcome = clientResolution;
+  }
+}
+
+export function markTraceProviderResult(
+  trace: WorkspaceAiTrace,
+  params: {
+    ok: boolean;
+    errorCode?: string | null;
+  },
+): void {
+  if (params.ok) {
+    trace.providerOutcome = "OK";
+    trace.failureClass = null;
+    return;
+  }
+  const code = params.errorCode || "INTERNAL_AI_ERROR";
+  const failureClass = classifyAiFailure(code);
+  trace.failureClass = failureClass;
+  if (failureClass === "MODEL_TIMEOUT") trace.providerOutcome = "TIMEOUT";
+  else if (failureClass === "MODEL_RATE_LIMIT") trace.providerOutcome = "RATE_LIMIT";
+  else if (failureClass === "EMPTY_MODEL_RESPONSE") trace.providerOutcome = "EMPTY";
+  else if (failureClass === "STREAM_INTERRUPTED") {
+    trace.providerOutcome = "STREAM_INTERRUPTED";
+  } else {
+    trace.providerOutcome = "ERROR";
+  }
 }
 
 export function assertTraceHasNoSecrets(

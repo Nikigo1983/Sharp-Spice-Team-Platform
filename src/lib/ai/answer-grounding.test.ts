@@ -124,7 +124,7 @@ describe("AI-05 grounding fixtures A–I", () => {
     assert.ok(client.text.includes(client.expectedFact));
     assert.equal(
       attributionLabelForRef(client.ref),
-      "Client record — Maria Belova",
+      "Заявки портала Emigrant — Maria Belova",
     );
 
     const drive = fixtureDrivePresence();

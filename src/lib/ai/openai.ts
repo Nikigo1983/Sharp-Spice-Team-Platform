@@ -1,6 +1,10 @@
 import { getAiRuntimeConfig } from "@/lib/ai/config";
 import { isGpt6AstraModel, normalizeProviderModel } from "@/lib/ai/models";
-import { AiCompletionError, aiErrorCode } from "@/lib/ai/errors";
+import {
+  AiCompletionError,
+  aiErrorCode,
+  providerHttpErrorCode,
+} from "@/lib/ai/errors";
 import { createAiDeadline, currentAiSignal } from "@/lib/ai/request-scope";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -231,11 +235,11 @@ function failure(started: number, requestedModel: string, code: string): ChatCom
 }
 
 function finishError(reason: string | null, hasContent: boolean, hasTools: boolean): string | undefined {
-  if (reason === "length") return "MODEL_LENGTH_LIMIT";
+  if (reason === "length") return "CONTEXT_LIMIT";
   if (reason === "content_filter") return "MODEL_CONTENT_FILTER";
-  if (reason !== "stop" && reason !== "tool_calls") return "MODEL_STREAM_INTERRUPTED";
-  if (reason === "tool_calls" && !hasTools) return "MODEL_INVALID_RESPONSE";
-  if (!hasContent && !hasTools) return "MODEL_EMPTY_RESPONSE";
+  if (reason !== "stop" && reason !== "tool_calls") return "STREAM_INTERRUPTED";
+  if (reason === "tool_calls" && !hasTools) return "MODEL_PROVIDER_ERROR";
+  if (!hasContent && !hasTools) return "EMPTY_MODEL_RESPONSE";
 }
 
 function requestDeadline(options?: ChatCompletionOptions) {
@@ -258,12 +262,15 @@ async function postCompletion(config: NonNullable<ReturnType<typeof getAiRuntime
     });
     if (response.ok) return response;
     const errBody = await response.text();
+    // Log status only — never response body (may contain provider prompt echoes).
     console.error(`[ai/${config.provider}] HTTP ${response.status}`);
     if (attempt === 0 && [429, 502, 503, 504].includes(response.status)) {
       await delay(parseRetryAfterMs(response, errBody), undefined, { signal });
       continue;
     }
-    throw new AiCompletionError(`${config.provider.toUpperCase()}_HTTP_${response.status}`);
+    throw new AiCompletionError(
+      providerHttpErrorCode(config.provider, response.status),
+    );
   }
 }
 
@@ -281,7 +288,9 @@ export async function createChatCompletionResult(messages: ChatMessage[], option
       model?: string; usage?: unknown; error?: unknown;
       choices?: { finish_reason?: string; message?: { content?: string; tool_calls?: unknown; refusal?: string } }[];
     };
-    if (data.error || !Array.isArray(data.choices)) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+    if (data.error || !Array.isArray(data.choices)) {
+      throw new AiCompletionError("MODEL_PROVIDER_ERROR");
+    }
     const choice = data.choices[0];
     const content = typeof choice?.message?.content === "string" ? choice.message.content.trim() || null : null;
     const toolCalls = parseToolCalls(choice?.message?.tool_calls);
@@ -315,7 +324,7 @@ async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string
     while (true) {
       const { done, value } = await reader.read();
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      if (buffer.length > 1_000_000) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+      if (buffer.length > 1_000_000) throw new AiCompletionError("MODEL_PROVIDER_ERROR");
       let newline: number;
       while ((newline = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, newline).replace(/\r$/, "");
@@ -352,7 +361,9 @@ export async function* streamChatCompletionResult(messages: ChatMessage[], optio
     if (!config) throw new AiCompletionError("AI_NOT_CONFIGURED");
     requestedModel = resolveModel(config, options);
     const response = await postCompletion(config, buildRequestBody(config, messages, options, true), deadline.signal);
-    if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+    if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
+      throw new AiCompletionError("MODEL_PROVIDER_ERROR");
+    }
     const { StreamToolCallAccumulator } = await import("@/lib/ai/workspace-tools/stream-tool-calls");
     const accumulator = new StreamToolCallAccumulator();
     let ended = false;
@@ -363,8 +374,8 @@ export async function* streamChatCompletionResult(messages: ChatMessage[], optio
         model?: string; usage?: unknown; error?: unknown;
         choices?: { finish_reason?: string; delta?: { content?: string; refusal?: string } }[];
       };
-      try { parsed = JSON.parse(data); } catch { throw new AiCompletionError("MODEL_INVALID_RESPONSE"); }
-      if (!parsed || parsed.error) throw new AiCompletionError("MODEL_INVALID_RESPONSE");
+      try { parsed = JSON.parse(data); } catch { throw new AiCompletionError("MODEL_PROVIDER_ERROR"); }
+      if (!parsed || parsed.error) throw new AiCompletionError("MODEL_PROVIDER_ERROR");
       if (parsed.model) returnedModel = parsed.model;
       if (parsed.usage) usage = parseUsage(parsed.usage);
       const choice = parsed.choices?.[0];
@@ -379,7 +390,7 @@ export async function* streamChatCompletionResult(messages: ChatMessage[], optio
       }
     }
     const toolCalls = accumulator.finalize();
-    const error = !ended ? "MODEL_STREAM_INTERRUPTED" : finishError(finishReason, Boolean(assembled.trim()), toolCalls.length > 0);
+    const error = !ended ? "STREAM_INTERRUPTED" : finishError(finishReason, Boolean(assembled.trim()), toolCalls.length > 0);
     yield { type: "meta", result: {
       content: assembled.trim() ? assembled : null, ok: !error, requestedModel, returnedModel, usage,
       latencyMs: Date.now() - started, error, finishReason,

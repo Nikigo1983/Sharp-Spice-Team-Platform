@@ -1,4 +1,4 @@
-import { aiErrorCode, aiErrorMessage, aiErrorStatus } from "@/lib/ai/errors";
+import { aiErrorCode, aiErrorPayload, aiErrorStatus } from "@/lib/ai/errors";
 import { createAiDeadline, withAiRequestScope } from "@/lib/ai/request-scope";
 
 export const runtime = "nodejs";
@@ -146,13 +146,15 @@ async function handlePost(request: Request) {
         } catch (error) {
           if (cancelled || request.signal.aborted) return;
           const code = aiErrorCode(deadline.signal.aborted ? deadline.signal.reason : error);
-          console.error(`[api/ai-workspace][${requestId}] ${code}`);
+          const payload = aiErrorPayload(code);
+          console.error(`[api/ai-workspace][${requestId}] ${payload.code} ${payload.failureClass}`);
           controller.enqueue(
             encoder.encode(
               `event: error\ndata: ${JSON.stringify({
                 requestId,
-                code,
-                message: aiErrorMessage(code),
+                code: payload.code,
+                failureClass: payload.failureClass,
+                message: payload.message,
               })}\n\n`,
             ),
           );
@@ -205,16 +207,33 @@ async function handlePost(request: Request) {
     );
   } catch (error) {
     const code = aiErrorCode(deadline.signal.aborted ? deadline.signal.reason : error);
-    console.error(`[api/ai-workspace][${requestId}] ${code}`);
-    return NextResponse.json({ error: code, reply: aiErrorMessage(code), requestId }, {
-      status: aiErrorStatus(code), headers: { "X-AI-Request-Id": requestId },
-    });
+    const payload = aiErrorPayload(code);
+    console.error(`[api/ai-workspace][${requestId}] ${payload.code} ${payload.failureClass}`);
+    return NextResponse.json(
+      {
+        error: payload.code,
+        failureClass: payload.failureClass,
+        reply: payload.message,
+        requestId,
+      },
+      {
+        status: aiErrorStatus(payload.code),
+        headers: { "X-AI-Request-Id": requestId },
+      },
+    );
   } finally { deadline.dispose(); }
 }
 
 export async function POST(request: Request) {
   try { return await handlePost(request); } catch (error) {
-    const code = aiErrorCode(error);
-    return NextResponse.json({ error: code, reply: aiErrorMessage(code) }, { status: aiErrorStatus(code) });
+    const payload = aiErrorPayload(aiErrorCode(error));
+    return NextResponse.json(
+      {
+        error: payload.code,
+        failureClass: payload.failureClass,
+        reply: payload.message,
+      },
+      { status: aiErrorStatus(payload.code) },
+    );
   }
 }

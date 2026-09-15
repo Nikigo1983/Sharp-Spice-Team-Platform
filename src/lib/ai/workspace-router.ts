@@ -37,7 +37,7 @@ const VALID_INTENTS = new Set<WorkspaceRouteIntentLabel>([
   "unknown",
 ]);
 
-const ROUTER_SYSTEM_PROMPT = `You classify internal Sharp & Spice manager questions for data-source routing.
+export const WORKSPACE_ROUTER_SYSTEM_PROMPT = `You classify internal Sharp & Spice manager questions for data-source routing.
 Return ONLY valid JSON (no markdown):
 {
   "intent": "knowledge|client_lookup|client_documents|client_list|desk_status|formgrid|generation|multi|unknown",
@@ -47,12 +47,12 @@ Return ONLY valid JSON (no markdown):
   "reason": "short_label"
 }
 
-Source semantics:
+Source semantics (canonical Workspace AI contract):
 - knowledge_base: program rules, ВНЖ/digital nomad requirements, immigration procedures, policies (NOT a named client's files)
-- clients: CRM Google Sheets client records (status, passport number, booking, lists)
+- clients: Emigrant client portal questionnaires (server DB) — status, passport, booking, contacts, lists. Canonical client id = questionnaire UUID. NOT Google Sheets CRM.
 - emigrant_drive: uploaded files/scans for a specific client in the ЭМИГРАНТ Drive folder
 - emigrant_desk: Emigrant Croatia Desk case status in the cabinet product
-- formgrid: new lead questionnaires / Formgrid rows
+- formgrid: recent portal applications / new intakes from the SAME portal DB as clients (legacy route key only — NOT a separate Formgrid/Sheets client database)
 
 Rules:
 - General "какие документы нужны для ВНЖ" → knowledge_base only
@@ -60,8 +60,11 @@ Rules:
 - Missing docs for a named client vs program rules → clients + emigrant_drive + knowledge_base
 - Named client + checklist / compare / eligibility / requirements → clients + emigrant_drive + knowledge_base
 - Named client booking/address/status/passport/phone/email → clients
-- Pure writing/rewrite/translate with no client facts → sources []
+- Recent new applications / «новые заявки за N дней» → formgrid (portal recent intakes) or clients
+- Pure writing/rewrite/translate with no client facts → sources [] (generation)
+- Follow-up drafting that reuses already-discussed client facts → generation (sources [] unless new facts needed)
 - Never invent sources; prefer fewer correct sources over loading all
+- Do NOT route client facts to Google Sheets or external Formgrid as canonical sources
 - confidence 0..1; reason is a short snake_case label, not a long explanation`;
 
 export function getWorkspaceRouterModel(): string {
@@ -120,7 +123,7 @@ async function classifyWithRouterModel(
   const model = getWorkspaceRouterModel();
   const result = await createChatCompletionResult(
     [
-      { role: "system", content: ROUTER_SYSTEM_PROMPT },
+      { role: "system", content: WORKSPACE_ROUTER_SYSTEM_PROMPT },
       { role: "user", content: query },
     ],
     {

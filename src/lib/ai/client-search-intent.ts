@@ -87,8 +87,9 @@ export const EMPTY_CLIENT_SEARCH_INTENT: ClientSearchIntent = {
 
 const MONTH_PATTERNS_LEGACY = MONTH_PATTERNS;
 
-const INTENT_SYSTEM_PROMPT = `You extract structured client search filters from manager queries for an immigration CRM (Google Sheets).
+export const CLIENT_SEARCH_INTENT_SYSTEM_PROMPT = `You extract structured client search filters from manager queries for Emigrant client portal questionnaires (server database; canonical client id = questionnaire UUID).
 Return ONLY valid JSON (no markdown, no comments). Use null for unknown fields.
+Do not assume Google Sheets or Formgrid as the client database.
 
 Schema:
 {
@@ -207,7 +208,7 @@ async function extractClientSearchIntentWithAi(
   query: string,
 ): Promise<ClientSearchIntent | null> {
   const messages: ChatMessage[] = [
-    { role: "system", content: INTENT_SYSTEM_PROMPT },
+    { role: "system", content: CLIENT_SEARCH_INTENT_SYSTEM_PROMPT },
     { role: "user", content: query },
   ];
 

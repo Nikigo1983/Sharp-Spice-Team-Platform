@@ -63,6 +63,17 @@ export function clipHistoryTurnsForModel<
   });
 }
 
+/** True when any turn body exceeds the model history char budget. */
+export function historyNeedsClipping(
+  turns: Array<{ content?: string }>,
+  maxChars: number = WORKSPACE_HISTORY_TURN_MAX_CHARS,
+): boolean {
+  return turns.some(
+    (turn) =>
+      typeof turn.content === "string" && turn.content.length > maxChars,
+  );
+}
+
 export function shouldRefreshConversationSummary(
   totalMessageCount: number,
   summaryThroughMessageCount: number,

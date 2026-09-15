@@ -27,6 +27,7 @@ import {
   createEmptyWorkspaceAiTrace,
   estimateChars,
   logWorkspaceAiTrace,
+  markTraceProviderResult,
   skippedDriveMeta,
   type WorkspaceAiTrace,
 } from "@/lib/ai/workspace-trace";
@@ -98,6 +99,7 @@ import {
 import {
   clipHistoryTurnsForModel,
   formatConversationSummaryForPrompt,
+  historyNeedsClipping,
   selectRecentHistoryTurns,
   sanitizeConversationSummary,
 } from "@/lib/ai/workspace-conversation-memory";
@@ -259,7 +261,7 @@ function buildSources(
     formgridLabel:
       options?.formgridLabel ??
       (intent.needsFormgrid && context.meta.formgridRows > 0
-        ? `Formgrid — анкеты (${context.meta.formgridRows})`
+        ? `Заявки портала Emigrant — недавние (${context.meta.formgridRows})`
         : null),
     kbBlockedInsufficient: options?.kbBlockedInsufficient ?? false,
   });
@@ -336,7 +338,9 @@ function buildContextBlock(
     contextParts.push(`=== EMIGRANT CROATIA DESK ===\n${context.emigrantDeskText}`);
   }
   if (intent.needsFormgrid && !clientContext) {
-    contextParts.push(`=== FORMGRID ===\n${context.formgridText}`);
+    contextParts.push(
+      `=== ЗАЯВКИ ПОРТАЛА (недавние) ===\n${context.formgridText}`,
+    );
   }
   if (webSearchText) {
     contextParts.push(webSearchText);
@@ -369,7 +373,7 @@ function buildChatMessages(
     : contextBlock;
 
   const hasAuthoritative =
-    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
+    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|ЗАЯВКИ ПОРТАЛА|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
       contextWithMemory,
     );
 
@@ -472,7 +476,7 @@ function emptyContextBundle(): Awaited<ReturnType<typeof buildWorkspaceContext>>
     clientsText: "Клиенты: не удалось загрузить таблицу.",
     emigrantDeskText: "Emigrant Croatia Desk: не удалось загрузить статусы дел.",
     emigrantDriveText: "Папка ЭМИГРАНТ: не удалось загрузить Google Drive.",
-    formgridText: "Formgrid: не удалось загрузить анкеты.",
+    formgridText: "Заявки портала Emigrant: недавние анкеты недоступны.",
     knowledgeBaseText: "Knowledge Base: не удалось загрузить Drive.",
     kbRetrieval: {
       ...skippedDriveMeta("knowledge_base"),
@@ -629,7 +633,9 @@ async function prepareWorkspaceRequest(
 > {
   const started = Date.now();
   const trace = createEmptyWorkspaceAiTrace(requestId);
+  const recentHistory = selectRecentHistoryTurns(history);
   trace.historyTurnCount = history.length;
+  trace.historyClipped = historyNeedsClipping(recentHistory);
 
   const trimmed = userMessage.trim();
   if (!trimmed) {
@@ -1114,7 +1120,7 @@ async function prepareWorkspaceRequest(
           ...(clientContext
             ? [
                 isMergedClientContext(clientContext)
-                  ? "Клиенты + Formgrid"
+                  ? "Клиенты + заявки портала"
                   : clientContext.sourceLabel,
               ]
             : []),
@@ -1175,7 +1181,7 @@ async function prepareWorkspaceRequest(
       return {
         kind: "direct",
         reply: direct,
-        sources: ["Анкеты Formgrid"],
+        sources: ["Заявки портала Emigrant"],
         requestId,
         trace,
       };
@@ -1695,7 +1701,7 @@ export async function runWorkspaceAi(
   if (prepared.kind === "empty") {
     return {
       reply:
-        "Напишите вопрос — подключу Knowledge Base, клиентов и анкеты Formgrid.",
+        "Напишите вопрос — подключу Knowledge Base и заявки портала Emigrant.",
       sources: [],
       demo: true,
       requestId: prepared.requestId,
@@ -1762,7 +1768,14 @@ export async function runWorkspaceAi(
       legacy.trace.openRouterOk = completion.ok;
       legacy.trace.astraCalled = true;
       legacy.trace.latencyMs.total = Date.now() - totalStarted;
-      if (!completion.ok) throw new AiCompletionError(completion.error);
+      if (!completion.ok) {
+        markTraceProviderResult(legacy.trace, {
+          ok: false,
+          errorCode: completion.error,
+        });
+        logWorkspaceAiTrace(legacy.trace);
+        throw new AiCompletionError(completion.error);
+      }
       if (completion.content) {
         const guarded = applyPostAnswerGroundingGuards({
           answer: completion.content,
@@ -1770,6 +1783,7 @@ export async function runWorkspaceAi(
           query: legacy.trimmed,
         });
         legacy.trace.responseOk = true;
+        markTraceProviderResult(legacy.trace, { ok: true });
         logWorkspaceAiTrace(legacy.trace);
         const memory = await attachRefreshedConversationMemory({
           userId: memoryContext?.userId,
@@ -1824,6 +1838,7 @@ export async function runWorkspaceAi(
       prepared.trace.notes.push(note);
     }
     prepared.trace.responseOk = true;
+    markTraceProviderResult(prepared.trace, { ok: true });
     logWorkspaceAiTrace(prepared.trace);
     const memory = await attachRefreshedConversationMemory({
       userId: memoryContext?.userId,
@@ -1846,14 +1861,19 @@ export async function runWorkspaceAi(
 
   prepared.trace.fallbackActivated = true;
   prepared.trace.fallbackReason =
+    completion.error === "EMPTY_MODEL_RESPONSE" ||
     completion.error === "MODEL_EMPTY_RESPONSE"
       ? "MODEL_EMPTY_RESPONSE"
       : "OPENROUTER_ERROR";
   prepared.trace.responseOk = false;
   prepared.trace.notes.push(completion.error ?? "OPENROUTER_ERROR");
+  markTraceProviderResult(prepared.trace, {
+    ok: false,
+    errorCode: completion.error,
+  });
   logWorkspaceAiTrace(prepared.trace);
 
-  throw new AiCompletionError(completion.error);
+  throw new AiCompletionError(completion.error ?? "INTERNAL_AI_ERROR");
 }
 
 export async function* runWorkspaceAiStream(
@@ -1891,7 +1911,7 @@ export async function* runWorkspaceAiStream(
       demo: true,
       requestId: prepared.requestId,
     };
-    yield "Напишите вопрос — подключу Knowledge Base, клиентов и анкеты Formgrid.";
+    yield "Напишите вопрос — подключу Knowledge Base и заявки портала Emigrant.";
     return;
   }
 
@@ -2113,7 +2133,7 @@ export async function* runWorkspaceAiStream(
       demo: true,
       requestId: prepared.requestId,
     };
-    throw new AiCompletionError("MODEL_EMPTY_RESPONSE");
+    throw new AiCompletionError("EMPTY_MODEL_RESPONSE");
   }
 }
 

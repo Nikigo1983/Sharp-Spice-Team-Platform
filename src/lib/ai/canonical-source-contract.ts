@@ -4,7 +4,7 @@
  */
 
 /** Bump when Workspace system-prompt assembly semantics change. */
-export const WORKSPACE_AI_PROMPT_VERSION = "phase0-canonical-v1";
+export const WORKSPACE_AI_PROMPT_VERSION = "phase1-evidence-v1";
 
 export const WORKSPACE_CANONICAL_CLIENT_SOURCE = {
   id: "client_portal" as const,

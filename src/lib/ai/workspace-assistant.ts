@@ -8,6 +8,24 @@ import {
   formatClientProvenanceBlock,
   applyPostAnswerGroundingGuards,
 } from "@/lib/ai/answer-grounding";
+import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-task";
+import {
+  clientRefFromCaseMemory,
+} from "@/lib/ai/conversation-client-lock";
+import {
+  formatEvidencePackForModel,
+  evidencePackTraceMeta,
+} from "@/lib/ai/evidence-pack";
+import { assembleEvidencePack } from "@/lib/ai/evidence-pack-assemble";
+import {
+  planFollowUpTransform,
+  formatFollowUpTransformContext,
+} from "@/lib/ai/follow-up-transform";
+import {
+  clientRefFromResolved,
+  querySuggestsDifferentClient,
+} from "@/lib/ai/resolve-client";
+import type { ClientRef } from "@/lib/ai/client-ref";
 import { getAiRuntimeConfig } from "@/lib/ai/config";
 import { decideKbGrounding } from "@/lib/ai/kb-grounding";
 import {
@@ -163,6 +181,7 @@ import {
 } from "@/lib/emigrant-desk/clients";
 import { parseRecentDaysFromQuery } from "@/lib/google-sheets/formgrid-dates";
 import {
+  getPortalIntakeCaseById,
   listPortalIntakeCasesForAi,
   portalCaseToContext,
   portalIntakeDisplayName,
@@ -283,6 +302,7 @@ function buildContextBlock(
   clientCandidatesTotalFound: number | null = null,
   deskSlice: EmigrantDeskContextSlice | null = null,
   webSearchText: string | null = null,
+  evidencePackText: string | null = null,
 ): string {
   const contextParts: string[] = [];
 
@@ -292,7 +312,10 @@ function buildContextBlock(
     );
   }
 
-  if (clientContext) {
+  // Phase 1: prefer purpose-bound EvidencePack over broad CLIENT CONTEXT preload.
+  if (evidencePackText) {
+    contextParts.push(evidencePackText);
+  } else if (clientContext) {
     const header = isMergedClientContext(clientContext)
       ? "=== CLIENT CONTEXT (MERGED) ==="
       : "=== CLIENT CONTEXT (Заявки портала Emigrant) ===";
@@ -659,6 +682,52 @@ async function prepareWorkspaceRequest(
     return { kind: "empty", requestId, trace };
   }
 
+  // Phase 1: CurrentTask + ClientRef lock + follow-up transform short-circuit.
+  const lockedClientRef = clientRefFromCaseMemory(caseMemory);
+  const transformPlan = planFollowUpTransform({
+    query: trimmed,
+    history: recentHistory,
+  });
+  const currentTask = classifyCurrentTask({
+    query: trimmed,
+    hasPriorDraft: Boolean(transformPlan),
+  });
+  trace.taskClass = currentTask.taskClass;
+  trace.modelRequired = currentTask.modelRequired;
+  trace.clientRefPresent = Boolean(lockedClientRef);
+
+  if (transformPlan) {
+    trace.selectedRoutes = ["follow_up_transform"];
+    trace.requestClass = "FOLLOW_UP_GENERATION";
+    trace.clientResolutionOutcome = "NOT_REQUIRED";
+    trace.followUpReusedClientRef = Boolean(lockedClientRef);
+    trace.followUpRefetchedFacts = false;
+    trace.modelCalled = true;
+    const transformBlock = formatFollowUpTransformContext(transformPlan);
+    const messages = buildChatMessages(
+      trimmed,
+      transformBlock,
+      history,
+      mode,
+      conversationSummary,
+      caseMemory,
+    );
+    trace.contextCharsEstimate = estimateChars(transformBlock);
+    trace.evidencePackChars = 0;
+    trace.latencyMs.prepare = Date.now() - started;
+    return {
+      kind: "ai",
+      messages,
+      sources: [],
+      context: emptyContextBundle(),
+      contextBlock: transformBlock,
+      trimmed,
+      clientContext: null,
+      requestId,
+      trace,
+    };
+  }
+
   const safePendingCandidates =
     sanitizeClientContextsForTransport(pendingClientCandidates ?? undefined) ??
     null;
@@ -737,6 +806,43 @@ async function prepareWorkspaceRequest(
   if (financeDebtNameHint) {
     try {
       const hint = financeDebtNameHint;
+      // Phase 1: reuse locked ClientRef when the debt hint matches the lock.
+      if (
+        lockedClientRef &&
+        lockedClientRef.displayLabel &&
+        clientFactSurnameMatches(lockedClientRef.displayLabel, hint)
+      ) {
+        const finance = await getPortalFinanceSnapshot(lockedClientRef.clientId);
+        const record = await getPortalIntakeCaseById(lockedClientRef.clientId);
+        const name =
+          lockedClientRef.displayLabel ||
+          (record ? portalIntakeDisplayName(record) : hint);
+        const reply = formatFinanceClientDebtReply({
+          name,
+          email: finance?.email ?? record?.email ?? null,
+          contractAmount: finance?.contractAmount ?? null,
+          contractAmountCents: finance?.contractAmountCents ?? null,
+          paidAmount: finance?.paidAmount ?? null,
+          balance: finance?.balance ?? null,
+          balanceCents: finance?.balanceCents ?? null,
+          nameHint: hint,
+        });
+        trace.selectedRoutes = ["finance_client_debt_direct"];
+        trace.responseOk = true;
+        trace.latencyMs.prepare = Date.now() - started;
+        trace.followUpReusedClientRef = true;
+        trace.clientResolutionOutcome = "RESOLVED";
+        trace.clientRefPresent = true;
+        trace.notes.push("finance_client_debt=locked_ref");
+        logWorkspaceAiTrace(trace);
+        return {
+          kind: "direct",
+          reply: redactSensitiveText(reply),
+          sources: ["Finance", "Заявки портала Emigrant"],
+          requestId,
+          trace,
+        };
+      }
       const cases = await listPortalIntakeCasesForAi();
       const matches = cases.filter((record) =>
         clientFactSurnameMatches(portalIntakeDisplayName(record), hint),
@@ -991,11 +1097,39 @@ async function prepareWorkspaceRequest(
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
   } else if (
-    intent.needsClients ||
-    intent.needsFormgrid ||
-    intent.needsEmigrantDrive ||
-    intent.fastClientLookup ||
-    isDocFillIntent(trimmed)
+    lockedClientRef &&
+    !querySuggestsDifferentClient(trimmed, lockedClientRef) &&
+    (taskRequiresClientRef(currentTask) ||
+      intent.needsClients ||
+      intent.fastClientLookup ||
+      isDocFillIntent(trimmed))
+  ) {
+    try {
+      const record = await getPortalIntakeCaseById(lockedClientRef.clientId);
+      if (record) {
+        clientContext = portalCaseToContext(record, 100, ["client_lock"]);
+        trace.followUpReusedClientRef = true;
+        trace.clientResolutionOutcome = "RESOLVED";
+        trace.clientRefPresent = true;
+        trace.notes.push("client_ref_lock_reuse");
+      }
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] locked ClientRef load failed`,
+        error,
+      );
+      trace.notes.push("CLIENT_REF_LOCK_LOAD_ERROR");
+    }
+  }
+
+  if (
+    !clientContext &&
+    !followUp &&
+    (intent.needsClients ||
+      intent.needsFormgrid ||
+      intent.needsEmigrantDrive ||
+      intent.fastClientLookup ||
+      isDocFillIntent(trimmed))
   ) {
     try {
       const aiSearch = await lookupClientsWithAiSearch(trimmed);
@@ -1343,6 +1477,50 @@ async function prepareWorkspaceRequest(
         ? `Client record — table (${context.meta.clientsTotal})`
         : null;
 
+  // Phase 1: purpose-bound EvidencePack for generative client tasks.
+  let evidencePackText: string | null = null;
+  let activeClientRef: ClientRef | null = lockedClientRef;
+  if (clientContext) {
+    const fromCtx = clientRefFromResolved(clientContext, "RESOLVED");
+    if (fromCtx) {
+      activeClientRef = fromCtx;
+      trace.clientRefPresent = true;
+      if (trace.clientResolutionOutcome === "UNKNOWN") {
+        trace.clientResolutionOutcome = "RESOLVED";
+      }
+    }
+  }
+  if (
+    activeClientRef &&
+    currentTask.requiredProjections.length > 0 &&
+    currentTask.modelRequired
+  ) {
+    try {
+      const pack = await assembleEvidencePack({
+        task: currentTask,
+        clientRef: activeClientRef,
+        freshnessClass: trace.followUpReusedClientRef
+          ? "LOCKED_REFETCH"
+          : "LIVE_FETCH",
+      });
+      if (pack) {
+        evidencePackText = formatEvidencePackForModel(pack);
+        const meta = evidencePackTraceMeta(pack, currentTask);
+        trace.evidenceProjectionNames = meta.evidenceProjectionNames;
+        trace.evidenceFactCount = meta.evidenceFactCount;
+        trace.evidencePackChars = meta.evidenceChars;
+        trace.evidenceFreshnessClass = meta.evidenceFreshnessClass;
+        trace.notes.push("evidence_pack_attached");
+      }
+    } catch (error) {
+      console.error(
+        `[workspace-ai][${requestId}] EvidencePack assemble failed`,
+        error,
+      );
+      trace.notes.push("EVIDENCE_PACK_ERROR");
+    }
+  }
+
   const sources = buildSources(context, intent, {
     clientLabel: clientAttrLabel,
     deskLabel:
@@ -1366,6 +1544,7 @@ async function prepareWorkspaceRequest(
     clientCandidatesTotalFound,
     deskSlice,
     webSearch?.text ?? null,
+    evidencePackText,
   );
 
   const questionnaireMode = isQuestionnaireAnswerIntent(trimmed);

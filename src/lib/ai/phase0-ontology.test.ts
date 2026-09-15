@@ -14,7 +14,10 @@ describe("Phase 0 canonical ontology", () => {
   it("exposes portal questionnaire UUID contract", () => {
     assert.equal(WORKSPACE_CANONICAL_CLIENT_SOURCE.id, "client_portal");
     assert.equal(WORKSPACE_CANONICAL_CLIENT_SOURCE.clientId, "questionnaire_uuid");
-    assert.ok(WORKSPACE_AI_PROMPT_VERSION.startsWith("phase0"));
+    assert.ok(
+      WORKSPACE_AI_PROMPT_VERSION.startsWith("phase0") ||
+        WORKSPACE_AI_PROMPT_VERSION.startsWith("phase1"),
+    );
     const block = workspaceCanonicalSourcePromptBlock();
     assert.match(block, /портала Emigrant/i);
   });

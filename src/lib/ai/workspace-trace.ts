@@ -179,6 +179,16 @@ export type WorkspaceAiTrace = {
   evidencePackChars: number | null;
   promptVersion: string;
   clientResolutionOutcome: WorkspaceClientResolutionOutcome;
+  /** Phase 1 privacy-safe EvidencePack / lock diagnostics (no PII / no UUID). */
+  taskClass: string | null;
+  clientRefPresent: boolean;
+  evidenceProjectionNames: string[];
+  evidenceFactCount: number;
+  evidenceFreshnessClass: string | null;
+  modelRequired: boolean | null;
+  modelCalled: boolean | null;
+  followUpReusedClientRef: boolean;
+  followUpRefetchedFacts: boolean;
 };
 
 const TRACE_STORE_MAX = 200;
@@ -254,6 +264,15 @@ export function createEmptyWorkspaceAiTrace(
     evidencePackChars: null,
     promptVersion: WORKSPACE_AI_PROMPT_VERSION,
     clientResolutionOutcome: "UNKNOWN",
+    taskClass: null,
+    clientRefPresent: false,
+    evidenceProjectionNames: [],
+    evidenceFactCount: 0,
+    evidenceFreshnessClass: null,
+    modelRequired: null,
+    modelCalled: null,
+    followUpReusedClientRef: false,
+    followUpRefetchedFacts: false,
   };
 }
 
@@ -419,6 +438,15 @@ export function serializeWorkspaceAiTraceForLog(
     evidencePackChars: trace.evidencePackChars,
     promptVersion: trace.promptVersion,
     clientResolutionOutcome: trace.clientResolutionOutcome,
+    taskClass: trace.taskClass,
+    clientRefPresent: trace.clientRefPresent,
+    evidenceProjectionNames: trace.evidenceProjectionNames,
+    evidenceFactCount: trace.evidenceFactCount,
+    evidenceFreshnessClass: trace.evidenceFreshnessClass,
+    modelRequired: trace.modelRequired,
+    modelCalled: trace.modelCalled,
+    followUpReusedClientRef: trace.followUpReusedClientRef,
+    followUpRefetchedFacts: trace.followUpRefetchedFacts,
   };
 
   return redactForLogging(payload) as Record<string, unknown>;

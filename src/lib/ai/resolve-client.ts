@@ -20,8 +20,12 @@ import {
 } from "@/lib/ai/client-context";
 import { resolveClientSelectionFollowUp } from "@/lib/ai/client-selection-followup";
 import { extractClientEntityFromQuery } from "@/lib/ai/client-entity-extract";
+import { extractClientNameFromLetterQuery } from "@/lib/ai/client-debt-letter";
 import { morphNameMatch } from "@/lib/ai/russian-name-morphology";
-import { isPronounDebtFollowUpQuery } from "@/lib/ai/finance-debt-query";
+import {
+  extractNameFromDebtQuery,
+  isPronounDebtFollowUpQuery,
+} from "@/lib/ai/finance-debt-query";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -84,8 +88,80 @@ export function clientRefFromResolved(
 }
 
 /**
+ * Positive person-name signal (not a stopword blacklist).
+ * Blocks weak instruction nouns after «клиенту …» from overriding a lock.
+ */
+export function looksLikePersonName(phrase: string): boolean {
+  const tokens = phrase
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.replace(/^[,.!?«»"']+|[,.!?«»"']+$/g, ""))
+    .filter(Boolean);
+  if (tokens.length === 0) return false;
+  const isAlphaToken = (t: string) =>
+    t.length >= 2 && /^[\p{L}][\p{L}'\u2019-]*$/u.test(t);
+  if (!tokens.every(isAlphaToken)) return false;
+  // Multi-token identity (e.g. AI SYNTH BETA KAPLAN, Имя Фамилия).
+  if (tokens.length >= 2) return true;
+  const t = tokens[0]!;
+  if (t.length < 4) return false;
+  // Title-case / Latin capital proper name.
+  if (/^[A-ZÀ-ÖØ-Þ]/.test(t)) return true;
+  if (/^[А-ЯЁ]/.test(t)) return true;
+  // Lowercase Cyrillic surname morphology (common RU manager phrasing).
+  if (
+    t.length >= 5 &&
+    /(?:ова|ева|ёва|ина|ына|ская|цкая|ский|цкий|енко|ук|юк)$/i.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Explicit different-client / switch identity only.
+ * Weak entity extraction alone must not override a valid ClientRef lock.
+ */
+export function extractExplicitDifferentClientPhrase(
+  query: string,
+): string | null {
+  const q = query.trim();
+  if (!q) return null;
+
+  const fromLetter = extractClientNameFromLetterQuery(q);
+  if (fromLetter && looksLikePersonName(fromLetter)) return fromLetter.trim();
+
+  const fromDebt = extractNameFromDebtQuery(q);
+  if (fromDebt && looksLikePersonName(fromDebt)) return fromDebt.trim();
+
+  const explicitPatterns: RegExp[] = [
+    /переключ\w*\s+(?:на\s+)?(?:клиента?\s+)?(.+?)(?:\s*[.?!]|$)/iu,
+    /смени(?:ть)?\s+(?:на\s+)?(?:клиента?\s+)?(.+?)(?:\s*[.?!]|$)/iu,
+    /switch\s+to(?:\s+client)?\s+(.+?)(?:\s*[.?!]|$)/iu,
+    /(?:^|[\s,.;])(?:для|к)\s+([A-Za-zА-ЯЁа-яё][\p{L}'\u2019-]*(?:\s+[A-Za-zА-ЯЁа-яё][\p{L}'\u2019-]*){0,5})/u,
+    /(?:по\s+)?клиент(?:ка|ки|ку|ке|ом|у|а|ов)?\s+([A-ZА-ЯЁ][\p{L}'\u2019-]*(?:\s+[A-Za-zА-ЯЁа-яё][\p{L}'\u2019-]*){0,5})/u,
+  ];
+  for (const pattern of explicitPatterns) {
+    const match = q.match(pattern);
+    const raw = match?.[1]?.trim();
+    if (!raw) continue;
+    // Strip leading «клиента/клиенту» if switch pattern captured it.
+    const cleaned = raw.replace(/^(?:клиента?|client)\s+/iu, "").trim();
+    if (cleaned && looksLikePersonName(cleaned)) return cleaned;
+  }
+
+  const extraction = extractClientEntityFromQuery(q);
+  const phrase =
+    extraction?.searchPhrase?.trim() ||
+    extraction?.extractedPhrase?.trim() ||
+    "";
+  if (phrase && looksLikePersonName(phrase)) return phrase;
+  return null;
+}
+
+/**
  * Detect whether the user is naming a different client than the lock.
- * Conservative: only switch when an extracted entity clearly mismatches.
+ * Default with a valid lock: reuse. Override only on explicit mismatch.
  */
 export function querySuggestsDifferentClient(
   query: string,
@@ -94,16 +170,11 @@ export function querySuggestsDifferentClient(
   if (!locked?.displayLabel) return false;
   // Pronoun debt/status follow-ups never name a new client.
   if (isPronounDebtFollowUpQuery(query)) return false;
-  const extraction = extractClientEntityFromQuery(query);
-  const phrase =
-    extraction?.searchPhrase?.trim() ||
-    extraction?.extractedPhrase?.trim() ||
-    "";
+  const phrase = extractExplicitDifferentClientPhrase(query);
   if (!phrase || phrase.length < 3) return false;
   // Same family / morph match → keep lock.
   if (morphNameMatch(locked.displayLabel, phrase)) return false;
   if (morphNameMatch(phrase, locked.displayLabel)) return false;
-  // Explicit other surname-like token.
   return true;
 }
 

@@ -1082,6 +1082,7 @@ async function prepareWorkspaceRequest(
           sources: ["Finance", "Заявки портала Emigrant"],
           requestId,
           trace,
+          caseMemory,
         };
       }
       if (resolvedLetter.outcome === "AMBIGUOUS") {
@@ -1104,6 +1105,7 @@ async function prepareWorkspaceRequest(
           sources: ["Заявки портала Emigrant"],
           requestId,
           trace,
+          caseMemory,
         };
       }
       if (hint || resolvedLetter.outcome === "NOT_FOUND") {
@@ -1121,6 +1123,7 @@ async function prepareWorkspaceRequest(
           sources: ["Заявки портала Emigrant"],
           requestId,
           trace,
+          caseMemory,
         };
       }
     } catch (error) {

@@ -16,8 +16,8 @@ export const KB_SAFE_GROUNDING_REPLY =
   "В базе знаний не нашлось достаточно информации, чтобы надёжно ответить на этот вопрос. Уточните тему, программу или название документа — либо откройте раздел Knowledge Base и укажите нужный файл.";
 
 /**
- * Guard only when workspace intent already marked the question as needing
- * authoritative Knowledge Base information.
+ * Guard when workspace intent requires authoritative Knowledge Base evidence.
+ * Optional KB (needsKb && !kbRequired) may enrich answers but never blocks the model.
  */
 export function decideKbGrounding(params: {
   intent: WorkspaceQueryIntent;
@@ -36,6 +36,16 @@ export function decideKbGrounding(params: {
   }
 
   if (state === "KB_CONTENT_AVAILABLE") {
+    return {
+      blockModel: false,
+      reason: "NONE",
+      reply: null,
+      state,
+    };
+  }
+
+  // Optional enrichment path: empty/error/catalog KB must not block general Astra.
+  if (!intent.kbRequired) {
     return {
       blockModel: false,
       reason: "NONE",

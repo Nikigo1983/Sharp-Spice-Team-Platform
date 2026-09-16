@@ -50,7 +50,7 @@ describe("AI-01 requestId", () => {
 describe("AI-01 KB grounding decisions", () => {
   it("allows model when KB_CONTENT_AVAILABLE", () => {
     const intent = detectWorkspaceIntent(
-      "сравни требования digital nomad программы",
+      "сравни требования digital nomad программы из базы знаний",
     );
     assert.equal(intent.needsKb, true);
     const decision = decideKbGrounding({
@@ -71,8 +71,10 @@ describe("AI-01 KB grounding decisions", () => {
 
   it("blocks confident answer on KB_EMPTY", () => {
     const intent = detectWorkspaceIntent(
-      "требования digital nomad immigration",
+      "Что в нашей базе знаний написано про требования digital nomad immigration?",
     );
+    assert.equal(intent.needsKb, true);
+    assert.equal(intent.kbRequired, true);
     const decision = decideKbGrounding({
       intent,
       kbMeta: kbMeta({
@@ -88,6 +90,7 @@ describe("AI-01 KB grounding decisions", () => {
 
   it("blocks confident answer on KB_ERROR", () => {
     const intent = detectWorkspaceIntent("база знаний immigration программа");
+    assert.equal(intent.kbRequired, true);
     const decision = decideKbGrounding({
       intent,
       kbMeta: kbMeta({
@@ -103,9 +106,10 @@ describe("AI-01 KB grounding decisions", () => {
 
   it("blocks catalog-only when content is required", () => {
     const intent = detectWorkspaceIntent(
-      "сравни требования digital nomad программы",
+      "сравни требования digital nomad программы из базы знаний",
     );
     assert.equal(intent.needsKbFullText, true);
+    assert.equal(intent.kbRequired, true);
     const decision = decideKbGrounding({
       intent,
       kbMeta: kbMeta({

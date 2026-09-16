@@ -178,6 +178,35 @@ export function querySuggestsDifferentClient(
   return true;
 }
 
+/** Explicit switch command — may resolve even when CurrentTask is non-client. */
+export function isExplicitClientSwitchCommand(query: string): boolean {
+  return /переключ\w*|смени(?:ть)?\s+(?:на\s+)?(?:клиента?\s+)?|switch\s+to(?:\s+client)?/i.test(
+    query.trim(),
+  );
+}
+
+/**
+ * Gate for portal client resolution.
+ * Generic entity extraction must NOT trigger resolve when the task does not
+ * require a ClientRef and the user is not explicitly switching clients.
+ */
+export function shouldAttemptClientResolve(params: {
+  followUp: boolean;
+  isListLike: boolean;
+  taskRequiresClientRef: boolean;
+  needsClients: boolean;
+  fastClientLookup: boolean;
+  isDocFill: boolean;
+  query: string;
+}): boolean {
+  if (params.followUp || params.isListLike) return false;
+  if (params.taskRequiresClientRef) return true;
+  if (params.needsClients || params.fastClientLookup) return true;
+  if (params.isDocFill) return true;
+  if (isExplicitClientSwitchCommand(params.query)) return true;
+  return false;
+}
+
 export type ResolveClientParams = {
   query: string;
   lockedClientRef?: ClientRef | null;

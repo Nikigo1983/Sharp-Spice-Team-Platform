@@ -211,25 +211,54 @@ describe("AI-03 routing behavior", () => {
     assert.equal(serialized.needsClients, false);
   });
 
-  it("17–18. AI-02 grounding still keyed off needsKb", () => {
-    const intent = detectWorkspaceIntent("требования digital nomad программы");
-    assert.equal(intent.needsKb, true);
-    const decision = decideKbGrounding({
-      intent,
-      kbMeta: {
-        source: "knowledge_base",
-        attempted: true,
-        configured: true,
-        mode: "content",
-        groundingState: "KB_EMPTY",
-        candidateFileCount: 0,
-        selectedFiles: [],
-        contentRetrieved: false,
-        usefulContextEmpty: true,
-        textCharCount: 0,
-      },
-    });
-    assert.equal(decision.blockModel, true);
+  it("17–18. AI-02 grounding blocks only when kbRequired", () => {
+    const required = detectWorkspaceIntent(
+      "Что в нашей базе знаний написано про требования digital nomad?",
+    );
+    assert.equal(required.needsKb, true);
+    assert.equal(required.kbRequired, true);
+    assert.equal(
+      decideKbGrounding({
+        intent: required,
+        kbMeta: {
+          source: "knowledge_base",
+          attempted: true,
+          configured: true,
+          mode: "content",
+          groundingState: "KB_EMPTY",
+          candidateFileCount: 0,
+          selectedFiles: [],
+          contentRetrieved: false,
+          usefulContextEmpty: true,
+          textCharCount: 0,
+        },
+      }).blockModel,
+      true,
+    );
+
+    const optional = detectWorkspaceIntent(
+      "Объясни простыми словами, что такое апостиль.",
+    );
+    assert.equal(optional.needsKb, true);
+    assert.equal(optional.kbRequired, false);
+    assert.equal(
+      decideKbGrounding({
+        intent: optional,
+        kbMeta: {
+          source: "knowledge_base",
+          attempted: true,
+          configured: true,
+          mode: "content",
+          groundingState: "KB_EMPTY",
+          candidateFileCount: 0,
+          selectedFiles: [],
+          contentRetrieved: false,
+          usefulContextEmpty: true,
+          textCharCount: 0,
+        },
+      }).blockModel,
+      false,
+    );
   });
 
   it("19. direct passport command still clients-only", () => {

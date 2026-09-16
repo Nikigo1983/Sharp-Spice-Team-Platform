@@ -155,3 +155,23 @@ export function applyClientRefLockTransition(params: {
   }
   return { active: next, switched: true, stalePrevented: false };
 }
+
+/**
+ * For non-client tasks, keep the ClientRef lock in durable conversation state
+ * but do not inject case-memory client facts into the model prompt.
+ */
+export function caseMemoryForModelIngress(params: {
+  caseMemory: WorkspaceCaseMemory | null | undefined;
+  taskRequiresClientRef: boolean;
+  needsClients: boolean;
+  fastClientLookup: boolean;
+}): WorkspaceCaseMemory | null {
+  if (
+    params.taskRequiresClientRef ||
+    params.needsClients ||
+    params.fastClientLookup
+  ) {
+    return sanitizeCaseMemory(params.caseMemory);
+  }
+  return null;
+}

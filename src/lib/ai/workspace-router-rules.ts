@@ -192,6 +192,32 @@ function isPureGenerationQuery(query: string): boolean {
   return true;
 }
 
+/**
+ * Explicit ask for Sharp & Spice internal / Knowledge Base authoritative evidence.
+ * Empty KB must block the model for these — unlike ordinary terminology questions.
+ */
+export function isExplicitInternalKnowledgeQuery(query: string): boolean {
+  const lower = query.toLowerCase();
+  if (
+    /баз[аеуы]\s*знан/i.test(lower) ||
+    /\bknowledge\s*base\b/i.test(lower) ||
+    /\b(?:в|из)\s+kb\b/i.test(lower)
+  ) {
+    return true;
+  }
+  if (
+    /внутренн\w*\s+(инструкц|регламент|баз|документ)/i.test(lower) ||
+    /по\s+наш(ей|ему|им|а)?\s+(внутренн|инструкц|базе|регламент)/i.test(lower) ||
+    /что\s+(в\s+наш(ей|ей)?\s+)?(баз[аеуы]\s*знан|инструкц|регламент)/i.test(lower) ||
+    /что\s+(говорят|сказано|написано)\s+в\s+(файл|инструкц|регламент|баз)/i.test(lower) ||
+    /найди\s+(инструкц|регламент|в\s+баз)/i.test(lower) ||
+    /что\s+говорится\s+в\s+(файл|инструкц|регламент)/i.test(lower)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** General program / immigration knowledge (corporate KB), not a client's files. */
 export function isGeneralKnowledgeQuery(query: string): boolean {
   const lower = query.toLowerCase();
@@ -203,7 +229,7 @@ export function isGeneralKnowledgeQuery(query: string): boolean {
   if (hasClientNameSignal(query) && hasClientFieldSignal(query)) return false;
 
   const kbSignals = [
-    /база\s*знан/i,
+    /баз[аеуы]\s*знан/i,
     /\bknowledge\b/i,
     /digital\s*nomad/i,
     /иммиграц/i,
@@ -214,7 +240,10 @@ export function isGeneralKnowledgeQuery(query: string): boolean {
     /основан(ия|ие|ий)/i,
     /заявител/i,
     /что\s+такое/i,
+    /что\s+означает/i,
+    /что\s+значит/i,
     /what\s+is\b/i,
+    /what\s+does\b/i,
     /какие\s+документ[аы]?\s+(нужн|требу)/i,
     /что\s+нужн[оа]?\s+(для|чтобы)/i,
     /документ[аы]?\s+нужны\s+для/i,
@@ -329,8 +358,10 @@ function buildIntentFromSources(params: {
   sources: WorkspaceRouteSource[];
   query: string;
   label: WorkspaceRouteIntentLabel;
+  /** Override: true = authoritative KB required; false = optional enrichment. */
+  kbRequired?: boolean;
 }): WorkspaceQueryIntent {
-  const { sources, query, label } = params;
+  const { sources, query } = params;
   const lower = query.toLowerCase();
   const emigrantDrivePrimary = isEmigrantDrivePrimaryQuery(query);
   const asksPassportFromTable = isPassportNumberLookupQuery(query);
@@ -341,7 +372,7 @@ function buildIntentFromSources(params: {
     isEmigrantDrivePrimaryQuery(query) ||
     /скан|pdf|файл|upload|drive|папк/i.test(lower);
 
-  const needsKb = sources.includes("knowledge_base");
+  const needsKbRaw = sources.includes("knowledge_base");
   const needsClients = sources.includes("clients");
   const needsEmigrantDrive = sources.includes("emigrant_drive");
   const needsEmigrantDesk = sources.includes("emigrant_desk");
@@ -351,6 +382,13 @@ function buildIntentFromSources(params: {
     hasClientName &&
     !documentOriented &&
     (hasClientFieldSignal(query) || asksPassportFromTable);
+
+  const needsKb = needsKbRaw && !fastClientLookup;
+  // Default: KB source outside the optional-general path stays authoritative.
+  const kbRequired =
+    params.kbRequired !== undefined
+      ? params.kbRequired && needsKb
+      : needsKb;
 
   const needsKbFullText =
     needsKb &&
@@ -384,7 +422,8 @@ function buildIntentFromSources(params: {
 
   return {
     fastClientLookup,
-    needsKb: needsKb && !fastClientLookup,
+    needsKb,
+    kbRequired,
     needsKbFullText,
     needsEmigrantDrive: needsEmigrantDrive && !fastClientLookup,
     needsEmigrantDriveFullText,
@@ -425,6 +464,7 @@ export function routeWorkspaceQueryByRules(query: string): RuleRouteResult {
         workspaceIntent: {
           fastClientLookup: false,
           needsKb: false,
+          kbRequired: false,
           needsKbFullText: false,
           needsEmigrantDrive: false,
           needsEmigrantDriveFullText: false,
@@ -588,7 +628,7 @@ export function routeWorkspaceQueryByRules(query: string): RuleRouteResult {
     };
   }
 
-  if (isGeneralKnowledgeQuery(trimmed)) {
+  if (isExplicitInternalKnowledgeQuery(trimmed)) {
     const sources: WorkspaceRouteSource[] = ["knowledge_base"];
     return {
       highConfidence: true,
@@ -596,6 +636,28 @@ export function routeWorkspaceQueryByRules(query: string): RuleRouteResult {
         intentLabel: "knowledge",
         sources,
         requiresAuthoritativeData: true,
+        confidence: 0.92,
+        reason: "explicit_internal_knowledge",
+        method: "RULE",
+        workspaceIntent: buildIntentFromSources({
+          sources,
+          query: trimmed,
+          label: "knowledge",
+          kbRequired: true,
+        }),
+      },
+    };
+  }
+
+  if (isGeneralKnowledgeQuery(trimmed)) {
+    const sources: WorkspaceRouteSource[] = ["knowledge_base"];
+    // Optional KB enrichment — general model knowledge remains allowed when KB is empty.
+    return {
+      highConfidence: true,
+      decision: {
+        intentLabel: "knowledge",
+        sources,
+        requiresAuthoritativeData: false,
         confidence: 0.9,
         reason: "general_knowledge_question",
         method: "RULE",
@@ -603,6 +665,7 @@ export function routeWorkspaceQueryByRules(query: string): RuleRouteResult {
           sources,
           query: trimmed,
           label: "knowledge",
+          kbRequired: false,
         }),
       },
     };
@@ -704,9 +767,15 @@ export function workspaceIntentFromAiClassification(
     requires_authoritative_data: boolean;
   },
 ): WorkspaceQueryIntent {
+  const wantsKb = classification.sources.includes("knowledge_base");
+  const kbRequired =
+    wantsKb &&
+    (classification.requires_authoritative_data ||
+      isExplicitInternalKnowledgeQuery(query));
   return buildIntentFromSources({
     sources: classification.sources,
     query,
     label: classification.intent,
+    kbRequired,
   });
 }

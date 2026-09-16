@@ -9,6 +9,11 @@ export type WorkspaceQueryIntent = {
   /** Букинг/адрес конкретного клиента — ответ из таблицы без AI */
   fastClientLookup: boolean;
   needsKb: boolean;
+  /**
+   * When true, empty/error KB must block the model (authoritative internal evidence).
+   * When false with needsKb, KB is optional enrichment — empty KB must not block.
+   */
+  kbRequired: boolean;
   /** Полный текст документов (медленно) */
   needsKbFullText: boolean;
   /** Папка Google Drive «ЭМИГРАНТ» — документы клиентов */

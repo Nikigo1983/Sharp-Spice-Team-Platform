@@ -16,6 +16,7 @@ import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-tas
 import {
   applyClientSwitch,
   bindClientBoundDraftToCaseMemory,
+  caseMemoryForModelIngress,
   clientRefFromCaseMemory,
   lockClientRefIntoCaseMemory,
 } from "@/lib/ai/conversation-client-lock";
@@ -34,7 +35,7 @@ import {
 import {
   resolveClient,
   clientRefFromResolved,
-  querySuggestsDifferentClient,
+  shouldAttemptClientResolve,
   toTraceClientResolutionOutcome,
 } from "@/lib/ai/resolve-client";
 import type { ClientRef } from "@/lib/ai/client-ref";
@@ -1248,18 +1249,15 @@ async function prepareWorkspaceRequest(
   const isListLike =
     isClientListQuery(trimmed) || isClientListContinuationQuery(trimmed);
 
-  const explicitDifferentClient =
-    Boolean(lockedClientRef) &&
-    querySuggestsDifferentClient(trimmed, lockedClientRef);
-
-  const needsClientResolve =
-    !followUp &&
-    !isListLike &&
-    (taskRequiresClientRef(currentTask) ||
-      intent.needsClients ||
-      intent.fastClientLookup ||
-      isDocFillIntent(trimmed) ||
-      explicitDifferentClient);
+  const needsClientResolve = shouldAttemptClientResolve({
+    followUp: Boolean(followUp),
+    isListLike,
+    taskRequiresClientRef: taskRequiresClientRef(currentTask),
+    needsClients: intent.needsClients,
+    fastClientLookup: intent.fastClientLookup,
+    isDocFill: isDocFillIntent(trimmed),
+    query: trimmed,
+  });
 
   const volatileRefetch = queryRequiresVolatileRefetch(trimmed);
   if (volatileRefetch) {
@@ -1645,6 +1643,14 @@ async function prepareWorkspaceRequest(
     intent,
     kbMeta: context.kbRetrieval,
   });
+  if (
+    intent.needsKb &&
+    !intent.kbRequired &&
+    grounding.state !== "KB_CONTENT_AVAILABLE" &&
+    grounding.state !== "KB_SKIPPED"
+  ) {
+    trace.notes.push("optional_kb_empty_model_allowed");
+  }
   if (grounding.blockModel && grounding.reply) {
     if (trace.fallbackReason === "NONE") {
       trace.fallbackReason = grounding.reason;
@@ -1716,8 +1722,12 @@ async function prepareWorkspaceRequest(
 
   // Phase 1/2.1: purpose-bound EvidencePack for generative client tasks.
   // Migrated path invariant: BROAD_CLIENT_CONTEXT_ALLOWED = false.
+  // General tasks: ClientRef lock stays in caseMemory store but is dormant here.
   let evidencePackText: string | null = null;
-  let activeClientRef: ClientRef | null = lockedClientRef;
+  let activeClientRef: ClientRef | null =
+    taskRequiresClientRef(currentTask) || needsClientResolve
+      ? lockedClientRef
+      : null;
   if (clientContext) {
     const fromCtx = clientRefFromResolved(clientContext, "RESOLVED");
     if (fromCtx) {
@@ -1862,7 +1872,7 @@ async function prepareWorkspaceRequest(
     ? "detailed"
     : mode;
 
-  const fillAwareContextBlock = questionnaireMode
+  let fillAwareContextBlock = questionnaireMode
     ? [buildQuestionnaireAnswerPromptAddon(trimmed), contextBlock]
         .filter(Boolean)
         .join("\n\n")
@@ -1882,6 +1892,16 @@ async function prepareWorkspaceRequest(
           .filter(Boolean)
           .join("\n\n")
       : contextBlock;
+
+  if (intent.needsKb && !intent.kbRequired) {
+    const optionalKbNote =
+      grounding.state === "KB_CONTENT_AVAILABLE"
+        ? "[KB POLICY: optional internal enrichment — use [SOURCE:KB:…] only for retrieved facts; otherwise answer from general knowledge and do not present general knowledge as Sharp & Spice KB.]"
+        : "[KB POLICY: optional KB had no matching evidence — answer from general model knowledge; do not invent Sharp & Spice internal instructions or claim KB provenance.]";
+    fillAwareContextBlock = [optionalKbNote, fillAwareContextBlock]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
   if (questionnaireMode) {
     trace.notes.push("questionnaire_answers_mode");
@@ -1906,13 +1926,20 @@ async function prepareWorkspaceRequest(
   trace.contextCharsEstimate = estimateChars(fillAwareContextBlock);
   trace.latencyMs.prepare = Date.now() - started;
 
+  const modelCaseMemory = caseMemoryForModelIngress({
+    caseMemory,
+    taskRequiresClientRef: taskRequiresClientRef(currentTask),
+    needsClients: intent.needsClients,
+    fastClientLookup: intent.fastClientLookup,
+  });
+
   const messages = buildChatMessages(
     trimmed,
     fillAwareContextBlock,
     history,
     effectiveMode,
     conversationSummary,
-    caseMemory,
+    modelCaseMemory,
   );
 
   return {

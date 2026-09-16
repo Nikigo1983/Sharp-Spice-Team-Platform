@@ -285,9 +285,10 @@ describe("AI-02 KB lexical retrieval", () => {
 
   it("16. AI-01 safe grounding still activates when retrieval is empty", () => {
     const intent = detectWorkspaceIntent(
-      "требования digital nomad программы immigration",
+      "Что в нашей базе знаний написано про требования digital nomad immigration?",
     );
     assert.equal(intent.needsKb, true);
+    assert.equal(intent.kbRequired, true);
     const emptyResult = rankFixtureCorpus(
       "xyzzyplugh qqqzzz foobarbaz 999nonexistent",
       KB_FIXTURE_DOCS,

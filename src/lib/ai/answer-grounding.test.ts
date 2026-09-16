@@ -62,8 +62,11 @@ describe("AI-05 grounding fixtures A–I", () => {
 
   it("3–5. KB_EMPTY / KB_ERROR / KB_CATALOG_ONLY safe grounding", () => {
     const intent = {
-      ...detectWorkspaceIntent("Какой минимальный доход для digital nomad?"),
+      ...detectWorkspaceIntent(
+        "Что в нашей базе знаний написано про минимальный доход digital nomad?",
+      ),
       needsKb: true,
+      kbRequired: true,
       needsKbFullText: true,
     };
     assert.equal(

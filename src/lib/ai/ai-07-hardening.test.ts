@@ -270,11 +270,14 @@ describe("AI-07 injection + valid facts + regressions", () => {
   it("18. attribution / banner regression", () => {
     assert.ok(AUTHORITATIVE_EVIDENCE_BANNER.includes("UNTRUSTED_SOURCE_DATA") || AUTHORITATIVE_EVIDENCE_BANNER.includes("DATA"));
     assert.ok(GROUNDING_SYSTEM_RULES.includes("NOT FOUND") || GROUNDING_SYSTEM_RULES.includes("NOT_FOUND"));
-    const intent = detectWorkspaceIntent("требования digital nomad");
+    const intent = detectWorkspaceIntent(
+      "Что в нашей базе знаний написано про требования digital nomad?",
+    );
     assert.equal(intent.needsKb, true);
+    assert.equal(intent.kbRequired, true);
     assert.equal(
       decideKbGrounding({
-        intent: { ...intent, needsKb: true, needsKbFullText: true },
+        intent: { ...intent, needsKb: true, kbRequired: true, needsKbFullText: true },
         kbMeta: {
           source: "knowledge_base",
           attempted: true,

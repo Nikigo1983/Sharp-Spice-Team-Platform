@@ -14,6 +14,13 @@ import type { ClientListContinuationState } from "@/lib/ai/client-list-continuat
 import { sanitizeClientListContinuation } from "@/lib/ai/client-list-continuation";
 import { sanitizeConversationSummary } from "@/lib/ai/workspace-conversation-memory";
 import { sanitizeCaseMemory } from "@/lib/ai/workspace-case-memory";
+import { clientRefFromCaseMemory } from "@/lib/ai/conversation-client-lock";
+import { resolveCaseMemoryForWorkspaceRequest } from "@/lib/ai/workspace-case-memory-recovery";
+import {
+  encodeWorkspaceAiSseEvent,
+  encodeWorkspaceAiSseMetaPayload,
+} from "@/lib/ai/workspace-ai-browser-contract";
+import { logClientRefLifecycleTrace } from "@/lib/ai/workspace-ai-clientref-trace";
 import {
   sanitizeClientContextsForTransport,
 } from "@/lib/ai/context-redaction";
@@ -60,11 +67,30 @@ async function handlePost(request: Request) {
   const conversationSummary = sanitizeConversationSummary(
     body.conversationSummary ?? null,
   );
-  const caseMemory = sanitizeCaseMemory(body.caseMemory ?? null);
   const chatId =
     typeof body.chatId === "string" && body.chatId.trim()
       ? body.chatId.trim()
       : null;
+  const requestCaseMemory = sanitizeCaseMemory(body.caseMemory ?? null);
+  const resolvedMemory = await resolveCaseMemoryForWorkspaceRequest({
+    userId: session.id,
+    chatId,
+    requestCaseMemory,
+  });
+  const caseMemory = resolvedMemory.caseMemory;
+  const inboundRef = clientRefFromCaseMemory(caseMemory);
+  const historyTurnCount = Array.isArray(history) ? history.length : 0;
+  const turnNumber = Math.floor(historyTurnCount / 2) + 1;
+  logClientRefLifecycleTrace({
+    checkpoint: "SERVER_TURN_RECEIVED_CLIENTREF",
+    requestId,
+    turn: turnNumber,
+    hasClientRef: Boolean(inboundRef),
+    clientId: inboundRef?.clientId ?? null,
+    uiTransition: resolvedMemory.recoveredFromDurable
+      ? "durable_chat_recovery"
+      : "request_body_case_memory",
+  });
   // Always pass session identity so internal agent eligibility can be evaluated
   // even when conversation memory (chatId) is not attached yet.
   const memoryContext = {
@@ -99,7 +125,7 @@ async function handlePost(request: Request) {
             if (typeof chunk === "string") {
               controller.enqueue(
                 encoder.encode(
-                  `event: delta\ndata: ${JSON.stringify({ content: chunk })}\n\n`,
+                  encodeWorkspaceAiSseEvent("delta", { content: chunk }),
                 ),
               );
               continue;
@@ -108,44 +134,57 @@ async function handlePost(request: Request) {
             if ("status" in chunk) {
               controller.enqueue(
                 encoder.encode(
-                  `event: status\ndata: ${JSON.stringify({
+                  encodeWorkspaceAiSseEvent("status", {
                     phase: chunk.status,
                     tool: chunk.tool,
                     label: chunk.label,
                     ok: chunk.ok,
                     errorCode: chunk.errorCode,
                     resultCount: chunk.resultCount,
-                  })}\n\n`,
+                  }),
                 ),
               );
               continue;
             }
 
-            controller.enqueue(
-              encoder.encode(
-                `event: meta\ndata: ${JSON.stringify({
-                  requestId: chunk.requestId,
-                  sources: chunk.sources,
-                  demo: chunk.demo,
-                  pendingClientCandidates: sanitizeClientContextsForTransport(
-                    chunk.pendingClientCandidates,
-                  ),
-                  needsClientSelection: chunk.needsClientSelection,
-                  clientListContinuation: chunk.clientListContinuation ?? null,
-                  conversationSummary: chunk.conversationSummary ?? null,
-                  summaryThroughMessageCount:
-                    chunk.summaryThroughMessageCount ?? null,
-                  // Ownership: omit key when unset so early meta cannot wipe a lock.
-                  ...(chunk.caseMemory !== undefined
-                    ? { caseMemory: chunk.caseMemory }
-                    : {}),
-                })}\n\n`,
+            const metaPayload = encodeWorkspaceAiSseMetaPayload({
+              requestId: chunk.requestId,
+              sources: chunk.sources,
+              demo: chunk.demo,
+              pendingClientCandidates: sanitizeClientContextsForTransport(
+                chunk.pendingClientCandidates,
               ),
+              needsClientSelection: chunk.needsClientSelection,
+              clientListContinuation: chunk.clientListContinuation ?? null,
+              conversationSummary: chunk.conversationSummary ?? null,
+              summaryThroughMessageCount:
+                chunk.summaryThroughMessageCount ?? null,
+              ...(chunk.caseMemory !== undefined
+                ? { caseMemory: chunk.caseMemory }
+                : {}),
+            });
+            const emittedRef = clientRefFromCaseMemory(
+              chunk.caseMemory !== undefined ? chunk.caseMemory : null,
+            );
+            if (chunk.caseMemory !== undefined) {
+              logClientRefLifecycleTrace({
+                checkpoint: "SSE_CLIENTREF_EMITTED",
+                requestId,
+                turn: turnNumber,
+                hasClientRef: Boolean(emittedRef),
+                clientId: emittedRef?.clientId ?? null,
+                sseEvent: "meta",
+              });
+            }
+            controller.enqueue(
+              encoder.encode(encodeWorkspaceAiSseEvent("meta", metaPayload)),
             );
           }
 
           deadline.signal.throwIfAborted();
-          controller.enqueue(encoder.encode(`event: done\ndata: {}\n\n`));
+          controller.enqueue(
+            encoder.encode(encodeWorkspaceAiSseEvent("done", {})),
+          );
         } catch (error) {
           if (cancelled || request.signal.aborted) return;
           const code = aiErrorCode(deadline.signal.aborted ? deadline.signal.reason : error);
@@ -153,12 +192,12 @@ async function handlePost(request: Request) {
           console.error(`[api/ai-workspace][${requestId}] ${payload.code} ${payload.failureClass}`);
           controller.enqueue(
             encoder.encode(
-              `event: error\ndata: ${JSON.stringify({
+              encodeWorkspaceAiSseEvent("error", {
                 requestId,
                 code: payload.code,
                 failureClass: payload.failureClass,
                 message: payload.message,
-              })}\n\n`,
+              }),
             ),
           );
         } finally {

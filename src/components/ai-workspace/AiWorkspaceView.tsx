@@ -21,7 +21,15 @@ import {
   WORKSPACE_RECENT_HISTORY_TURNS,
 } from "@/lib/ai/workspace-conversation-memory";
 import type { WorkspaceCaseMemory } from "@/lib/ai/workspace-case-memory";
-import { mergeStreamCaseMemoryUpdate } from "@/lib/ai/workspace-case-memory";
+import {
+  buildWorkspaceAiTurnRequestBody,
+  createLiveCaseMemoryController,
+  logClientRefLifecycleBrowserTrace,
+  parseWorkspaceAiSseBlock,
+  reduceWorkspaceAiSseCaseMemory,
+  splitWorkspaceAiSseBlocks,
+} from "@/lib/ai/workspace-ai-browser-contract";
+import { clientRefFromCaseMemory } from "@/lib/ai/conversation-client-lock";
 
 import type {
 
@@ -211,6 +219,14 @@ export function AiWorkspaceView() {
   const [caseMemory, setCaseMemory] = useState<WorkspaceCaseMemory | null>(
     null,
   );
+  /** Immediate ClientRef for next send() — updated on SSE meta before persistChat. */
+  const caseMemoryLiveRef = useRef(
+    createLiveCaseMemoryController(null),
+  );
+  const commitCaseMemory = useCallback((next: WorkspaceCaseMemory | null) => {
+    caseMemoryLiveRef.current.set(next);
+    setCaseMemory(next);
+  }, []);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null,
   );
@@ -366,7 +382,7 @@ export function AiWorkspaceView() {
     setHistory(data.chat?.messages ?? []);
     setConversationSummary(data.chat?.conversationSummary ?? null);
     setSummaryThroughMessageCount(data.chat?.summaryThroughMessageCount ?? 0);
-    setCaseMemory(data.chat?.caseMemory ?? null);
+    commitCaseMemory(data.chat?.caseMemory ?? null);
     setCopiedMessageIndex(null);
 
     setSources([]);
@@ -379,7 +395,7 @@ export function AiWorkspaceView() {
 
     }
 
-  }, []);
+  }, [commitCaseMemory]);
 
 
 
@@ -399,7 +415,7 @@ export function AiWorkspaceView() {
     setHistory([]);
     setConversationSummary(null);
     setSummaryThroughMessageCount(0);
-    setCaseMemory(null);
+    commitCaseMemory(null);
     setCopiedMessageIndex(null);
 
     setSources([]);
@@ -418,7 +434,7 @@ export function AiWorkspaceView() {
 
     requestAnimationFrame(() => inputRef.current?.focus());
 
-  }, [refreshChatList]);
+  }, [refreshChatList, commitCaseMemory]);
 
 
 
@@ -540,18 +556,15 @@ export function AiWorkspaceView() {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split("\n\n");
-      buffer = chunks.pop() ?? "";
+      const { complete, rest } = splitWorkspaceAiSseBlocks(buffer);
+      buffer = rest;
 
-      for (const chunk of chunks) {
-        const lines = chunk.split("\n");
-        const eventLine = lines.find((line) => line.startsWith("event:"));
-        const dataLine = lines.find((line) => line.startsWith("data:"));
-        if (!eventLine || !dataLine) continue;
+      for (const chunk of complete) {
+        const parsed = parseWorkspaceAiSseBlock(chunk);
+        if (!parsed) continue;
 
-        const event = eventLine.slice(6).trim();
-        const rawData = dataLine.slice(5).trim();
-        if (!rawData) continue;
+        const event = parsed.event;
+        const rawData = parsed.rawData;
 
         if (event === "done") { terminalReceived = true; continue; }
         if (event === "status") {
@@ -564,6 +577,7 @@ export function AiWorkspaceView() {
 
         if (event === "meta") {
           const meta = JSON.parse(rawData) as {
+            requestId?: string;
             sources?: string[];
             demo?: boolean;
             pendingClientCandidates?: ClientContext[];
@@ -594,11 +608,24 @@ export function AiWorkspaceView() {
             streamSummaryThrough = meta.summaryThroughMessageCount;
           }
           if (meta.caseMemory !== undefined) {
-            streamCaseMemory = mergeStreamCaseMemoryUpdate(
+            streamCaseMemory = reduceWorkspaceAiSseCaseMemory(
               streamCaseMemory,
-              meta.caseMemory,
-              true,
+              event,
+              rawData,
             );
+            // Live ClientRef: available to next send() before persistChat.
+            if (streamCaseMemory !== undefined) {
+              commitCaseMemory(streamCaseMemory);
+            }
+            logClientRefLifecycleBrowserTrace({
+              checkpoint: "UI_CLIENTREF_AFTER_META",
+              requestId: meta.requestId ?? null,
+              hasClientRef: Boolean(
+                clientRefFromCaseMemory(streamCaseMemory ?? null),
+              ),
+              sseEvent: "meta",
+              uiTransition: "live_case_memory_before_persist",
+            });
           }
 
           if (meta.needsClientSelection && meta.pendingClientCandidates) {
@@ -658,15 +685,23 @@ export function AiWorkspaceView() {
           : {}),
       },
     ];
+    // ClientRef already committed on meta — persist must not gate the next send().
+    if (streamCaseMemory !== undefined) {
+      commitCaseMemory(streamCaseMemory);
+      logClientRefLifecycleBrowserTrace({
+        checkpoint: "UI_CLIENTREF_AFTER_STREAM_COMPLETE",
+        hasClientRef: Boolean(
+          clientRefFromCaseMemory(streamCaseMemory ?? null),
+        ),
+        uiTransition: "confirm_case_memory_before_persist",
+      });
+    }
     await persistChat(chatId, finalHistory);
     if (streamSummary !== undefined) {
       setConversationSummary(streamSummary);
     }
     if (streamSummaryThrough != null) {
       setSummaryThroughMessageCount(streamSummaryThrough);
-    }
-    if (streamCaseMemory !== undefined) {
-      setCaseMemory(streamCaseMemory);
     }
     return finalHistory;
   }
@@ -709,21 +744,32 @@ export function AiWorkspaceView() {
       setHistory(nextHistory);
       void persistChat(chatId, nextHistory);
       const listContinuation = resolveClientListContinuationFromHistory(history, trimmed);
+      const liveCaseMemory = caseMemoryLiveRef.current.get();
+      const requestBody = buildWorkspaceAiTurnRequestBody({
+        message: trimmed,
+        history: clipHistoryTurnsForModel(
+          selectRecentHistoryTurns(history, WORKSPACE_RECENT_HISTORY_TURNS),
+        ).map((turn) => ({ role: turn.role, content: turn.content })),
+        mode: responseMode,
+        chatId,
+        conversationSummary: conversationSummary ?? undefined,
+        caseMemory: liveCaseMemory ?? undefined,
+        pendingClientCandidates: pendingClientCandidates.length
+          ? pendingClientCandidates
+          : undefined,
+        clientListContinuation: listContinuation ?? undefined,
+      });
+      logClientRefLifecycleBrowserTrace({
+        checkpoint: "TURN2_POST_CLIENTREF",
+        turn: Math.floor(history.length / 2) + 1,
+        hasClientRef: Boolean(clientRefFromCaseMemory(liveCaseMemory)),
+        uiTransition: "build_from_live_case_memory_ref",
+      });
       const res = await fetch("/api/ai-workspace", {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          history: clipHistoryTurnsForModel(
-            selectRecentHistoryTurns(history, WORKSPACE_RECENT_HISTORY_TURNS),
-          ).map(turn => ({ role: turn.role, content: turn.content })),
-          mode: responseMode, chatId,
-          conversationSummary: conversationSummary ?? undefined,
-          caseMemory: caseMemory ?? undefined,
-          pendingClientCandidates: pendingClientCandidates.length ? pendingClientCandidates : undefined,
-          clientListContinuation: listContinuation ?? undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { reply?: string };
@@ -747,7 +793,7 @@ export function AiWorkspaceView() {
       setNeedsClientSelection(Boolean(data.needsClientSelection));
       if (data.conversationSummary !== undefined) setConversationSummary(data.conversationSummary);
       if (data.summaryThroughMessageCount != null) setSummaryThroughMessageCount(data.summaryThroughMessageCount);
-      if (data.caseMemory !== undefined) setCaseMemory(data.caseMemory);
+      if (data.caseMemory !== undefined) commitCaseMemory(data.caseMemory);
       const finalHistory: ChatEntry[] = [...nextHistory, {
         role: "assistant", content: data.reply || "AI не вернул ответ.",
         ...(data.clientListContinuation ? { clientListContinuation: data.clientListContinuation } : {}),

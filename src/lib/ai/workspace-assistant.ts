@@ -174,6 +174,7 @@ import {
   type WorkspaceWebSearchResult,
 } from "@/lib/ai/workspace-web-search";
 import { maybeRefreshWorkspaceConversationMemory } from "@/lib/ai/workspace-conversation-summary";
+import { logClientRefLifecycleTrace } from "@/lib/ai/workspace-ai-clientref-trace";
 import { getWorkspaceChatMemory } from "@/lib/ai/workspace-chat-memory-store";
 import {
   buildClientSearchQuery,
@@ -1640,6 +1641,25 @@ async function prepareWorkspaceRequest(
       });
       trace.notes.push(`grounding_mode:${agentGroundingMode}`);
       trace.latencyMs.prepare = Date.now() - started;
+      {
+        // Agent path returns BEFORE the EvidencePack lock block below.
+        // Trace whether ClientRef is already durable in caseMemory at exit.
+        const lockedAtAgentEntry = clientRefFromCaseMemory(caseMemory);
+        const fromCtx = clientContext
+          ? clientRefFromResolved(clientContext, "RESOLVED")
+          : null;
+        logClientRefLifecycleTrace({
+          checkpoint: "SERVER_RESOLVED_CLIENTREF",
+          requestId,
+          hasClientRef: Boolean(lockedAtAgentEntry),
+          clientId: lockedAtAgentEntry?.clientId ?? fromCtx?.clientId ?? null,
+          uiTransition: lockedAtAgentEntry
+            ? "prepare_agent_exit_locked"
+            : fromCtx
+              ? "prepare_agent_exit_context_unlocked"
+              : "prepare_agent_exit_no_client",
+        });
+      }
       return {
         kind: "agent",
         trimmed,
@@ -1798,6 +1818,16 @@ async function prepareWorkspaceRequest(
   if (activeClientRef && !clientRefFromCaseMemory(caseMemory)) {
     caseMemory = lockClientRefIntoCaseMemory(caseMemory, activeClientRef);
     trace.notes.push("client_ref_locked_from_active_context");
+  }
+  {
+    const lockedNow = clientRefFromCaseMemory(caseMemory);
+    logClientRefLifecycleTrace({
+      checkpoint: "SERVER_RESOLVED_CLIENTREF",
+      requestId,
+      hasClientRef: Boolean(lockedNow),
+      clientId: lockedNow?.clientId ?? null,
+      uiTransition: "prepare_legacy_after_lock",
+    });
   }
   const migratedClientModelPath = isMigratedClientModelPath({
     hasClientRef: Boolean(activeClientRef),

@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/client-ref";
 import type { WorkspaceCaseMemory } from "@/lib/ai/workspace-case-memory";
 import {
+  CLIENT_BOUND_DRAFT_CLEARED,
   emptyCaseMemory,
   sanitizeCaseMemory,
 } from "@/lib/ai/workspace-case-memory";
@@ -51,6 +52,75 @@ export function clearClientRefFromCaseMemory(
     linkedClientId: null,
     updatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Mark the active client-bound draft as belonging to this ClientRef
+ * (e.g. after a debt-reminder letter). Enables safe follow-up transforms.
+ */
+export function bindClientBoundDraftToCaseMemory(
+  memory: WorkspaceCaseMemory | null | undefined,
+  clientId: string,
+): WorkspaceCaseMemory {
+  const base = sanitizeCaseMemory(memory) ?? emptyCaseMemory();
+  return {
+    ...base,
+    draftClientId: clientId,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Atomic explicit client switch: replace lock and drop previous-client facts.
+ * Safe cross-client leftovers are not retained as current-client evidence.
+ */
+export function applyClientSwitch(params: {
+  memory: WorkspaceCaseMemory | null | undefined;
+  previous?: ClientRef | null;
+  next: ClientRef;
+}): {
+  memory: WorkspaceCaseMemory;
+  clientRef: ClientRef;
+  switched: boolean;
+} {
+  const previous =
+    params.previous ?? clientRefFromCaseMemory(params.memory);
+  const next: ClientRef = {
+    ...params.next,
+    resolutionOutcome: "RESOLVED_LOCKED",
+  };
+  if (previous && previous.clientId === next.clientId) {
+    return {
+      memory: lockClientRefIntoCaseMemory(params.memory, next),
+      clientRef: next,
+      switched: false,
+    };
+  }
+
+  const transition = applyClientRefLockTransition({
+    previous,
+    next,
+    switchExplicit: true,
+  });
+  if (!transition.switched && previous) {
+    // Should not happen when ids differ and switchExplicit — keep previous.
+    return {
+      memory: lockClientRefIntoCaseMemory(params.memory, previous),
+      clientRef: previous,
+      switched: false,
+    };
+  }
+
+  // Fresh authoritative identity boundary — no ALPHA finance/contact/profile facts.
+  const memory: WorkspaceCaseMemory = {
+    ...emptyCaseMemory(),
+    linkedClientId: next.clientId,
+    clientName: next.displayLabel?.trim() || null,
+    passport: null,
+    draftClientId: CLIENT_BOUND_DRAFT_CLEARED,
+    updatedAt: new Date().toISOString(),
+  };
+  return { memory, clientRef: next, switched: Boolean(previous) };
 }
 
 /**

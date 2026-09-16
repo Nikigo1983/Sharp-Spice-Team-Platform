@@ -7,6 +7,9 @@ export const WORKSPACE_CASE_MEMORY_EVERY_TURNS = 4;
 export const WORKSPACE_CASE_MEMORY_MIN_TURNS = 2;
 export const WORKSPACE_CASE_MEMORY_SOURCE_TURN_CAP = 24;
 
+/** Sentinel: client-bound draft cleared on explicit switch — block transform. */
+export const CLIENT_BOUND_DRAFT_CLEARED = "__cleared__";
+
 export type WorkspaceCaseMemory = {
   clientName: string | null;
   citizenship: string | null;
@@ -20,6 +23,11 @@ export type WorkspaceCaseMemory = {
   specialNotes: string | null;
   openQuestions: string | null;
   linkedClientId: string | null;
+  /**
+   * Client UUID for the active transformable client-bound draft, or
+   * CLIENT_BOUND_DRAFT_CLEARED after an explicit switch. null = legacy/unset.
+   */
+  draftClientId: string | null;
   updatedAt: string;
 };
 
@@ -48,6 +56,7 @@ const STRING_FIELDS = [
   "specialNotes",
   "openQuestions",
   "linkedClientId",
+  "draftClientId",
 ] as const;
 
 function cleanField(value: unknown, max = 500): string | null {
@@ -71,7 +80,53 @@ export function emptyCaseMemory(
     specialNotes: null,
     openQuestions: null,
     linkedClientId: null,
+    draftClientId: null,
     updatedAt,
+  };
+}
+
+/** True when follow-up transform may rewrite the prior client-bound draft. */
+export function isClientBoundDraftTransformAllowed(
+  memory: WorkspaceCaseMemory | null | undefined,
+): boolean {
+  const sanitized = sanitizeCaseMemory(memory);
+  if (!sanitized) return true; // no memory → legacy allow
+  const draftId = sanitized.draftClientId;
+  if (draftId == null) return true; // unset → legacy allow
+  if (draftId === CLIENT_BOUND_DRAFT_CLEARED) return false;
+  const linked = sanitized.linkedClientId;
+  return Boolean(linked && draftId === linked);
+}
+
+/**
+ * Current-request prepare lock wins over stale durable/store memory.
+ * Never restore an older linkedClientId after an explicit switch this turn.
+ */
+export function selectAuthoritativeCaseMemory(params: {
+  prepared: WorkspaceCaseMemory | null | undefined;
+  refreshed: WorkspaceCaseMemory | null | undefined;
+}): WorkspaceCaseMemory | null {
+  const prep = sanitizeCaseMemory(params.prepared);
+  const refreshed = sanitizeCaseMemory(params.refreshed);
+  if (!prep) return refreshed;
+  if (!refreshed) return prep;
+  if (
+    prep.linkedClientId &&
+    refreshed.linkedClientId &&
+    prep.linkedClientId !== refreshed.linkedClientId
+  ) {
+    return prep;
+  }
+  // Same identity (or one side missing id): patch=prepared wins conflicts.
+  const merged = mergeCaseMemory(refreshed, prep);
+  if (!merged) return prep;
+  return {
+    ...merged,
+    linkedClientId: prep.linkedClientId ?? merged.linkedClientId,
+    clientName: prep.clientName ?? merged.clientName,
+    draftClientId: prep.draftClientId ?? merged.draftClientId,
+    passport: null,
+    updatedAt: prep.updatedAt || merged.updatedAt,
   };
 }
 
@@ -164,11 +219,34 @@ export function mergeCaseMemoryFromClientSnapshot(
   // Do not persist booking/home address into employers (high-sensitivity).
   fromClient.employers = null;
   fromClient.specialNotes = cleanField(client.notes, 800);
-  // Dialogue/base wins on conflicts; CRM only fills empty slots.
+  const baseSan = sanitizeCaseMemory(base);
+  // Different canonical client → identity boundary; do not keep old client facts.
+  if (
+    fromClient.linkedClientId &&
+    baseSan?.linkedClientId &&
+    fromClient.linkedClientId !== baseSan.linkedClientId
+  ) {
+    return {
+      ...fromClient,
+      draftClientId: CLIENT_BOUND_DRAFT_CLEARED,
+      passport: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  // Same client (or no prior lock): dialogue wins on conflicts; CRM fills empties.
   const merged = mergeCaseMemory(fromClient, base);
   if (!merged) return null;
-  // Never keep passport in durable conversational memory going forward.
-  return { ...merged, passport: null };
+  return {
+    ...merged,
+    linkedClientId: fromClient.linkedClientId ?? merged.linkedClientId,
+    clientName:
+      // Prefer existing dialogue name only when lock id matches / unset.
+      (baseSan?.linkedClientId == null ||
+      baseSan.linkedClientId === fromClient.linkedClientId
+        ? merged.clientName
+        : fromClient.clientName) ?? fromClient.clientName,
+    passport: null,
+  };
 }
 
 export function formatCaseMemoryForPrompt(
@@ -245,6 +323,7 @@ export function buildCaseMemoryExtractPrompt(params: {
         specialNotes: "string|null",
         openQuestions: "string|null",
         linkedClientId: "string|null",
+        draftClientId: "string|null",
       },
       null,
       2,

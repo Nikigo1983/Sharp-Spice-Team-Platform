@@ -14,9 +14,10 @@ import {
 } from "@/lib/ai/answer-grounding";
 import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-task";
 import {
+  applyClientSwitch,
+  bindClientBoundDraftToCaseMemory,
   clientRefFromCaseMemory,
   lockClientRefIntoCaseMemory,
-  clearClientRefFromCaseMemory,
 } from "@/lib/ai/conversation-client-lock";
 import {
   formatEvidencePackForModel,
@@ -159,6 +160,7 @@ import {
   formatCaseMemoryForPrompt,
   prepareCaseMemoryForModelContext,
   sanitizeCaseMemory,
+  selectAuthoritativeCaseMemory,
   type WorkspaceCaseMemory,
 } from "@/lib/ai/workspace-case-memory";
 import { queryLooksLikeClientPii } from "@/lib/ai/client-pii-signals";
@@ -715,6 +717,7 @@ async function prepareWorkspaceRequest(
   const transformPlan = planFollowUpTransform({
     query: trimmed,
     history: recentHistory,
+    caseMemory,
   });
   const currentTask = classifyCurrentTask({
     query: trimmed,
@@ -899,10 +902,24 @@ async function prepareWorkspaceRequest(
           balanceCents: finance?.balanceCents ?? null,
           nameHint: hint || name,
         });
-        caseMemory = lockClientRefIntoCaseMemory(
-          caseMemory,
-          resolvedDebt.clientRef,
-        );
+        const previousLock = clientRefFromCaseMemory(caseMemory);
+        if (
+          previousLock &&
+          previousLock.clientId !== resolvedDebt.clientRef.clientId &&
+          !resolvedDebt.reusedLock
+        ) {
+          const switched = applyClientSwitch({
+            memory: caseMemory,
+            previous: previousLock,
+            next: resolvedDebt.clientRef,
+          });
+          caseMemory = switched.memory;
+        } else {
+          caseMemory = lockClientRefIntoCaseMemory(
+            caseMemory,
+            resolvedDebt.clientRef,
+          );
+        }
         trace.selectedRoutes = ["finance_client_debt_direct"];
         trace.clientRefPresent = true;
         trace.notes.push(
@@ -1061,10 +1078,26 @@ async function prepareWorkspaceRequest(
             trimmed,
           ),
         });
-        caseMemory = lockClientRefIntoCaseMemory(
-          caseMemory,
-          resolvedLetter.clientRef,
-        );
+        const previousLock = clientRefFromCaseMemory(caseMemory);
+        if (
+          previousLock &&
+          previousLock.clientId !== resolvedLetter.clientRef.clientId
+        ) {
+          const switched = applyClientSwitch({
+            memory: caseMemory,
+            previous: previousLock,
+            next: resolvedLetter.clientRef,
+          });
+          caseMemory = bindClientBoundDraftToCaseMemory(
+            switched.memory,
+            resolvedLetter.clientRef.clientId,
+          );
+        } else {
+          caseMemory = bindClientBoundDraftToCaseMemory(
+            lockClientRefIntoCaseMemory(caseMemory, resolvedLetter.clientRef),
+            resolvedLetter.clientRef.clientId,
+          );
+        }
         trace.selectedRoutes = ["client_debt_letter_direct"];
         trace.clientRefPresent = true;
         trace.notes.push(
@@ -1202,8 +1235,12 @@ async function prepareWorkspaceRequest(
       lockedClientRef &&
       selectedRef.clientId !== lockedClientRef.clientId
     ) {
-      // Explicit ambiguity pick switches ClientRef — clear incompatible memory.
-      caseMemory = clearClientRefFromCaseMemory(caseMemory);
+      const switched = applyClientSwitch({
+        memory: caseMemory,
+        previous: lockedClientRef,
+        next: selectedRef,
+      });
+      caseMemory = switched.memory;
       trace.notes.push("client_ref_switched_via_selection");
     }
   }
@@ -1211,13 +1248,18 @@ async function prepareWorkspaceRequest(
   const isListLike =
     isClientListQuery(trimmed) || isClientListContinuationQuery(trimmed);
 
+  const explicitDifferentClient =
+    Boolean(lockedClientRef) &&
+    querySuggestsDifferentClient(trimmed, lockedClientRef);
+
   const needsClientResolve =
     !followUp &&
     !isListLike &&
     (taskRequiresClientRef(currentTask) ||
       intent.needsClients ||
       intent.fastClientLookup ||
-      isDocFillIntent(trimmed));
+      isDocFillIntent(trimmed) ||
+      explicitDifferentClient);
 
   const volatileRefetch = queryRequiresVolatileRefetch(trimmed);
   if (volatileRefetch) {
@@ -1251,8 +1293,18 @@ async function prepareWorkspaceRequest(
           resolved.clientRef.clientId !== lockedClientRef.clientId &&
           !resolved.reusedLock
         ) {
-          caseMemory = clearClientRefFromCaseMemory(caseMemory);
+          const switched = applyClientSwitch({
+            memory: caseMemory,
+            previous: lockedClientRef,
+            next: resolved.clientRef,
+          });
+          caseMemory = switched.memory;
           trace.notes.push("client_ref_switched");
+        } else {
+          caseMemory = lockClientRefIntoCaseMemory(
+            caseMemory,
+            resolved.clientRef,
+          );
         }
         trace.clientRefPresent = true;
         if (resolved.client) {
@@ -1264,13 +1316,6 @@ async function prepareWorkspaceRequest(
           if (record) {
             clientContext = portalCaseToContext(record, 100, ["resolve_client"]);
           }
-        }
-        // Persist lock into case memory for subsequent turns.
-        if (resolved.clientRef) {
-          caseMemory = lockClientRefIntoCaseMemory(
-            caseMemory,
-            resolved.clientRef,
-          );
         }
       } else if (resolved.outcome === "AMBIGUOUS") {
         clientCandidates = [];
@@ -1324,12 +1369,26 @@ async function prepareWorkspaceRequest(
         clientContext = clientLookup.client;
         const searchRef = clientRefFromResolved(clientContext);
         if (searchRef) {
-          caseMemory = lockClientRefIntoCaseMemory(caseMemory, searchRef);
+          const previousLock = clientRefFromCaseMemory(caseMemory);
+          if (
+            previousLock &&
+            previousLock.clientId !== searchRef.clientId
+          ) {
+            const switched = applyClientSwitch({
+              memory: caseMemory,
+              previous: previousLock,
+              next: searchRef,
+            });
+            caseMemory = switched.memory;
+            trace.notes.push("client_ref_switched_from_search_single");
+          } else {
+            caseMemory = lockClientRefIntoCaseMemory(caseMemory, searchRef);
+            trace.notes.push("client_ref_locked_from_search_single");
+          }
           trace.clientRefPresent = true;
           if (trace.clientResolutionOutcome === "UNKNOWN") {
             trace.clientResolutionOutcome = "RESOLVED";
           }
-          trace.notes.push("client_ref_locked_from_search_single");
         }
       } else if (clientLookup.kind === "multiple") {
         clientCandidates = clientLookup.clients;
@@ -2178,7 +2237,7 @@ export async function runWorkspaceAi(
       conversationSummary: memory.conversationSummary,
       summaryThroughMessageCount: memory.summaryThroughMessageCount,
       // Prefer prepare lock over store refresh — never drop a just-created ClientRef.
-      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
+      caseMemory: selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory }),
     };
   }
 
@@ -2323,7 +2382,7 @@ export async function runWorkspaceAi(
       needsClientSelection: prepared.needsClientSelection,
       conversationSummary: memory.conversationSummary,
       summaryThroughMessageCount: memory.summaryThroughMessageCount,
-      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
+      caseMemory: selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory }),
     };
   }
 
@@ -2400,7 +2459,7 @@ export async function* runWorkspaceAiStream(
       clientListContinuation: prepared.clientListContinuation ?? null,
       conversationSummary: memory.conversationSummary,
       summaryThroughMessageCount: memory.summaryThroughMessageCount,
-      caseMemory: memory.caseMemory ?? prepared.caseMemory ?? null,
+      caseMemory: selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory }),
     };
     yield prepared.reply;
     return;
@@ -2593,7 +2652,7 @@ export async function* runWorkspaceAiStream(
         assistantReply: finalAnswer,
         clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
       });
-      const caseMemory = memory.caseMemory ?? prepared.caseMemory ?? null;
+      const caseMemory = selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory });
       // Always emit final meta when a ClientRef lock exists — never rely only on
       // store refresh succeeding. Early meta intentionally omits caseMemory.
       yield {

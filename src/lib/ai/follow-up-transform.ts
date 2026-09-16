@@ -4,6 +4,10 @@
  */
 
 import { isFollowUpTransformQuery } from "@/lib/ai/current-task";
+import {
+  isClientBoundDraftTransformAllowed,
+  type WorkspaceCaseMemory,
+} from "@/lib/ai/workspace-case-memory";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -31,8 +35,11 @@ export function findPriorAssistantDraft(
 export function planFollowUpTransform(params: {
   query: string;
   history: ChatTurn[];
+  /** When set, client-bound draft must match current lock after switch. */
+  caseMemory?: WorkspaceCaseMemory | null;
 }): FollowUpTransformPlan | null {
   if (!isFollowUpTransformQuery(params.query)) return null;
+  if (!isClientBoundDraftTransformAllowed(params.caseMemory)) return null;
   const priorDraft = findPriorAssistantDraft(params.history);
   if (!priorDraft) return null;
   return {

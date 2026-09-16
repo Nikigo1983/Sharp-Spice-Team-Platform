@@ -101,6 +101,7 @@ export function isClientBoundDraftTransformAllowed(
 /**
  * Current-request prepare lock wins over stale durable/store memory.
  * Never restore an older linkedClientId after an explicit switch this turn.
+ * Never let refreshed/store memory erase a prepare-resolved ClientRef with null.
  */
 export function selectAuthoritativeCaseMemory(params: {
   prepared: WorkspaceCaseMemory | null | undefined;
@@ -115,9 +116,10 @@ export function selectAuthoritativeCaseMemory(params: {
     refreshed.linkedClientId &&
     prep.linkedClientId !== refreshed.linkedClientId
   ) {
+    // Explicit switch this turn already updated prepare — prepare wins.
     return prep;
   }
-  // Same identity (or one side missing id): patch=prepared wins conflicts.
+  // Same identity (or refreshed missing id): prepare identity is authoritative.
   const merged = mergeCaseMemory(refreshed, prep);
   if (!merged) return prep;
   return {
@@ -128,6 +130,26 @@ export function selectAuthoritativeCaseMemory(params: {
     passport: null,
     updatedAt: prep.updatedAt || merged.updatedAt,
   };
+}
+
+/**
+ * SSE meta payload for ClientRef conversation state.
+ * - early: emit prepare lock as soon as uniquely resolved (omit key if none)
+ * - final: prepare lock wins over refreshed/store via selectAuthoritativeCaseMemory
+ */
+export function caseMemoryForStreamMeta(params: {
+  prepared: WorkspaceCaseMemory | null | undefined;
+  refreshed?: WorkspaceCaseMemory | null | undefined;
+  phase: "early" | "final";
+}): WorkspaceCaseMemory | null | undefined {
+  const prep = sanitizeCaseMemory(params.prepared);
+  if (params.phase === "early") {
+    return prep?.linkedClientId ? prep : undefined;
+  }
+  return selectAuthoritativeCaseMemory({
+    prepared: prep,
+    refreshed: params.refreshed,
+  });
 }
 
 export function sanitizeCaseMemory(value: unknown): WorkspaceCaseMemory | null {
@@ -150,9 +172,10 @@ export function sanitizeCaseMemory(value: unknown): WorkspaceCaseMemory | null {
 /**
  * SSE/UI ownership for caseMemory on a single response:
  * - key absent → no change
- * - non-null → set (authoritative lock)
- * - null → do not wipe an already-received non-null lock in the same stream
- *   (early meta must omit the key; explicit clear is a separate unlock path)
+ * - non-null with linkedClientId → set (authoritative lock / switch)
+ * - non-null without linkedClientId → merge facts but keep existing lock id
+ * - null → do not wipe an already-received ClientRef lock in the same stream
+ *   (intentional clear uses a dedicated unlock path, not accidental null meta)
  */
 export function mergeStreamCaseMemoryUpdate(
   current: WorkspaceCaseMemory | null | undefined,
@@ -160,7 +183,19 @@ export function mergeStreamCaseMemoryUpdate(
   keyPresent: boolean,
 ): WorkspaceCaseMemory | null | undefined {
   if (!keyPresent) return current;
-  if (incoming != null) return incoming;
+  if (incoming != null) {
+    const curId = current?.linkedClientId?.trim() || null;
+    const nextId = incoming.linkedClientId?.trim() || null;
+    if (curId && !nextId) {
+      return {
+        ...incoming,
+        linkedClientId: curId,
+        clientName: incoming.clientName ?? current?.clientName ?? null,
+      };
+    }
+    return incoming;
+  }
+  if (current != null && current.linkedClientId) return current;
   if (current != null) return current;
   return null;
 }

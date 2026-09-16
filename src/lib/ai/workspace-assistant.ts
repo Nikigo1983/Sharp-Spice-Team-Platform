@@ -163,6 +163,7 @@ import {
   formatCaseMemoryForPrompt,
   prepareCaseMemoryForModelContext,
   sanitizeCaseMemory,
+  caseMemoryForStreamMeta,
   selectAuthoritativeCaseMemory,
   type WorkspaceCaseMemory,
 } from "@/lib/ai/workspace-case-memory";
@@ -262,8 +263,10 @@ export type WorkspaceAiStreamMeta = {
   conversationSummary?: string | null;
   summaryThroughMessageCount?: number;
   /**
-   * Omit from early SSE meta. Only set on the authoritative post-resolve meta.
-   * `undefined` = no change; non-null = lock; explicit null = clear.
+   * Conversation ClientRef state for UI round-trip.
+   * `undefined` = omit key (no change); non-null = authoritative lock;
+   * early meta may include lock as soon as uniquely resolved; final meta
+   * must preserve the same ClientRef via selectAuthoritativeCaseMemory.
    */
   caseMemory?: WorkspaceCaseMemory | null;
 };
@@ -1790,6 +1793,12 @@ async function prepareWorkspaceRequest(
       }
     }
   }
+  // Invariant: uniquely resolved ClientRef must be durable conversation state
+  // for this request — not only an EvidencePack assembly input.
+  if (activeClientRef && !clientRefFromCaseMemory(caseMemory)) {
+    caseMemory = lockClientRefIntoCaseMemory(caseMemory, activeClientRef);
+    trace.notes.push("client_ref_locked_from_active_context");
+  }
   const migratedClientModelPath = isMigratedClientModelPath({
     hasClientRef: Boolean(activeClientRef),
     modelRequired: currentTask.modelRequired,
@@ -2257,7 +2266,12 @@ async function executeAgentPrepared(params: {
         requestId: prepared.requestId,
         pendingClientCandidates: prepared.pendingClientCandidates,
         needsClientSelection: prepared.needsClientSelection,
-        ...memory,
+        conversationSummary: memory.conversationSummary,
+        summaryThroughMessageCount: memory.summaryThroughMessageCount,
+        caseMemory: selectAuthoritativeCaseMemory({
+          prepared: prepared.caseMemory,
+          refreshed: memory.caseMemory,
+        }),
       },
       statusEvents: loop.statusEvents,
     };
@@ -2411,7 +2425,12 @@ export async function runWorkspaceAi(
           requestId: legacy.requestId,
           pendingClientCandidates: legacy.pendingClientCandidates,
           needsClientSelection: legacy.needsClientSelection,
-          ...memory,
+          conversationSummary: memory.conversationSummary,
+          summaryThroughMessageCount: memory.summaryThroughMessageCount,
+          caseMemory: selectAuthoritativeCaseMemory({
+            prepared: legacy.caseMemory,
+            refreshed: memory.caseMemory,
+          }),
         };
       }
     }
@@ -2558,6 +2577,18 @@ export async function* runWorkspaceAiStream(
   }
 
   if (prepared.kind === "agent") {
+    const agentEarly = caseMemoryForStreamMeta({
+      prepared: prepared.caseMemory,
+      phase: "early",
+    });
+    if (agentEarly !== undefined) {
+      yield {
+        sources: [],
+        demo: false,
+        requestId: prepared.requestId,
+        caseMemory: agentEarly,
+      };
+    }
     yield { status: "generating" };
 
     let agentOutcome: Awaited<ReturnType<typeof executeAgentPrepared>> = null;
@@ -2588,7 +2619,10 @@ export async function* runWorkspaceAiStream(
         needsClientSelection: agentResult.needsClientSelection,
         conversationSummary: agentResult.conversationSummary,
         summaryThroughMessageCount: agentResult.summaryThroughMessageCount,
-        caseMemory: agentResult.caseMemory,
+        caseMemory: selectAuthoritativeCaseMemory({
+          prepared: prepared.caseMemory,
+          refreshed: agentResult.caseMemory,
+        }),
       };
       // Expose the guarded final answer, never intermediate tool-round text.
       yield agentResult.reply;
@@ -2609,59 +2643,116 @@ export async function* runWorkspaceAiStream(
       actor,
     );
     if (legacy.kind !== "ai") {
+      const rescue = caseMemoryForStreamMeta({
+        prepared: prepared.caseMemory,
+        phase: "early",
+      });
       yield {
         sources: [],
         demo: false,
         requestId: prepared.requestId,
+        ...(rescue !== undefined ? { caseMemory: rescue } : {}),
       };
       yield "Не удалось получить ответ агента.";
       return;
     }
+    const legacyEarly = caseMemoryForStreamMeta({
+      prepared: legacy.caseMemory,
+      phase: "early",
+    });
     yield {
       sources: legacy.sources,
       demo: false,
       requestId: legacy.requestId,
       pendingClientCandidates: legacy.pendingClientCandidates,
       needsClientSelection: legacy.needsClientSelection,
+      ...(legacyEarly !== undefined ? { caseMemory: legacyEarly } : {}),
     };
     yield { status: "generating" };
     let streamed = "";
-    for await (const event of streamChatCompletionResult(
-      legacy.messages,
-      completionOptionsForWorkspaceTurn({
-        hasClientData:
-          Boolean(legacy.clientContext) ||
-          queryLooksLikeClientPii(legacy.trimmed),
-        overrides: legacy.maxTokens
-          ? { maxTokens: legacy.maxTokens }
-          : undefined,
-      }),
-    )) {
-      if (event.type === "delta") {
-        streamed += event.content;
-        yield event.content;
-        continue;
+    let legacyFinalMetaEmitted = false;
+    try {
+      for await (const event of streamChatCompletionResult(
+        legacy.messages,
+        completionOptionsForWorkspaceTurn({
+          hasClientData:
+            Boolean(legacy.clientContext) ||
+            queryLooksLikeClientPii(legacy.trimmed),
+          overrides: legacy.maxTokens
+            ? { maxTokens: legacy.maxTokens }
+            : undefined,
+        }),
+      )) {
+        if (event.type === "delta") {
+          streamed += event.content;
+          yield event.content;
+          continue;
+        }
+        if (!event.result.ok) throw new AiCompletionError(event.result.error);
+        legacy.trace.notes.push("agent_fallback_legacy_stream");
+        legacy.trace.astraCalled = true;
+        legacy.trace.modelCalled = true;
+        legacy.trace.openRouterOk = event.result.ok;
+        legacy.trace.responseOk = event.result.ok;
+        logWorkspaceAiTrace(legacy.trace);
       }
-      if (!event.result.ok) throw new AiCompletionError(event.result.error);
-      legacy.trace.notes.push("agent_fallback_legacy_stream");
-      legacy.trace.astraCalled = true;
-      legacy.trace.modelCalled = true;
-      legacy.trace.openRouterOk = event.result.ok;
-      legacy.trace.responseOk = event.result.ok;
-      logWorkspaceAiTrace(legacy.trace);
-    }
-    if (!streamed.trim()) {
-      throw new AiCompletionError("MODEL_EMPTY_RESPONSE");
+      if (!streamed.trim()) {
+        throw new AiCompletionError("MODEL_EMPTY_RESPONSE");
+      }
+      const memory = await attachRefreshedConversationMemory({
+        userId: memoryContext?.userId,
+        chatId: memoryContext?.chatId,
+        history,
+        userMessage,
+        assistantReply: streamed,
+        clientSnapshot: clientSnapshotFromResolved(legacy.clientContext),
+      });
+      yield {
+        sources: legacy.sources,
+        demo: false,
+        requestId: legacy.requestId,
+        pendingClientCandidates: legacy.pendingClientCandidates,
+        needsClientSelection: legacy.needsClientSelection,
+        conversationSummary: memory.conversationSummary,
+        summaryThroughMessageCount: memory.summaryThroughMessageCount,
+        caseMemory: caseMemoryForStreamMeta({
+          prepared: legacy.caseMemory,
+          refreshed: memory.caseMemory,
+          phase: "final",
+        }),
+      };
+      legacyFinalMetaEmitted = true;
+    } catch (error) {
+      if (!legacyFinalMetaEmitted) {
+        const rescue = caseMemoryForStreamMeta({
+          prepared: legacy.caseMemory,
+          phase: "early",
+        });
+        if (rescue !== undefined) {
+          yield {
+            sources: legacy.sources,
+            demo: false,
+            requestId: legacy.requestId,
+            caseMemory: rescue,
+          };
+        }
+      }
+      throw error;
     }
     return;
   }
 
+  const earlyCaseMemory = caseMemoryForStreamMeta({
+    prepared: prepared.caseMemory,
+    phase: "early",
+  });
   yield {
     sources: prepared.sources,
     demo: false,
     requestId: prepared.requestId,
     pendingClientCandidates: prepared.pendingClientCandidates,
     needsClientSelection: prepared.needsClientSelection,
+    ...(earlyCaseMemory !== undefined ? { caseMemory: earlyCaseMemory } : {}),
   };
 
   yield { status: "generating" };
@@ -2673,91 +2764,111 @@ export async function* runWorkspaceAiStream(
   let buffered = "";
   let streamed = "";
   let hasContent = false;
-  for await (const event of streamChatCompletionResult(
-    prepared.messages,
-    completionOptionsForWorkspaceTurn({
-      hasClientData:
-        Boolean(prepared.clientContext) ||
-        queryLooksLikeClientPii(prepared.trimmed),
-      overrides: prepared.maxTokens
-        ? { maxTokens: prepared.maxTokens }
-        : undefined,
-    }),
-  )) {
-    if (event.type === "delta") {
-      hasContent = true;
-      if (mayNeedGroundingGuard) {
-        buffered += event.content;
+  let finalMetaEmitted = false;
+  try {
+    for await (const event of streamChatCompletionResult(
+      prepared.messages,
+      completionOptionsForWorkspaceTurn({
+        hasClientData:
+          Boolean(prepared.clientContext) ||
+          queryLooksLikeClientPii(prepared.trimmed),
+        overrides: prepared.maxTokens
+          ? { maxTokens: prepared.maxTokens }
+          : undefined,
+      }),
+    )) {
+      if (event.type === "delta") {
+        hasContent = true;
+        if (mayNeedGroundingGuard) {
+          buffered += event.content;
+        } else {
+          streamed += event.content;
+          yield event.content;
+        }
+        continue;
+      }
+
+      prepared.trace.requestedModel = event.result.requestedModel;
+      prepared.trace.returnedModel = event.result.returnedModel;
+      prepared.trace.usageInputTokens = event.result.usage.inputTokens;
+      prepared.trace.usageOutputTokens = event.result.usage.outputTokens;
+      prepared.trace.latencyMs.model = event.result.latencyMs;
+      prepared.trace.openRouterOk = event.result.ok;
+      prepared.trace.astraCalled = true;
+      prepared.trace.modelCalled = true;
+      prepared.trace.latencyMs.total = Date.now() - totalStarted;
+
+      if (!event.result.ok) {
+        prepared.trace.fallbackActivated = true;
+        prepared.trace.fallbackReason =
+          event.result.error === "MODEL_EMPTY_RESPONSE"
+            ? "MODEL_EMPTY_RESPONSE"
+            : "OPENROUTER_ERROR";
+        prepared.trace.notes.push(event.result.error ?? "AI_REQUEST_FAILED");
+        prepared.trace.responseOk = false;
+        logWorkspaceAiTrace(prepared.trace);
+        throw new AiCompletionError(event.result.error);
       } else {
-        streamed += event.content;
-        yield event.content;
+        prepared.trace.responseOk = true;
       }
-      continue;
-    }
 
-    prepared.trace.requestedModel = event.result.requestedModel;
-    prepared.trace.returnedModel = event.result.returnedModel;
-    prepared.trace.usageInputTokens = event.result.usage.inputTokens;
-    prepared.trace.usageOutputTokens = event.result.usage.outputTokens;
-    prepared.trace.latencyMs.model = event.result.latencyMs;
-    prepared.trace.openRouterOk = event.result.ok;
-    prepared.trace.astraCalled = true;
-    prepared.trace.modelCalled = true;
-    prepared.trace.latencyMs.total = Date.now() - totalStarted;
+      let finalAnswer = streamed;
+      if (mayNeedGroundingGuard && buffered) {
+        const guarded = applyPostAnswerGroundingGuards({
+          answer: buffered,
+          contextBlock: prepared.contextBlock,
+          query: prepared.trimmed,
+        });
+        for (const note of guarded.notes) {
+          prepared.trace.notes.push(note);
+        }
+        finalAnswer = guarded.answer;
+        yield guarded.answer;
+      }
 
-    if (!event.result.ok) {
-      prepared.trace.fallbackActivated = true;
-      prepared.trace.fallbackReason =
-        event.result.error === "MODEL_EMPTY_RESPONSE"
-          ? "MODEL_EMPTY_RESPONSE"
-          : "OPENROUTER_ERROR";
-      prepared.trace.notes.push(event.result.error ?? "AI_REQUEST_FAILED");
-      prepared.trace.responseOk = false;
       logWorkspaceAiTrace(prepared.trace);
-      throw new AiCompletionError(event.result.error);
-    } else {
-      prepared.trace.responseOk = true;
-    }
 
-    let finalAnswer = streamed;
-    if (mayNeedGroundingGuard && buffered) {
-      const guarded = applyPostAnswerGroundingGuards({
-        answer: buffered,
-        contextBlock: prepared.contextBlock,
-        query: prepared.trimmed,
-      });
-      for (const note of guarded.notes) {
-        prepared.trace.notes.push(note);
+      if (finalAnswer.trim()) {
+        const memory = await attachRefreshedConversationMemory({
+          userId: memoryContext?.userId,
+          chatId: memoryContext?.chatId,
+          history,
+          userMessage,
+          assistantReply: finalAnswer,
+          clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
+        });
+        const authoritative = caseMemoryForStreamMeta({
+          prepared: prepared.caseMemory,
+          refreshed: memory.caseMemory,
+          phase: "final",
+        });
+        // Always emit final meta when content completed — prepare lock wins
+        // over store refresh so ClientRef cannot regress to null/stale.
+        yield {
+          sources: prepared.sources,
+          demo: false,
+          requestId: prepared.requestId,
+          pendingClientCandidates: prepared.pendingClientCandidates,
+          needsClientSelection: prepared.needsClientSelection,
+          conversationSummary: memory.conversationSummary,
+          summaryThroughMessageCount: memory.summaryThroughMessageCount,
+          caseMemory: authoritative ?? null,
+        };
+        finalMetaEmitted = true;
       }
-      finalAnswer = guarded.answer;
-      yield guarded.answer;
     }
-
-    logWorkspaceAiTrace(prepared.trace);
-
-    if (finalAnswer.trim()) {
-      const memory = await attachRefreshedConversationMemory({
-        userId: memoryContext?.userId,
-        chatId: memoryContext?.chatId,
-        history,
-        userMessage,
-        assistantReply: finalAnswer,
-        clientSnapshot: clientSnapshotFromResolved(prepared.clientContext),
-      });
-      const caseMemory = selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory });
-      // Always emit final meta when a ClientRef lock exists — never rely only on
-      // store refresh succeeding. Early meta intentionally omits caseMemory.
+  } catch (error) {
+    // State persistence: if ClientRef was already resolved, re-assert it even
+    // when later streaming/refresh fails. Do not invent a successful answer.
+    if (!finalMetaEmitted && earlyCaseMemory !== undefined) {
       yield {
         sources: prepared.sources,
         demo: false,
         requestId: prepared.requestId,
-        pendingClientCandidates: prepared.pendingClientCandidates,
-        needsClientSelection: prepared.needsClientSelection,
-        conversationSummary: memory.conversationSummary,
-        summaryThroughMessageCount: memory.summaryThroughMessageCount,
-        caseMemory,
+        caseMemory: earlyCaseMemory,
       };
     }
+    throw error;
   }
 
   if (!hasContent) {
@@ -2765,6 +2876,7 @@ export async function* runWorkspaceAiStream(
       sources: prepared.sources,
       demo: true,
       requestId: prepared.requestId,
+      ...(earlyCaseMemory !== undefined ? { caseMemory: earlyCaseMemory } : {}),
     };
     throw new AiCompletionError("EMPTY_MODEL_RESPONSE");
   }

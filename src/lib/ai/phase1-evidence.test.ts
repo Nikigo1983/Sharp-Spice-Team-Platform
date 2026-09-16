@@ -96,6 +96,7 @@ function synthFinance(): PortalFinanceSnapshot {
     contractAmount: "€1,000.00",
     contractAmountCents: 100000,
     paidAmount: "€400.00",
+    paidAmountCents: 40000,
     balance: "€600.00",
     balanceCents: 60000,
     paymentStatus: "partial",
@@ -217,7 +218,7 @@ describe("Phase 1 EvidencePack projections", () => {
     });
     assert.ok(pack.projections.CONTACT?.email);
     assert.ok(pack.projections.CASE?.status);
-    assert.ok(pack.projections.FINANCE?.balance);
+    assert.ok(pack.projections.FINANCE?.debtAmount);
     assert.equal(pack.projections.FINANCE?.source, "finance");
     const check = assertNoHighSensitivityInPack(pack);
     assert.equal(check.ok, true, check.leaks.join(","));
@@ -271,7 +272,7 @@ describe("Phase 1 EvidencePack projections", () => {
       safe: synthSafe(),
       finance: synthFinance(),
     });
-    assert.ok(pack.projections.FINANCE?.balance);
+    assert.ok(pack.projections.FINANCE?.debtAmount);
     assert.equal(assertNoHighSensitivityInPack(pack).ok, true);
   });
 });
@@ -466,7 +467,7 @@ describe("Phase 1 acceptance properties", () => {
       finance: synthFinance(),
     });
     // Required finance evidence present.
-    assert.ok(pack.projections.FINANCE?.balance);
+    assert.ok(pack.projections.FINANCE?.debtAmount);
     assert.ok(pack.projections.CONTACT?.displayName || pack.projections.CASE);
     // Unnecessary sensitive absent.
     assert.equal(assertNoHighSensitivityInPack(pack).ok, true);

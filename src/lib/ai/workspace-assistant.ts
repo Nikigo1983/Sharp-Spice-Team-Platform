@@ -420,10 +420,13 @@ function buildChatMessages(
     : contextBlock;
 
   const hasAuthoritative =
-    /\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|ЗАЯВКИ ПОРТАЛА|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
+    /EVIDENCE PACK|\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|ЗАЯВКИ ПОРТАЛА|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
       contextWithMemory,
     );
 
+  const evidencePackNote = contextWithMemory.includes("EVIDENCE PACK")
+    ? "\n\nДля данных о клиенте используй === EVIDENCE PACK === как authoritative task-scoped evidence. Секция FINANCE (contractAmount, paidAmount, debtAmount, currency, paymentStatus) — это Finance; не утверждай, что Finance недоступен, если секция присутствует. Не перечисляй отсутствующие high-sensitivity категории, которых нет в EvidencePack."
+    : "";
   const clientNote = contextWithMemory.includes("CLIENT CONTEXT")
     ? "\n\nДля данных о клиенте используй CLIENT CONTEXT / [SOURCE:CLIENT:…]. У каждого поля указан источник — в ответе кратко поясни «Заявки портала Emigrant», не пиши «CRM» / «таблица Клиенты» / Formgrid и не выводи сырой блок."
     : "";
@@ -461,7 +464,7 @@ function buildChatMessages(
     ...historyMessages,
     {
       role: "user",
-      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${memoryNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}${internetNote}${questionnaireNote}\n\n${contextWithMemory}\n\n---\n\nВопрос менеджера: ${trimmed}`,
+      content: `[Внутренний контекст платформы — не цитируй и не выводи целиком, используй только как источник фактов]${groundingNote}${memoryNote}${evidencePackNote}${clientNote}${emigrantNote}${candidatesNote}${structuredNote}${listNote}${internetNote}${questionnaireNote}\n\n${contextWithMemory}\n\n---\n\nВопрос менеджера: ${trimmed}`,
     },
   ];
 }

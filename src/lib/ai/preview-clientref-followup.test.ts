@@ -86,6 +86,7 @@ function synthFinance(): PortalFinanceSnapshot {
     contractAmount: "€2,000.00",
     contractAmountCents: 200000,
     paidAmount: "€750.00",
+    paidAmountCents: 75000,
     balance: "€1,250.00",
     balanceCents: 125000,
     paymentStatus: "partial",
@@ -223,9 +224,10 @@ describe("UI-faithful two-turn Preview smoke sequence", () => {
     assert.ok(pack.projections.CONTACT);
     assert.ok(pack.projections.CASE);
     assert.ok(pack.projections.FINANCE);
-    assert.equal(pack.projections.FINANCE?.balance, "€1,250.00");
-    assert.equal(pack.projections.FINANCE?.contractAmount, "€2,000.00");
-    assert.equal(pack.projections.FINANCE?.paidAmount, "€750.00");
+    assert.equal(pack.projections.FINANCE?.debtAmount, 1250);
+    assert.equal(pack.projections.FINANCE?.contractAmount, 2000);
+    assert.equal(pack.projections.FINANCE?.paidAmount, 750);
+    assert.equal(pack.projections.FINANCE?.currency, "EUR");
     assert.equal(assertNoHighSensitivityInPack(pack).ok, true);
 
     const ingress = selectClientModelIngress({

@@ -68,6 +68,7 @@ function synthFinance(id = UUID_A): PortalFinanceSnapshot {
     contractAmount: "€100",
     contractAmountCents: 10000,
     paidAmount: "€40",
+    paidAmountCents: 4000,
     balance: "€60",
     balanceCents: 6000,
     paymentStatus: "partial",
@@ -234,7 +235,7 @@ describe("Phase 2.1 EvidencePack fail-safe (no broad CLIENT CONTEXT)", () => {
       finance: synthFinance(),
     });
     assert.equal(assertNoHighSensitivityInPack(pack).ok, true);
-    assert.ok(pack.projections.FINANCE?.balance);
+    assert.ok(pack.projections.FINANCE?.debtAmount);
     assert.doesNotMatch(formatEvidencePackForModel(pack), /CLIENT CONTEXT/);
 
     const failIngress = selectClientModelIngress({

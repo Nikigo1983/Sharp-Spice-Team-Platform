@@ -50,11 +50,20 @@ export type EvidenceProjections = {
     email?: string | null;
     phone?: string | null;
   };
+  /**
+   * Canonical model-visible Finance contract (major currency units + explicit code).
+   * Do not add competing aliases (balance / outstanding / debt) alongside debtAmount.
+   */
   FINANCE?: {
+    /** Optional non-money label (e.g. counterparty name) — omit when empty. */
     contractLabel?: string | null;
-    contractAmount?: string | null;
-    paidAmount?: string | null;
-    balance?: string | null;
+    /** Contract total in major units (e.g. 2000 for €2000). */
+    contractAmount?: number | null;
+    /** Amount paid in major units. */
+    paidAmount?: number | null;
+    /** Outstanding debt in major units (authoritative debt). */
+    debtAmount?: number | null;
+    currency: "EUR";
     paymentStatus?: string | null;
     source: "finance";
     linkField: "clientExternalId";
@@ -105,41 +114,83 @@ function boundNotes(notes: string | null | undefined): string | null {
   return t.length > NOTES_CAP ? `${t.slice(0, NOTES_CAP)}…` : t;
 }
 
+function nonEmpty(value: string | null | undefined): string | null {
+  const t = value?.trim();
+  return t ? t : null;
+}
+
+/** Convert integer cents to major EUR units for the model contract. */
+export function majorEuroUnitsFromCents(
+  cents: number | null | undefined,
+): number | null {
+  if (cents == null || !Number.isFinite(cents)) return null;
+  return cents / 100;
+}
+
+export function formatMajorEuroForModel(amount: number): string {
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
 export function projectContact(safe: SafeClientRecord): EvidenceProjections["CONTACT"] {
-  return {
-    displayName: safe.name,
-    email: safe.email,
-    phone: safe.phone,
-  };
+  const contact: NonNullable<EvidenceProjections["CONTACT"]> = {};
+  const name = nonEmpty(safe.name);
+  const email = nonEmpty(safe.email);
+  const phone = nonEmpty(safe.phone);
+  if (name) contact.displayName = name;
+  if (email) contact.email = email;
+  if (phone) contact.phone = phone;
+  return contact;
 }
 
 export function projectFinance(
   snap: PortalFinanceSnapshot,
 ): NonNullable<EvidenceProjections["FINANCE"]> {
-  return {
-    contractLabel: snap.contractLabel,
-    contractAmount: snap.contractAmount,
-    paidAmount: snap.paidAmount,
-    balance: snap.balance,
-    paymentStatus: snap.paymentStatus,
+  const paidCents =
+    snap.paidAmountCents ??
+    (snap.contractAmountCents != null && snap.balanceCents != null
+      ? snap.contractAmountCents - snap.balanceCents
+      : null);
+  const finance: NonNullable<EvidenceProjections["FINANCE"]> = {
+    currency: "EUR",
     source: "finance",
     linkField: "clientExternalId",
   };
+  const label = nonEmpty(snap.contractLabel);
+  if (label) finance.contractLabel = label;
+  const contractAmount = majorEuroUnitsFromCents(snap.contractAmountCents);
+  const paidAmount = majorEuroUnitsFromCents(paidCents);
+  const debtAmount = majorEuroUnitsFromCents(snap.balanceCents);
+  if (contractAmount != null) finance.contractAmount = contractAmount;
+  if (paidAmount != null) finance.paidAmount = paidAmount;
+  if (debtAmount != null) finance.debtAmount = debtAmount;
+  const status = nonEmpty(snap.paymentStatus);
+  if (status) finance.paymentStatus = status;
+  return finance;
 }
 
 export function projectCase(safe: SafeClientRecord): EvidenceProjections["CASE"] {
-  return {
-    status: safe.status,
-    manager: safe.manager,
-    partner: safe.partner,
-    direction: safe.direction,
-    citizenship: safe.citizenship,
-    submittedAt: safe.submittedAt,
-    approvalAt: safe.approvalAt,
-    expectedApprovalAt: safe.expectedApprovalAt,
-    bookingRange: safe.bookingRange,
-    notesBounded: boundNotes(safe.notes),
-  };
+  const k: NonNullable<EvidenceProjections["CASE"]> = {};
+  const status = nonEmpty(safe.status);
+  const manager = nonEmpty(safe.manager);
+  const partner = nonEmpty(safe.partner);
+  const direction = nonEmpty(safe.direction);
+  const citizenship = nonEmpty(safe.citizenship);
+  const submittedAt = nonEmpty(safe.submittedAt);
+  const approvalAt = nonEmpty(safe.approvalAt);
+  const expectedApprovalAt = nonEmpty(safe.expectedApprovalAt);
+  const bookingRange = nonEmpty(safe.bookingRange);
+  const notesBounded = boundNotes(safe.notes);
+  if (status) k.status = status;
+  if (manager) k.manager = manager;
+  if (partner) k.partner = partner;
+  if (direction) k.direction = direction;
+  if (citizenship) k.citizenship = citizenship;
+  if (submittedAt) k.submittedAt = submittedAt;
+  if (approvalAt) k.approvalAt = approvalAt;
+  if (expectedApprovalAt) k.expectedApprovalAt = expectedApprovalAt;
+  if (bookingRange) k.bookingRange = bookingRange;
+  if (notesBounded) k.notesBounded = notesBounded;
+  return k;
 }
 
 /**
@@ -163,6 +214,23 @@ export function assertNoHighSensitivityInPack(pack: EvidencePack): {
     leaks.push("document_content");
   }
   if (/appPassword|apiKey|password/i.test(blob)) leaks.push("secret");
+  return { ok: leaks.length === 0, leaks };
+}
+
+/** Unauthorized sensitive names must be absent from model-visible EvidencePack text. */
+export function assertNoUnauthorizedSensitiveNamesInModelIngress(
+  text: string,
+): { ok: boolean; leaks: string[] } {
+  const leaks: string[] = [];
+  if (/\bpassportNumber\b|\bpassport\b/i.test(text)) leaks.push("passport");
+  if (/\bdateOfBirth\b|\bdate_of_birth\b|\bdob\b/i.test(text)) leaks.push("dob");
+  if (
+    /\bhomeAddress\b|\bresidentialAddress\b|\bresidenceAddress\b|\bbookingAddress\b/i.test(
+      text,
+    )
+  ) {
+    leaks.push("address");
+  }
   return { ok: leaks.length === 0, leaks };
 }
 
@@ -221,26 +289,34 @@ function factsFromProjections(
   }
   const f = projections.FINANCE;
   if (f) {
-    if (f.contractAmount) {
+    if (f.contractAmount != null) {
       facts.push({
         key: "contractAmount",
-        value: f.contractAmount,
+        value: formatMajorEuroForModel(f.contractAmount),
         source: "finance",
         sensitivity: "CLIENT_FINANCIAL",
       });
     }
-    if (f.paidAmount) {
+    if (f.paidAmount != null) {
       facts.push({
         key: "paidAmount",
-        value: f.paidAmount,
+        value: formatMajorEuroForModel(f.paidAmount),
         source: "finance",
         sensitivity: "CLIENT_FINANCIAL",
       });
     }
-    if (f.balance) {
+    if (f.debtAmount != null) {
       facts.push({
-        key: "balance",
-        value: f.balance,
+        key: "debtAmount",
+        value: formatMajorEuroForModel(f.debtAmount),
+        source: "finance",
+        sensitivity: "CLIENT_FINANCIAL",
+      });
+    }
+    if (f.currency) {
+      facts.push({
+        key: "currency",
+        value: f.currency,
         source: "finance",
         sensitivity: "CLIENT_FINANCIAL",
       });
@@ -321,7 +397,7 @@ export function buildEvidencePack(params: {
   return pack;
 }
 
-/** Model-facing block — purpose-bound, no secrets / passport / DOB / address. */
+/** Model-facing block — purpose-bound; unauthorized sensitive categories omitted entirely. */
 export function formatEvidencePackForModel(pack: EvidencePack): string {
   const lines: string[] = [
     "=== EVIDENCE PACK (purpose-bound) ===",
@@ -336,7 +412,7 @@ export function formatEvidencePackForModel(pack: EvidencePack): string {
   ].filter((line): line is string => line != null);
 
   const c = pack.projections.CONTACT;
-  if (c) {
+  if (c && (c.displayName || c.email || c.phone)) {
     lines.push("CONTACT:");
     if (c.displayName) lines.push(`- name: ${c.displayName}`);
     if (c.email) lines.push(`- email: ${c.email}`);
@@ -346,17 +422,24 @@ export function formatEvidencePackForModel(pack: EvidencePack): string {
 
   const f = pack.projections.FINANCE;
   if (f) {
-    lines.push("FINANCE (authoritative via clientExternalId):");
-    if (f.contractLabel) lines.push(`- contract: ${f.contractLabel}`);
-    if (f.contractAmount) lines.push(`- contractAmount: ${f.contractAmount}`);
-    if (f.paidAmount) lines.push(`- paidAmount: ${f.paidAmount}`);
-    if (f.balance) lines.push(`- balance/debt: ${f.balance}`);
+    lines.push("FINANCE (authoritative):");
+    if (f.contractLabel) lines.push(`- contractLabel: ${f.contractLabel}`);
+    if (f.contractAmount != null) {
+      lines.push(`- contractAmount: ${formatMajorEuroForModel(f.contractAmount)}`);
+    }
+    if (f.paidAmount != null) {
+      lines.push(`- paidAmount: ${formatMajorEuroForModel(f.paidAmount)}`);
+    }
+    if (f.debtAmount != null) {
+      lines.push(`- debtAmount: ${formatMajorEuroForModel(f.debtAmount)}`);
+    }
+    lines.push(`- currency: ${f.currency}`);
     if (f.paymentStatus) lines.push(`- paymentStatus: ${f.paymentStatus}`);
     lines.push("");
   }
 
   const k = pack.projections.CASE;
-  if (k) {
+  if (k && Object.keys(k).length > 0) {
     lines.push("CASE:");
     if (k.status) lines.push(`- status: ${k.status}`);
     if (k.manager) lines.push(`- manager: ${k.manager}`);
@@ -384,10 +467,7 @@ export function formatEvidencePackForModel(pack: EvidencePack): string {
     lines.push("");
   }
 
-  lines.push(
-    "High-sensitivity (passport / DOB / home address / document content) excluded by default.",
-  );
-  return lines.join("\n");
+  return lines.join("\n").trimEnd();
 }
 
 export function evidencePackTraceMeta(

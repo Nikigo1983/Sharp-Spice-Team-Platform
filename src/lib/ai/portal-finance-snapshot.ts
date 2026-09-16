@@ -28,6 +28,8 @@ export type PortalFinanceSnapshot = {
   contractAmount: string | null;
   contractAmountCents: number | null;
   paidAmount: string | null;
+  /** Integer cents paid (authoritative); used by EvidencePack major-unit projection. */
+  paidAmountCents: number | null;
   balance: string | null;
   balanceCents: number | null;
   paymentStatus: string | null;
@@ -88,6 +90,8 @@ export function snapshotFromRecord(
       summary.contractAmountCents != null
         ? formatEuroFromCents(summary.paidAmountCents, "ru")
         : null,
+    paidAmountCents:
+      summary.contractAmountCents != null ? summary.paidAmountCents : null,
     balance:
       summary.contractAmountCents != null
         ? formatEuroFromCents(summary.balanceCents, "ru")

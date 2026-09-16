@@ -91,6 +91,7 @@ function synthFinance(id = UUID_A): PortalFinanceSnapshot {
     contractAmount: "€100",
     contractAmountCents: 10000,
     paidAmount: "€40",
+    paidAmountCents: 4000,
     balance: "€60",
     balanceCents: 6000,
     paymentStatus: "partial",
@@ -404,7 +405,7 @@ describe("Phase 2 acceptance", () => {
       safe: synthSafe(),
       finance: synthFinance(),
     });
-    assert.ok(pack.projections.FINANCE?.balance);
+    assert.ok(pack.projections.FINANCE?.debtAmount);
     assert.equal(assertNoHighSensitivityInPack(pack).ok, true);
     const bleed = applyClientRefLockTransition({
       previous: createClientRef({ clientId: UUID_A })!,

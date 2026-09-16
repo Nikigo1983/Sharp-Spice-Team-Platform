@@ -6,11 +6,13 @@ import {
 } from "@/lib/ai/errors";
 import { throwIfAiAborted } from "@/lib/ai/request-scope";
 import {
-  AUTHORITATIVE_EVIDENCE_BANNER,
   buildAttributionLabels,
-  buildHistoryPrecedenceNote,
   formatClientProvenanceBlock,
   applyPostAnswerGroundingGuards,
+  hasUsefulAuthoritativeEvidence,
+  resolveWorkspaceGroundingMode,
+  userGroundingEnvelopeNote,
+  type WorkspaceGroundingMode,
 } from "@/lib/ai/answer-grounding";
 import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-task";
 import {
@@ -374,7 +376,19 @@ function buildContextBlock(
   }
 
   if (intent.needsKb) {
-    contextParts.push(`=== KNOWLEDGE BASE ===\n${context.knowledgeBaseText}`);
+    const kbText = context.knowledgeBaseText?.trim() ?? "";
+    const kbMeta = context.kbRetrieval;
+    const kbEmpty =
+      !kbText ||
+      kbMeta.groundingState === "KB_EMPTY" ||
+      kbMeta.usefulContextEmpty ||
+      /релевантных документов по запросу не найдено|файлы не найдены|нет доступа к папке/i.test(
+        kbText,
+      );
+    // Optional KB with no useful evidence must not emit an authoritative KB block.
+    if (!(kbEmpty && !intent.kbRequired) && kbText) {
+      contextParts.push(`=== KNOWLEDGE BASE ===\n${kbText}`);
+    }
   }
   if (intent.needsEmigrantDrive) {
     contextParts.push(`=== ЭМИГРАНТ (документы клиентов) ===\n${context.emigrantDriveText}`);
@@ -396,6 +410,27 @@ function buildContextBlock(
   return contextParts.join("\n\n");
 }
 
+/** Exported for prompt-contract regressions (no external model call). */
+export function buildWorkspaceChatMessagesForTest(
+  trimmed: string,
+  contextBlock: string,
+  history: WorkspaceChatTurn[] = [],
+  mode: WorkspaceResponseMode = "brief",
+  conversationSummary: string | null = null,
+  caseMemory: WorkspaceCaseMemory | null = null,
+  groundingMode: WorkspaceGroundingMode = "AUTHORITATIVE_GROUNDED",
+): ChatMessage[] {
+  return buildChatMessages(
+    trimmed,
+    contextBlock,
+    history,
+    mode,
+    conversationSummary,
+    caseMemory,
+    groundingMode,
+  );
+}
+
 function buildChatMessages(
   trimmed: string,
   contextBlock: string,
@@ -403,6 +438,7 @@ function buildChatMessages(
   mode: WorkspaceResponseMode,
   conversationSummary: string | null = null,
   caseMemory: WorkspaceCaseMemory | null = null,
+  groundingMode: WorkspaceGroundingMode = "AUTHORITATIVE_GROUNDED",
 ): ChatMessage[] {
   const historyMessages: ChatMessage[] = clipHistoryTurnsForModel(
     selectRecentHistoryTurns(history),
@@ -422,10 +458,13 @@ function buildChatMessages(
     ? `${memoryBlocks}\n\n${contextBlock}`
     : contextBlock;
 
-  const hasAuthoritative =
-    /EVIDENCE PACK|\[SOURCE:|CLIENT CONTEXT|KNOWLEDGE BASE|ЭМИГРАНТ|ЗАЯВКИ ПОРТАЛА|FORMGRID|EMIGRANT CROATIA DESK|СВОДКА ДИАЛОГА|ПАМЯТЬ КЕЙСА|ИНТЕРНЕТ/i.test(
-      contextWithMemory,
-    );
+  const usefulAuthoritative = hasUsefulAuthoritativeEvidence(contextWithMemory);
+  // Summary/case-memory alone must not arm AUTHORITATIVE banner in general mode.
+  const groundingNote = userGroundingEnvelopeNote({
+    groundingMode,
+    hasUsefulAuthoritativeEvidence:
+      groundingMode === "AUTHORITATIVE_GROUNDED" && usefulAuthoritative,
+  });
 
   const evidencePackNote = contextWithMemory.includes("EVIDENCE PACK")
     ? "\n\nДля данных о клиенте используй === EVIDENCE PACK === как authoritative task-scoped evidence. Секция FINANCE (contractAmount, paidAmount, debtAmount, currency, paymentStatus) — это Finance; не утверждай, что Finance недоступен, если секция присутствует. Не перечисляй отсутствующие high-sensitivity категории, которых нет в EvidencePack."
@@ -448,7 +487,9 @@ function buildChatMessages(
     : "";
   const memoryNote =
     caseBlock || summaryBlock
-      ? "\n\nУчитывай ПАМЯТЬ КЕЙСА и/или СВОДКУ ДИАЛОГА. Последние сообщения history приоритетнее сводки при конфликте фактов разговора; CLIENT CONTEXT приоритетнее памяти кейса для CRM-полей."
+      ? groundingMode === "AUTHORITATIVE_GROUNDED"
+        ? "\n\nУчитывай ПАМЯТЬ КЕЙСА и/или СВОДКУ ДИАЛОГА. Последние сообщения history приоритетнее сводки при конфликте фактов разговора; CLIENT CONTEXT приоритетнее памяти кейса для CRM-полей."
+        : ""
       : "";
   const internetNote = contextWithMemory.includes("ИНТЕРНЕТ (web search)")
     ? "\n\nБлок ИНТЕРНЕТ — только для внешних актуальных фактов. Для данных клиента он слабее CLIENT CONTEXT. В ответе указывай URL источников."
@@ -458,12 +499,12 @@ function buildChatMessages(
   )
     ? "\n\nСейчас режим официальных ответов на анкету: пиши от первого лица заявителя живым человеческим языком. Сохрани текст каждого вопроса. Не используй канцелярские оговорки ассистента внутри ответов; пробелы вынеси в «Что уточнить»."
     : "";
-  const groundingNote = hasAuthoritative
-    ? `\n\n${AUTHORITATIVE_EVIDENCE_BANNER}\n${buildHistoryPrecedenceNote()}`
-    : "\n\nЗапрос без обязательных authoritative-блоков: можно выполнить обычную генерацию/редактирование/перевод без секции «Источники:», если факты платформы не используются.";
 
   return [
-    { role: "system", content: buildWorkspaceSystemPrompt(mode) },
+    {
+      role: "system",
+      content: buildWorkspaceSystemPrompt(mode, groundingMode),
+    },
     ...historyMessages,
     {
       role: "user",
@@ -673,6 +714,7 @@ async function prepareWorkspaceRequest(
       kind: "agent";
       trimmed: string;
       mode: WorkspaceResponseMode;
+      groundingMode: WorkspaceGroundingMode;
       history: WorkspaceChatTurn[];
       conversationSummary: string | null;
       caseMemory: WorkspaceCaseMemory | null;
@@ -743,6 +785,7 @@ async function prepareWorkspaceRequest(
       mode,
       conversationSummary,
       caseMemory,
+      "GENERAL_KNOWLEDGE_ALLOWED",
     );
     trace.contextCharsEstimate = estimateChars(transformBlock);
     trace.evidencePackChars = 0;
@@ -1585,11 +1628,20 @@ async function prepareWorkspaceRequest(
       incrementWorkspaceToolMetric("agent_path_entered");
       trace.agentMode = true;
       trace.selectedRoutes = ["agent_tools"];
+      const agentGroundingMode = resolveWorkspaceGroundingMode({
+        kbRequired: intent.kbRequired,
+        taskRequiresClientRef: taskRequiresClientRef(currentTask),
+        needsClients: intent.needsClients,
+        fastClientLookup: intent.fastClientLookup,
+        hasClientEvidence: Boolean(clientContext),
+      });
+      trace.notes.push(`grounding_mode:${agentGroundingMode}`);
       trace.latencyMs.prepare = Date.now() - started;
       return {
         kind: "agent",
         trimmed,
         mode,
+        groundingMode: agentGroundingMode,
         history,
         conversationSummary,
         caseMemory,
@@ -1893,12 +1945,11 @@ async function prepareWorkspaceRequest(
           .join("\n\n")
       : contextBlock;
 
-  if (intent.needsKb && !intent.kbRequired) {
-    const optionalKbNote =
-      grounding.state === "KB_CONTENT_AVAILABLE"
-        ? "[KB POLICY: optional internal enrichment — use [SOURCE:KB:…] only for retrieved facts; otherwise answer from general knowledge and do not present general knowledge as Sharp & Spice KB.]"
-        : "[KB POLICY: optional KB had no matching evidence — answer from general model knowledge; do not invent Sharp & Spice internal instructions or claim KB provenance.]";
-    fillAwareContextBlock = [optionalKbNote, fillAwareContextBlock]
+  if (intent.needsKb && !intent.kbRequired && grounding.state === "KB_CONTENT_AVAILABLE") {
+    fillAwareContextBlock = [
+      "[KB POLICY: optional enrichment — use [SOURCE:KB:…] only for retrieved facts; other statements may be general knowledge and must not be attributed to Sharp & Spice KB.]",
+      fillAwareContextBlock,
+    ]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -1910,6 +1961,15 @@ async function prepareWorkspaceRequest(
       "questionnaire_answers",
     ];
   }
+
+  const groundingMode = resolveWorkspaceGroundingMode({
+    kbRequired: intent.kbRequired,
+    taskRequiresClientRef: taskRequiresClientRef(currentTask),
+    needsClients: intent.needsClients,
+    fastClientLookup: intent.fastClientLookup,
+    hasClientEvidence: Boolean(evidencePackText || modelClientContext),
+  });
+  trace.notes.push(`grounding_mode:${groundingMode}`);
 
   trace.clientContextCount = clientContext ? 1 : 0;
   trace.clientCandidatesCount = clientCandidates?.length ?? 0;
@@ -1940,6 +2000,7 @@ async function prepareWorkspaceRequest(
     effectiveMode,
     conversationSummary,
     modelCaseMemory,
+    groundingMode,
   );
 
   return {
@@ -2063,6 +2124,7 @@ async function executeAgentPrepared(params: {
     kind: "agent";
     trimmed: string;
     mode: WorkspaceResponseMode;
+    groundingMode: WorkspaceGroundingMode;
     history: WorkspaceChatTurn[];
     conversationSummary: string | null;
     caseMemory: WorkspaceCaseMemory | null;
@@ -2101,7 +2163,10 @@ async function executeAgentPrepared(params: {
   const messages = buildWorkspaceAgentMessages({
     userMessage: prepared.trimmed,
     history: recent,
-    baseSystemPrompt: buildWorkspaceSystemPrompt(prepared.mode),
+    baseSystemPrompt: buildWorkspaceSystemPrompt(
+      prepared.mode,
+      prepared.groundingMode,
+    ),
     conversationSummary: prepared.conversationSummary,
     activeClientId,
   });

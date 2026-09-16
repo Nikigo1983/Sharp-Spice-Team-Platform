@@ -58,7 +58,8 @@ const LABEL_TO_CAPABILITY: Array<{
     capability: "residential_address",
   },
   {
-    match: /document\s*content|ocr|текст\s*документ/i,
+    match:
+      /document\s*content|ocr|текст\s*документ|загранпаспорт\s*\(|справка о несудимости|банковск\w*\s+выписк|внж\s+другой\s+стран|вложен|подпис[ьи]\s+клиент|медстраховк/i,
     capability: "document_content",
   },
 ];
@@ -83,4 +84,25 @@ export function filterFieldRowsForModelContext<
     if (!cap) return true;
     return allow.has(cap);
   });
+}
+
+/**
+ * Strip unauthorized high-sensitivity category lines from portal survey text
+ * (including empty «[не заполнено]» labels) before model ingress.
+ */
+export function filterSurveyDataForModelContext(
+  surveyData: string,
+  allow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
+): string {
+  if (!surveyData.trim()) return surveyData;
+  return surveyData
+    .split("\n")
+    .filter((line) => {
+      const match = line.match(/^-\s*([^:]+):/);
+      if (!match?.[1]) return true;
+      const cap = capabilityForFieldLabel(match[1].trim());
+      if (!cap) return true;
+      return allow.has(cap);
+    })
+    .join("\n");
 }

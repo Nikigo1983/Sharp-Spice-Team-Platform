@@ -8,6 +8,7 @@ import {
   EMPTY_HIGH_SENSITIVITY_ALLOW,
   capabilityForFieldLabel,
   filterFieldRowsForModelContext,
+  filterSurveyDataForModelContext,
   type HighSensitivityAllowSet,
 } from "@/lib/ai/high-sensitivity-gate";
 
@@ -439,17 +440,20 @@ export function formatPartsTechnicalBlocks(
   crmData: string,
   surveyData: string,
   desk?: EmigrantDeskContextSlice | null,
+  highSensitivityAllow: HighSensitivityAllowSet = EMPTY_HIGH_SENSITIVITY_ALLOW,
 ): string[] {
   const lines: string[] = ["--- Полные поля заявки по источникам ---"];
 
   const crmPart = parts.find((part) => part.source === "clients");
   const formPart = parts.find((part) => part.source === "new_clients");
+  const gate = (text: string) =>
+    filterSurveyDataForModelContext(text, highSensitivityAllow);
 
   if (crmPart) {
     lines.push(
       "",
       `Заявки портала:`,
-      crmPart.surveyData || crmData || "(нет дополнительных полей)",
+      gate(crmPart.surveyData || crmData) || "(нет дополнительных полей)",
     );
   }
 
@@ -457,7 +461,7 @@ export function formatPartsTechnicalBlocks(
     lines.push(
       "",
       `Formgrid (строка ${formPart?.rowIndex ?? "?"}):`,
-      formPart?.surveyData ?? surveyData,
+      gate(formPart?.surveyData ?? surveyData),
     );
   }
 
@@ -522,9 +526,15 @@ export function formatSingleClientContextWithSources(
     ).map((line) => (line === "" ? "" : line)),
   ];
 
-  // surveyData is already gated via formatClientForAi default allow=empty.
+  // surveyData may still carry empty high-sensitivity category labels — gate them.
   if (client.surveyData) {
-    lines.push("", client.surveyData);
+    const gatedSurvey = filterSurveyDataForModelContext(
+      client.surveyData,
+      highSensitivityAllow,
+    );
+    if (gatedSurvey.trim()) {
+      lines.push("", gatedSurvey);
+    }
   }
 
   return lines.filter((line, index, array) => !(line === "" && array[index - 1] === "")).join("\n");
@@ -583,6 +593,7 @@ export function formatMergedClientContextWithSources(
       merged.crmData,
       merged.surveyData,
       desk,
+      highSensitivityAllow,
     ),
   ];
 

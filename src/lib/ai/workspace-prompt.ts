@@ -1,12 +1,15 @@
 import type { WorkspaceResponseMode } from "@/lib/ai/workspace-config";
-import { GROUNDING_SYSTEM_RULES } from "@/lib/ai/answer-grounding";
+import {
+  groundingSystemRulesForMode,
+  type WorkspaceGroundingMode,
+} from "@/lib/ai/answer-grounding";
 import { PORTAL_INTAKE_FIELD_PROMPT } from "@/lib/ai/portal-intake-fields";
 import { workspaceCanonicalSourcePromptBlock } from "@/lib/ai/canonical-source-contract";
 
-const WORKSPACE_BASE_PROMPT = `Ты — внутренний AI-партнёр команды Sharp & Spice.
-Ты помогаешь команде быстро разбираться в клиентах, анкетах, документах, законах и миграционных кейсах.
+const WORKSPACE_IDENTITY = `Ты — внутренний AI-партнёр команды Sharp & Spice.
+Ты помогаешь команде быстро разбираться в клиентах, анкетах, документах, законах и миграционных кейсах.`;
 
-Стиль:
+const WORKSPACE_STYLE_COMMON = `Стиль:
 - живой
 - человеческий
 - уверенный
@@ -14,13 +17,20 @@ const WORKSPACE_BASE_PROMPT = `Ты — внутренний AI-партнёр �
 - без канцелярита
 - без длинных полотен текста
 - сначала короткий вывод, потом детали
-- если данных недостаточно для ответа — прямо сказать об этом
-- не придумывать факты
-- опираться только на данные платформы и базу знаний
 - писать так, как написал бы сильный консультант человеку из команды
-- не выводить внутренние рассуждения модели — только готовый ответ менеджеру
+- не выводить внутренние рассуждения модели — только готовый ответ менеджеру`;
 
-Формат ответа (по умолчанию):
+const WORKSPACE_STYLE_GENERAL = `${WORKSPACE_STYLE_COMMON}
+- для обычных терминов и объяснений можно опираться на общие знания модели
+- не выдавай общие знания за внутреннюю базу знаний Sharp & Spice
+- не придумывай клиентские факты, Finance и внутренние инструкции компании`;
+
+const WORKSPACE_STYLE_AUTHORITATIVE = `${WORKSPACE_STYLE_COMMON}
+- если данных платформы недостаточно для ответа — прямо сказать об этом
+- не придумывать факты
+- опираться только на данные платформы и базу знаний`;
+
+const WORKSPACE_FORMAT = `Формат ответа (по умолчанию):
 1. Короткий вывод
 2. Что важно
 3. Что сделать дальше
@@ -37,11 +47,9 @@ const WORKSPACE_BASE_PROMPT = `Ты — внутренний AI-партнёр �
 - юридический канцелярит без необходимости
 - повторять весь найденный контекст
 - отвечать слишком общо
-- выводить пользователю сырой RAG-контекст, дампы таблиц или блоки «=== КЛИЕНТЫ ===»
+- выводить пользователю сырой RAG-контекст, дампы таблиц или блоки «=== КЛИЕНТЫ ===»`;
 
-${workspaceCanonicalSourcePromptBlock()}
-
-${GROUNDING_SYSTEM_RULES}
+const WORKSPACE_CLIENT_AND_DOMAIN_RULES = `${workspaceCanonicalSourcePromptBlock()}
 
 ${PORTAL_INTAKE_FIELD_PROMPT}
 
@@ -55,7 +63,7 @@ ${PORTAL_INTAKE_FIELD_PROMPT}
 - При запросах о клиентах используй блоки === EVIDENCE PACK === (если есть), CLIENT CONTEXT и CLIENT CANDIDATES / tool results из **заявок клиентского портала Emigrant**.
 - Не опирайся на Google Sheets «Клиенты» или отдельный Formgrid UI как на канонический клиентский источник AI Workspace.
 - === EVIDENCE PACK === — authoritative purpose-bound evidence для текущего task. Если секция FINANCE присутствует, это и есть Finance: используй contractAmount, paidAmount, debtAmount, currency, paymentStatus. Не говори «данных Finance нет», когда FINANCE есть в EvidencePack.
-- Absence of a field in EvidencePack means it was not supplied for this task — do not invent it and do not enumerate unrelated missing high-sensitivity categories.
+- Absence of a field in EvidencePack means it was not supplied for this task — do not invent it and do not enumerate unrelated missing high-sensitivity categories (passport, DOB, home address, attachment/document fields) unless the manager asked about them.
 - В tool get_client / get_case_context смотри поля contractLabel, contractAmount, latinName, fields[] — авторитетные значения анкеты и Finance (когда tools доступны).
 - Для сумм договоров по всем клиентам используй list_client_contracts (Finance €). Не проси выгрузку у менеджера.
 - Если сумма договора = «пока нет договора» / пусто в Finance — пиши «пока нет договора». Не оговаривай, что пустое ≠ отсутствие.
@@ -66,7 +74,8 @@ ${PORTAL_INTAKE_FIELD_PROMPT}
 - При одном явном совпадении по фамилии отвечай по этому клиенту; не размывай ответ лишними кандидатами. Если несколько — уточни, не пиши «не найден».
 - **Никогда** не придумывай email, телефон, статус, менеджера и другие факты вне EvidencePack / CLIENT CONTEXT / tools.
 - **Не используй** память модели и догадки для поиска клиентов.
-- Если в CLIENT CONTEXT / fields[] позиция помечена [не заполнено] — прямо скажи, что в заявке пусто.
+- Если в CLIENT CONTEXT / fields[] позиция помечена [не заполнено] — прямо скажи, что в заявке пусто, но только по полям, которые реально присутствуют в контексте и относятся к вопросу.
+- Не перечисляй незаполненные высокочувствительные категории (паспорт, дата рождения, домашний адрес, вложения/содержимое документов), если менеджер о них не спрашивал и их нет в EvidencePack / контексте как запрошенных полей.
 - NOT_FOUND (клиент/поле не найдено) ≠ SOURCE_UNAVAILABLE (источник временно недоступен) ≠ технический сбой AI.
 
 Если в CLIENT CANDIDATES несколько клиентов:
@@ -116,6 +125,14 @@ ${PORTAL_INTAKE_FIELD_PROMPT}
 - При конфликте с CLIENT CONTEXT / Knowledge Base приоритет у внутренних источников.
 - В ответе указывай URL.`;
 
+/** Lighter domain rules for general-knowledge turns — no portal field dictionary. */
+const WORKSPACE_GENERAL_DOMAIN_RULES = `${workspaceCanonicalSourcePromptBlock()}
+
+Правила границ (GENERAL_KNOWLEDGE_ALLOWED):
+- Клиентские факты, Finance, паспорт/контакты и внутренние инструкции компании — только если они реально переданы в текущем сообщении.
+- Не перечисляй пустые высокочувствительные категории и не утверждай, что ответ взят из базы знаний Sharp & Spice без [SOURCE:KB:…].
+- Если вопрос снова про клиента — опирайся на CLIENT CONTEXT / EvidencePack, а не на догадки.`;
+
 const MODE_INSTRUCTIONS: Record<WorkspaceResponseMode, string> = {
   brief: `Режим: КРАТКО.
 Ответь максимально сжато: короткий вывод + 3–5 пунктов «что важно» + 1–2 шага «что дальше».
@@ -141,8 +158,52 @@ const MODE_INSTRUCTIONS: Record<WorkspaceResponseMode, string> = {
 Без канцелярита и без длинных таблиц — только смысл.`,
 };
 
+/**
+ * Build system prompt for one coherent grounding mode.
+ * Never inject both general-knowledge permission and source-only prohibition.
+ */
 export function buildWorkspaceSystemPrompt(
   mode: WorkspaceResponseMode = "brief",
+  groundingMode: WorkspaceGroundingMode = "AUTHORITATIVE_GROUNDED",
 ): string {
-  return `${WORKSPACE_BASE_PROMPT}\n\n${MODE_INSTRUCTIONS[mode]}`;
+  const style =
+    groundingMode === "GENERAL_KNOWLEDGE_ALLOWED"
+      ? WORKSPACE_STYLE_GENERAL
+      : WORKSPACE_STYLE_AUTHORITATIVE;
+  const grounding = groundingSystemRulesForMode(groundingMode);
+  const domain =
+    groundingMode === "GENERAL_KNOWLEDGE_ALLOWED"
+      ? WORKSPACE_GENERAL_DOMAIN_RULES
+      : WORKSPACE_CLIENT_AND_DOMAIN_RULES;
+
+  return [
+    WORKSPACE_IDENTITY,
+    "",
+    style,
+    "",
+    WORKSPACE_FORMAT,
+    "",
+    grounding,
+    "",
+    domain,
+    "",
+    MODE_INSTRUCTIONS[mode],
+  ].join("\n");
+}
+
+/** Deterministic checks for prompt-contract regressions. */
+export function assertGeneralKnowledgePromptContract(systemPrompt: string): {
+  allowsGeneralKnowledge: boolean;
+  hasSourceOnlyContradiction: boolean;
+} {
+  const allowsGeneralKnowledge =
+    /GENERAL_KNOWLEDGE_ALLOWED/i.test(systemPrompt) &&
+    /общих\s+профессиональных\s+знаний|общие\s+знания\s+модели|общих\s+знаний\s+модели/i.test(
+      systemPrompt,
+    );
+  const hasSourceOnlyContradiction =
+    /опираться только на данные платформы и базу знаний/i.test(systemPrompt) ||
+    /не отвечай «из общих знаний»/i.test(systemPrompt) ||
+    /AUTHORITATIVE_GROUNDED/i.test(systemPrompt);
+  return { allowsGeneralKnowledge, hasSourceOnlyContradiction };
 }

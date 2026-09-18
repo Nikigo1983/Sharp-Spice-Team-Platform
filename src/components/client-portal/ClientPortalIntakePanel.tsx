@@ -162,6 +162,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
   const [bookingFilter, setBookingFilter] = useState<BookingFilter>("");
+  const [bookingAlertsOpen, setBookingAlertsOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
@@ -1685,6 +1686,28 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             </option>
             <option value="ended">Уже закончился</option>
           </select>
+          {!loading && listView === "active" && bookingAlerts.length > 0 ? (
+            <button
+              type="button"
+              className={
+                bookingAlertsEnded.length > 0
+                  ? styles.bookingAlertToggleEnded
+                  : styles.bookingAlertToggleSoon
+              }
+              aria-expanded={bookingAlertsOpen}
+              aria-controls="booking-alerts-panel"
+              onClick={() => setBookingAlertsOpen((open) => !open)}
+            >
+              Букинг
+              {bookingAlertsSoon.length > 0
+                ? `: ${bookingAlertsSoon.length} скоро`
+                : ""}
+              {bookingAlertsEnded.length > 0
+                ? `${bookingAlertsSoon.length > 0 ? " · " : ": "}${bookingAlertsEnded.length} закончились`
+                : ""}
+              <span aria-hidden>{bookingAlertsOpen ? " ▴" : " ▾"}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.filterBtn}
@@ -1706,14 +1729,22 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             Показано: {filteredItems.length} из {items.length}
           </p>
         ) : null}
-        {!loading && listView === "active" && bookingAlerts.length > 0 ? (
-          <div className={styles.bookingAlerts} role="status">
+        {!loading &&
+        listView === "active" &&
+        bookingAlertsOpen &&
+        bookingAlerts.length > 0 ? (
+          <div
+            id="booking-alerts-panel"
+            className={styles.bookingAlertsPanel}
+            role="region"
+            aria-label="Оповещения по букингу"
+          >
             {bookingAlertsSoon.length > 0 ? (
               <div
                 className={`${styles.bookingAlert} ${styles.bookingAlertSoon}`}
               >
                 <span className={styles.bookingAlertTitle}>
-                  Скоро заканчивается букинг — продлите бронь
+                  Скоро заканчивается — продлите бронь
                 </span>
                 <ul className={styles.bookingAlertList}>
                   {bookingAlertsSoon.map(({ item, alert, label }) => (
@@ -1721,7 +1752,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       <button
                         type="button"
                         className={styles.bookingAlertName}
-                        onClick={() => void openCase(item)}
+                        onClick={() => {
+                          setBookingAlertsOpen(false);
+                          void openCase(item);
+                        }}
                       >
                         {label}
                       </button>
@@ -1741,7 +1775,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 className={`${styles.bookingAlert} ${styles.bookingAlertEnded}`}
               >
                 <span className={styles.bookingAlertTitle}>
-                  Букинг уже закончился — нужна новая бронь
+                  Уже закончился — нужна новая бронь
                 </span>
                 <ul className={styles.bookingAlertList}>
                   {bookingAlertsEnded.map(({ item, alert, label }) => (
@@ -1749,7 +1783,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       <button
                         type="button"
                         className={styles.bookingAlertName}
-                        onClick={() => void openCase(item)}
+                        onClick={() => {
+                          setBookingAlertsOpen(false);
+                          void openCase(item);
+                        }}
                       >
                         {label}
                       </button>

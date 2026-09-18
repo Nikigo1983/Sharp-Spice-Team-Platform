@@ -1,0 +1,15 @@
+---
+description: Always deploy finished UI/product changes to Production
+alwaysApply: true
+---
+
+# Always deploy at the end
+
+When a user-facing change is finished in this repo:
+
+1. Commit the relevant files (unless the user said not to commit).
+2. Push to `main` so Vercel Production deploys.
+3. Confirm the Vercel/GitHub deploy status before ending.
+4. Do not wait for the user to ask «Задеплоил?» — deploy is part of finishing the task.
+
+Exceptions: pure local experiments the user asked not to ship, or when they explicitly say not to deploy.

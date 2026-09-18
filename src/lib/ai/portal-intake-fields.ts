@@ -29,7 +29,11 @@ export function readSheetColumnFromAnswers(
   answers: Record<string, unknown>,
   ...labels: string[]
 ): string {
-  const sheets = [answers.__legacySheet, answers.__formgridSheet];
+  const sheets = [
+    answers.__legacySheet,
+    answers.__formgridSheet,
+    answers.__crmOpsSheet,
+  ];
   const wanted = labels.map((label) => label.trim().toLowerCase());
   for (const sheet of sheets) {
     if (!sheet || typeof sheet !== "object" || Array.isArray(sheet)) continue;
@@ -391,7 +395,7 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 - Дата одобрения ВНЖ, Дата выдачи карточки ВНЖ.
 - Договор — тип/название договора или контрагента (например Flant JSC), НЕ денежная сумма.
 - Сумма договора — денежная сумма из Finance (€). Для списков сумм по всем клиентам используй инструмент list_client_contracts. Если суммы нет — «пока нет договора» (не оговаривай, что пустое ≠ отсутствие).
-- СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ / СПРАВКА О НЕСУДИМОСТИ / ПОДПИСЬ КЛИЕНТА / медстраховка.
+- СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ / Адвокат / СПРАВКА О НЕСУДИМОСТИ / ПОДПИСЬ КЛИЕНТА / медстраховка.
 - Статус процесса, Компания.
 
 Правила ответа:

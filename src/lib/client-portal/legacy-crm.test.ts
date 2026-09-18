@@ -90,7 +90,7 @@ describe("legacy crm import mapping", () => {
     );
     assert.ok(!rows.some((r) => r.label.toLowerCase().includes("пароль")));
     assert.ok(!rows.some((r) => r.value === "secret-pass"));
-    assert.equal(rows.length, 19);
+    assert.equal(rows.length, 20);
   });
 
   it("parses dd.mm.yyyy submitted dates", () => {

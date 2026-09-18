@@ -73,6 +73,7 @@ export const EXTERNAL_COLUMN_ORDER = [
   "Договор",
   "ТИП ЗАНЯТОСТИ",
   "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ",
+  "Адвокат",
   "СПРАВКА О НЕСУДИМОСТИ",
   "ПОДПИСЬ КЛИЕНТА",
   "медстраховка",
@@ -117,6 +118,7 @@ function canonicalHeader(header: string): string {
   if (n.includes("свидетельств") && n.includes("компани")) {
     return "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ";
   }
+  if (n === "адвокат" || n.includes("адвокат")) return "Адвокат";
   if (n.includes("несудимости")) return "СПРАВКА О НЕСУДИМОСТИ";
   if (n.includes("подпись")) return "ПОДПИСЬ КЛИЕНТА";
   if (n.includes("медстрах")) return "медстраховка";
@@ -247,6 +249,7 @@ export function buildLegacyAnswersFromClient(
     trpApprovalDate: clean(row.approvalAt),
     trpCardIssueDate: clean(row.residenceCardIssuedAt),
     partner: clean(row.partnerName),
+    lawyer: "",
   };
 
   const importMeta: LegacyCrmImportMeta = {
@@ -406,6 +409,7 @@ export function applyLegacySheetEdits(
     trpApprovalDate: clean(currentSheet["Дата одобрения ВНЖ"]),
     trpCardIssueDate: clean(currentSheet["Дата выдачи карточки ВНЖ"]),
     partner: clean(currentSheet["Партнер от кого клиент"]),
+    lawyer: clean(currentSheet["Адвокат"]),
   };
 
   return {

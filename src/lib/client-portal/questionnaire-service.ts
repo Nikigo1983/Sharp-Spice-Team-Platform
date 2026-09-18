@@ -45,7 +45,11 @@ import {
 import {
   applyFormgridCrmOpsEdits,
   buildFormgridReviewRows,
+  buildManagerFillReviewRows,
+  emptyFormgridCrmOpsSheet,
+  FORMGRID_CRM_OPS_KEY,
   isFormgridImport,
+  readFormgridCrmOpsSheet,
   readFormgridStoredFiles,
 } from "./formgrid-import";
 import { markManualStaffAnswers } from "./client-source";
@@ -265,18 +269,22 @@ export async function submitQuestionnaire(
   }
 
   const now = new Date().toISOString();
+  const withStatus = writeProcessStatus(current.answers, {
+    value: INITIAL_PROCESS_STATUS,
+    updatedAt: now,
+    updatedByUserId: null,
+    updatedByName: null,
+  });
   const next: QuestionnaireRecord = {
     ...current,
     status: "submitted",
     submittedAt: now,
     updatedAt: now,
     revision: current.revision + 1,
-    answers: writeProcessStatus(current.answers, {
-      value: INITIAL_PROCESS_STATUS,
-      updatedAt: now,
-      updatedByUserId: null,
-      updatedByName: null,
-    }),
+    answers: {
+      ...withStatus,
+      [FORMGRID_CRM_OPS_KEY]: readFormgridCrmOpsSheet(withStatus),
+    },
   };
   await upsertQuestionnaire(next);
   try {
@@ -348,19 +356,22 @@ export async function createManualCaseForStaff(input: {
     baseAnswers.phone = phone;
   }
 
-  const answers = writeProcessStatus(
-    markManualStaffAnswers(hydrateAnswers(baseAnswers, user.email), {
-      createdByUserId: input.createdByUserId,
-      createdByName: input.createdByName,
-      createdAt: now,
-    }),
-    {
-      value: INITIAL_PROCESS_STATUS,
-      updatedAt: now,
-      updatedByUserId: input.createdByUserId,
-      updatedByName: input.createdByName,
-    },
-  );
+  const answers = {
+    ...writeProcessStatus(
+      markManualStaffAnswers(hydrateAnswers(baseAnswers, user.email), {
+        createdByUserId: input.createdByUserId,
+        createdByName: input.createdByName,
+        createdAt: now,
+      }),
+      {
+        value: INITIAL_PROCESS_STATUS,
+        updatedAt: now,
+        updatedByUserId: input.createdByUserId,
+        updatedByName: input.createdByName,
+      },
+    ),
+    [FORMGRID_CRM_OPS_KEY]: emptyFormgridCrmOpsSheet(),
+  };
 
   const record: QuestionnaireRecord = {
     id: existing?.id ?? randomUUID(),
@@ -508,7 +519,8 @@ export async function updateFormgridCrmOpsFields(
 ): Promise<QuestionnaireRecord> {
   const current = await getSubmittedForStaff(id);
   if (!current) throw new Error("NOT_FOUND");
-  if (!isFormgridImport(current.answers)) {
+  // Portal / Formgrid / manual cases share __crmOpsSheet. Legacy uses __legacySheet.
+  if (isLegacyCrmImport(current.answers)) {
     throw new Error("NOT_FORMGRID");
   }
   const now = new Date().toISOString();
@@ -523,14 +535,18 @@ export async function updateFormgridCrmOpsFields(
 export async function updateSubmittedAnswerFields(
   id: string,
   fields: Record<string, string>,
+  crmOpsSheet?: Record<string, string> | null,
 ): Promise<QuestionnaireRecord> {
   const current = await getSubmittedForStaff(id);
   if (!current) throw new Error("NOT_FOUND");
   const now = new Date().toISOString();
-  const answers = { ...current.answers };
+  let answers = { ...current.answers };
   for (const [key, value] of Object.entries(fields)) {
     if (!key || key.startsWith("__")) continue;
     answers[key] = value;
+  }
+  if (crmOpsSheet && typeof crmOpsSheet === "object") {
+    answers = applyFormgridCrmOpsEdits(answers, crmOpsSheet);
   }
   return upsertQuestionnaire({
     ...current,
@@ -794,6 +810,9 @@ export function buildReviewRows(
       });
     }
   }
+
+  // Staff-editable ops block (same fields as Formgrid «Для заполнения менеджером»).
+  rows.push(...buildManagerFillReviewRows(readFormgridCrmOpsSheet(answers)));
   return rows;
 }
 

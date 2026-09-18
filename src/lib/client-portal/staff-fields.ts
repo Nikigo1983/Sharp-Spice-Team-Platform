@@ -10,6 +10,7 @@ export type QuestionnaireStaffFields = {
   trpApprovalDate: string;
   trpCardIssueDate: string;
   partner: string;
+  lawyer: string;
 };
 
 export const EMPTY_STAFF_FIELDS: QuestionnaireStaffFields = {
@@ -23,6 +24,7 @@ export const EMPTY_STAFF_FIELDS: QuestionnaireStaffFields = {
   trpApprovalDate: "",
   trpCardIssueDate: "",
   partner: "",
+  lawyer: "",
 };
 
 export const STAFF_FIELD_COLUMNS: Array<{
@@ -38,6 +40,7 @@ export const STAFF_FIELD_COLUMNS: Array<{
   { key: "trpApprovalDate", label: "Дата одобрения ВНЖ" },
   { key: "trpCardIssueDate", label: "Дата выдачи карточки ВНЖ" },
   { key: "partner", label: "Партнер от кого клиент" },
+  { key: "lawyer", label: "Адвокат" },
 ];
 
 const STAFF_ANSWERS_KEY = "__staff";

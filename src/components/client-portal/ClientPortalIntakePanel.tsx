@@ -658,12 +658,21 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         body.crmOpsSheet = crmOpsSheet;
       } else {
         const answerFields: Record<string, string> = {};
+        const crmOpsSheet: Record<string, string> = {};
         for (const row of review) {
           if (!row.questionId || row.fileId) continue;
+          if (row.questionId.startsWith("__crmOpsSheet.")) {
+            const label = row.questionId.slice("__crmOpsSheet.".length);
+            crmOpsSheet[label] = reviewDraft[row.questionId] ?? "";
+            continue;
+          }
           if (row.questionId.startsWith("__")) continue;
           answerFields[row.questionId] = reviewDraft[row.questionId] ?? "";
         }
         body.answerFields = answerFields;
+        if (Object.keys(crmOpsSheet).length > 0) {
+          body.crmOpsSheet = crmOpsSheet;
+        }
       }
 
       const res = await fetch("/api/client-cases", {

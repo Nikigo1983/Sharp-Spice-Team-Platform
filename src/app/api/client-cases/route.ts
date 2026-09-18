@@ -253,24 +253,30 @@ export async function PATCH(request: Request) {
       });
     }
 
+    if (body.answerFields && typeof body.answerFields === "object") {
+      const record = await updateSubmittedAnswerFields(
+        body.id,
+        body.answerFields,
+        body.crmOpsSheet && typeof body.crmOpsSheet === "object"
+          ? body.crmOpsSheet
+          : null,
+      );
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        review: buildReviewRows(record.answers, "ru"),
+        isLegacy: isLegacyCrmImport(record.answers),
+      });
+    }
+
     if (body.crmOpsSheet && typeof body.crmOpsSheet === "object") {
       const record = await updateFormgridCrmOpsFields(body.id, body.crmOpsSheet);
       return NextResponse.json({
         item: toListItem(record),
         staffFields: readStaffFields(record.answers),
         review: buildReviewRows(record.answers, "ru"),
-        isFormgrid: true,
+        isFormgrid: isFormgridImport(record.answers),
         isLegacy: false,
-      });
-    }
-
-    if (body.answerFields && typeof body.answerFields === "object") {
-      const record = await updateSubmittedAnswerFields(body.id, body.answerFields);
-      return NextResponse.json({
-        item: toListItem(record),
-        staffFields: readStaffFields(record.answers),
-        review: buildReviewRows(record.answers, "ru"),
-        isLegacy: isLegacyCrmImport(record.answers),
       });
     }
 

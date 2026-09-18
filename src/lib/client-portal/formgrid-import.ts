@@ -11,6 +11,9 @@ export const FORMGRID_FILES_KEY = "__formgridFiles";
 /** Staff CRM process fields (same labels as External sheet / legacy intake). */
 export const FORMGRID_CRM_OPS_KEY = "__crmOpsSheet";
 
+/** Section title in intake questionnaire review (staff-editable ops fields). */
+export const MANAGER_FILL_SECTION = "Для заполнения менеджером";
+
 export const FORMGRID_CRM_OPS_COLUMNS = [
   "Дата подачи",
   "Дата предпологаемого одобрения",
@@ -23,6 +26,7 @@ export const FORMGRID_CRM_OPS_COLUMNS = [
   "Договор",
   "ТИП ЗАНЯТОСТИ",
   "СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ КОМПАНИИ",
+  "Адвокат",
   "СПРАВКА О НЕСУДИМОСТИ",
   "ПОДПИСЬ КЛИЕНТА",
   "медстраховка",
@@ -376,6 +380,7 @@ export function applyFormgridCrmOpsEdits(
       trpApprovalDate: current["Дата одобрения ВНЖ"],
       trpCardIssueDate: current["Дата выдачи карточки ВНЖ"],
       partner: current["Партнер от кого клиент"],
+      lawyer: current["Адвокат"],
     },
   };
 }
@@ -545,14 +550,26 @@ export function buildFormgridReviewRows(
   });
 
   const crmOps = readFormgridCrmOpsSheet(answers);
-  const crmRows = FORMGRID_CRM_OPS_COLUMNS.map((key) => ({
-    section: "CRM / процесс",
+  const crmRows = buildManagerFillReviewRows(crmOps);
+
+  return [...formgridRows, ...crmRows];
+}
+
+/** Staff-editable ops block shared by Formgrid + portal questionnaire cases. */
+export function buildManagerFillReviewRows(
+  crmOps: FormgridCrmOpsSheet = emptyFormgridCrmOpsSheet(),
+): Array<{
+  section: string;
+  label: string;
+  value: string;
+  questionId: string;
+}> {
+  return FORMGRID_CRM_OPS_COLUMNS.map((key) => ({
+    section: MANAGER_FILL_SECTION,
     label: key,
     value: crmOps[key],
     questionId: `${FORMGRID_CRM_OPS_KEY}.${key}`,
   }));
-
-  return [...formgridRows, ...crmRows];
 }
 
 export function parseFormgridSubmittedAtIso(raw: string | null | undefined): string | null {

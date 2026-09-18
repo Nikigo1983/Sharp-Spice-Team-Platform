@@ -20,6 +20,14 @@ import {
 } from "@/lib/presence/daily-activity-logic";
 import { parseDateKey } from "@/lib/calendar/range";
 import { canViewTeamMemberActivity } from "@/lib/team/permissions";
+import {
+  buildHoursReportCsv,
+  buildHoursReportHtml,
+  buildHoursReportTable,
+  downloadTextFile,
+  hoursReportFilename,
+  openHtmlReport,
+} from "@/lib/team/hours-report";
 import type { TeamMember } from "@/lib/team/types";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -32,6 +40,7 @@ type TeamViewProps = {
 };
 
 const ACTIVITY_PERIODS: ActivityPeriod[] = ["day", "week", "month", "year"];
+const REPORT_PERIODS: ActivityPeriod[] = ["week", "month", "year"];
 
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -162,6 +171,14 @@ export function TeamView({ user }: TeamViewProps) {
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState(false);
   const [selectedDay, setSelectedDay] = useState<ActivityDayStat | null>(null);
+  const [reportTarget, setReportTarget] = useState<TeamMember | null>(null);
+  const [reportPeriod, setReportPeriod] = useState<ActivityPeriod>("week");
+  const [reportAnchor, setReportAnchor] = useState(getActivityDayKey());
+  const [reportStats, setReportStats] = useState<MemberActivityStats | null>(
+    null,
+  );
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
   const [overlayDismissArmed, setOverlayDismissArmed] = useState(false);
 
@@ -170,14 +187,14 @@ export function TeamView({ user }: TeamViewProps) {
   }, []);
 
   useEffect(() => {
-    if (!statsTarget) {
+    if (!statsTarget && !reportTarget) {
       setOverlayDismissArmed(false);
       return;
     }
     setOverlayDismissArmed(false);
     const timer = window.setTimeout(() => setOverlayDismissArmed(true), 350);
     return () => window.clearTimeout(timer);
-  }, [statsTarget]);
+  }, [statsTarget, reportTarget]);
 
   const fetchMembers = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -262,6 +279,41 @@ export function TeamView({ user }: TeamViewProps) {
     void fetchMemberStats(statsTarget.id, statsPeriod, statsAnchor);
   }, [statsTarget, statsPeriod, statsAnchor, fetchMemberStats]);
 
+  const fetchReportStats = useCallback(
+    async (memberId: string, period: ActivityPeriod, anchor: string) => {
+      setReportLoading(true);
+      setReportError(false);
+      try {
+        const params = new URLSearchParams({ period, anchor });
+        const res = await fetch(
+          `/api/team/${encodeURIComponent(memberId)}/activity?${params}`,
+        );
+        if (!res.ok) throw new Error("fetch failed");
+        const data = (await res.json()) as { stats?: MemberActivityStats };
+        const next = data.stats ?? null;
+        setReportStats(next);
+        if (next?.anchor && next.anchor !== anchor) {
+          setReportAnchor(next.anchor);
+        }
+      } catch {
+        setReportStats(null);
+        setReportError(true);
+      } finally {
+        setReportLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!reportTarget) {
+      setReportStats(null);
+      setReportError(false);
+      return;
+    }
+    void fetchReportStats(reportTarget.id, reportPeriod, reportAnchor);
+  }, [reportTarget, reportPeriod, reportAnchor, fetchReportStats]);
+
   const openMemberStats = (member: TeamMember) => {
     setStatsPeriod("week");
     setStatsAnchor(getActivityDayKey());
@@ -275,15 +327,102 @@ export function TeamView({ user }: TeamViewProps) {
     setStatsError(false);
   };
 
+  const openHoursReport = (member: TeamMember) => {
+    setReportPeriod("week");
+    setReportAnchor(getActivityDayKey());
+    setReportTarget(member);
+  };
+
+  const closeHoursReport = () => {
+    setReportTarget(null);
+    setReportStats(null);
+    setReportError(false);
+  };
+
   const changeStatsPeriod = (period: ActivityPeriod) => {
     setStatsPeriod(period);
     setStatsAnchor(getActivityDayKey());
+  };
+
+  const changeReportPeriod = (period: ActivityPeriod) => {
+    setReportPeriod(period);
+    setReportAnchor(getActivityDayKey());
   };
 
   const shiftStatsAnchor = (delta: number) => {
     setStatsAnchor((current) =>
       clampActivityAnchor(shiftActivityPeriodAnchor(statsPeriod, current, delta)),
     );
+  };
+
+  const shiftReportAnchor = (delta: number) => {
+    setReportAnchor((current) =>
+      clampActivityAnchor(
+        shiftActivityPeriodAnchor(reportPeriod, current, delta),
+      ),
+    );
+  };
+
+  const reportRangeLabel = (statsValue: MemberActivityStats): string => {
+    if (statsValue.period === "year") {
+      return formatActivityYearTitle(statsValue.anchor);
+    }
+    if (statsValue.period === "month") {
+      return formatActivityMonthTitle(
+        statsValue.days[0]?.date ?? statsValue.anchor,
+      );
+    }
+    return formatActivityWeekTitle(statsValue.days);
+  };
+
+  const buildCurrentHoursReport = () => {
+    if (!reportTarget || !reportStats) return null;
+    const rangeLabel = reportRangeLabel(reportStats);
+    const mode = reportStats.period === "year" ? "months" : "days";
+    const rows = buildHoursReportTable(
+      reportStats,
+      formatActivityDay,
+      (monthKey) => formatActivityMonthTitle(`${monthKey}-15`),
+      formatOnlineDuration,
+      formatClock,
+    );
+    const meta = {
+      memberName: reportTarget.name,
+      memberEmail: reportTarget.email,
+      periodLabel: PERIOD_LABELS[reportStats.period],
+      rangeLabel,
+      totalLabel: formatOnlineDuration(reportStats.onlineMs),
+      generatedAtLabel: new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "short",
+        timeStyle: "short",
+        timeZone: ACTIVITY_TIMEZONE,
+      }).format(new Date()),
+    };
+    return {
+      meta,
+      rows,
+      mode: mode as "days" | "months",
+      filename: hoursReportFilename(
+        reportTarget.name,
+        reportStats.period,
+        rangeLabel,
+      ),
+    };
+  };
+
+  const downloadHoursReport = () => {
+    const built = buildCurrentHoursReport();
+    if (!built) return;
+    const csv = buildHoursReportCsv(built.meta, built.rows, built.mode);
+    downloadTextFile(built.filename, csv, "text/csv;charset=utf-8");
+    setToast({ text: "Отчёт скачан." });
+  };
+
+  const openHoursReportFile = () => {
+    const built = buildCurrentHoursReport();
+    if (!built) return;
+    const html = buildHoursReportHtml(built.meta, built.rows, built.mode);
+    openHtmlReport(html);
   };
 
   const openMonthFromYear = (month: ActivityMonthStat) => {
@@ -344,6 +483,8 @@ export function TeamView({ user }: TeamViewProps) {
               !isSelf &&
               !(member.id === "veronika" && user.id !== "veronika");
             const canOpenStats = canViewTeamMemberActivity(user, member);
+            const canReport =
+              isSelf || canViewTeamMemberActivity(user, member);
             const activity = member.activityToday;
 
             return (
@@ -424,18 +565,30 @@ export function TeamView({ user }: TeamViewProps) {
                       {ROLE_LABELS[member.role]}
                     </span>
                   </div>
-                  {showDelete ? (
-                    <div className={styles.actions}>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDeleteTarget(member);
-                        }}
-                      >
-                        Удалить
-                      </Button>
+                  {canReport || showDelete ? (
+                    <div
+                      className={styles.actions}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      {canReport ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => openHoursReport(member)}
+                        >
+                          Сформировать отчет
+                        </Button>
+                      ) : null}
+                      {showDelete ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          onClick={() => setDeleteTarget(member)}
+                        >
+                          Удалить
+                        </Button>
+                      ) : null}
                     </div>
                   ) : null}
                 </Card>
@@ -666,6 +819,121 @@ export function TeamView({ user }: TeamViewProps) {
                     onClick={closeMemberStats}
                   >
                     Закрыть
+                  </Button>
+                </div>
+              </Card>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {portalReady && reportTarget
+        ? createPortal(
+            <div className={styles.overlay} role="dialog" aria-modal="true">
+              <div
+                className={styles.backdrop}
+                onClick={() => {
+                  if (overlayDismissArmed) closeHoursReport();
+                }}
+                aria-hidden
+              />
+              <Card
+                className={styles.modal}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h2 className={styles.modalTitle}>Отчёт об отработанных часах</h2>
+                <p className={styles.confirmName}>{reportTarget.name}</p>
+                <div className={styles.periodTabs} role="tablist">
+                  {REPORT_PERIODS.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      role="tab"
+                      aria-selected={reportPeriod === period}
+                      className={`${styles.periodTab}${reportPeriod === period ? ` ${styles.periodTabActive}` : ""}`}
+                      onClick={() => changeReportPeriod(period)}
+                    >
+                      {PERIOD_LABELS[period]}
+                    </button>
+                  ))}
+                </div>
+                {reportLoading ? (
+                  <p className={styles.confirmText}>Загрузка…</p>
+                ) : reportError || !reportStats ? (
+                  <p className={styles.confirmText}>
+                    Не удалось загрузить статистику для отчёта.
+                  </p>
+                ) : (
+                  <>
+                    <div className={styles.statsNav}>
+                      <button
+                        type="button"
+                        className={styles.navBtn}
+                        onClick={() => shiftReportAnchor(-1)}
+                        disabled={
+                          !canNavigatePeriod(
+                            reportStats.period,
+                            reportStats.anchor,
+                            -1,
+                          )
+                        }
+                        aria-label="Предыдущий период"
+                      >
+                        ‹
+                      </button>
+                      <p className={styles.statsRange}>
+                        {reportRangeLabel(reportStats)}
+                      </p>
+                      <button
+                        type="button"
+                        className={styles.navBtn}
+                        onClick={() => shiftReportAnchor(1)}
+                        disabled={
+                          !canNavigatePeriod(
+                            reportStats.period,
+                            reportStats.anchor,
+                            1,
+                          )
+                        }
+                        aria-label="Следующий период"
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <p className={styles.statsTotal}>
+                      Всего за период:{" "}
+                      <span className={styles.statValue}>
+                        {formatOnlineDuration(reportStats.onlineMs)}
+                      </span>
+                    </p>
+                    <p className={styles.confirmText}>
+                      Файл можно открыть в браузере или скачать (CSV для Excel).
+                    </p>
+                  </>
+                )}
+                <div className={styles.confirmActions}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={closeHoursReport}
+                  >
+                    Закрыть
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={openHoursReportFile}
+                    disabled={reportLoading || reportError || !reportStats}
+                  >
+                    Открыть
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={downloadHoursReport}
+                    disabled={reportLoading || reportError || !reportStats}
+                  >
+                    Скачать
                   </Button>
                 </div>
               </Card>

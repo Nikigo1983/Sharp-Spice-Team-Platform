@@ -110,6 +110,11 @@
 
 .actions {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+  min-width: 11.5rem;
 }
 
 .empty {

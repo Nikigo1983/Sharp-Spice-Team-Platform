@@ -37,7 +37,8 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
-  if (!canViewTeamMemberActivity(session, target)) {
+  const canAccessOwn = session.id === target.id;
+  if (!canAccessOwn && !canViewTeamMemberActivity(session, target)) {
     return NextResponse.json(
       { error: "Недостаточно прав для просмотра статистики." },
       { status: 403 },

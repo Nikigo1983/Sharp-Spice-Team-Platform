@@ -28,8 +28,8 @@ const NAV_CLIENT_INVITATIONS: NavItem = {
 
 const NAV_CLIENT_INTAKE: NavItem = {
   href: "/clients/intake",
-  label: "Заявки с портала Emigrant",
-  icon: "fa-solid fa-clipboard-list",
+  label: "Клиенты",
+  icon: "fa-solid fa-users",
 };
 
 const NAV_FINANCE: NavItem = {

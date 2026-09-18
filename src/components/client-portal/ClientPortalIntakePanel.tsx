@@ -1364,14 +1364,14 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <EmigrantLogo size="md" />
           </div>
           <h1 className={styles.title}>
-            Заявки клиентского портала Emigrant
+            Клиенты
           </h1>
           <p className={styles.lead}>
             {listView === "archive"
               ? "Архив: клиенты с завершёнными процессами. Карточка и все данные сохраняются."
               : "Анкеты клиентов. Редактируйте колонки и нажмите «Сохранить»."}
           </p>
-          <div className={styles.viewTabs} role="tablist" aria-label="Разделы заявок">
+          <div className={styles.viewTabs} role="tablist" aria-label="Разделы клиентов">
             <button
               type="button"
               role="tab"
@@ -1381,7 +1381,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               }
               onClick={() => setListView("active")}
             >
-              Заявки
+              Активные
               <span className={styles.viewTabCount}>{counts.active}</span>
             </button>
             <button

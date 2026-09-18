@@ -7,10 +7,6 @@ import { CaseFinancePanel } from "@/components/finance/CaseFinancePanel";
 import { LeadFieldValue } from "@/components/leads/LeadFieldValue";
 import { Card } from "@/components/ui/Card";
 import {
-  matchesApprovalFilter,
-  type ApprovalFilter,
-} from "@/lib/clients/list-filter-utils";
-import {
   formatBookingEndAlertRu,
   getBookingEndAlert,
   type BookingEndAlert,
@@ -155,7 +151,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [query, setQuery] = useState("");
   const [curator, setCurator] = useState("");
   const [partner, setPartner] = useState("");
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
   const [bookingAlertsOpen, setBookingAlertsOpen] = useState(false);
@@ -408,9 +403,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!rowMatchesQuery(item, draft, query)) return false;
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
-          if (!matchesApprovalFilter(draft.trpApprovalDate, approvalStatus)) {
-            return false;
-          }
           if (clientSource) {
             const source =
               item.source ??
@@ -440,7 +432,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       query,
       curator,
       partner,
-      approvalStatus,
       clientSource,
       lawyerFilter,
     ],
@@ -526,7 +517,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setQuery("");
     setCurator("");
     setPartner("");
-    setApprovalStatus("");
     setClientSource("");
     setLawyerFilter("");
   };
@@ -1616,18 +1606,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 {value}
               </option>
             ))}
-          </select>
-          <select
-            className={styles.select}
-            value={approvalStatus}
-            onChange={(e) =>
-              setApprovalStatus(e.target.value as ApprovalFilter)
-            }
-            aria-label="Одобрение ВНЖ"
-          >
-            <option value="">Одобрение: все</option>
-            <option value="approved">Одобрены</option>
-            <option value="not_approved">Не одобрены</option>
           </select>
           <select
             className={styles.select}

@@ -27,10 +27,30 @@ import {
   isLegacyCrmImport,
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
-import { isFormgridImport } from "@/lib/client-portal/formgrid-import";
+import { isFormgridImport, readFormgridCrmOpsSheet } from "@/lib/client-portal/formgrid-import";
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
+
+function staffFieldsForList(
+  answers: Record<string, unknown>,
+): QuestionnaireStaffFields {
+  const staff = readStaffFields(answers);
+  if (staff.lawyer.trim()) return staff;
+
+  const fromCrm = readFormgridCrmOpsSheet(answers)["Адвокат"]?.trim() || "";
+  if (fromCrm) return { ...staff, lawyer: fromCrm };
+
+  const legacySheet = answers.__legacySheet;
+  if (legacySheet && typeof legacySheet === "object" && !Array.isArray(legacySheet)) {
+    const fromLegacy = String(
+      (legacySheet as Record<string, unknown>)["Адвокат"] ?? "",
+    ).trim();
+    if (fromLegacy) return { ...staff, lawyer: fromLegacy };
+  }
+
+  return staff;
+}
 
 function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
   const identity = readLegacyIdentity(item.answers);
@@ -67,7 +87,7 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     isManual: source === "manual",
     source,
     isArchived: isCaseArchived(item.answers),
-    staffFields: readStaffFields(item.answers),
+    staffFields: staffFieldsForList(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),
   };
 }

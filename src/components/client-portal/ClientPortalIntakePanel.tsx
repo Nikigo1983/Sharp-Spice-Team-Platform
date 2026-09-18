@@ -41,6 +41,8 @@ type ListItem = {
 };
 
 type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
+/** Empty lawyer field vs filled («Передан адвокату»). */
+type LawyerFilter = "" | "assigned";
 
 type ReviewRow = {
   section: string;
@@ -150,6 +152,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [partner, setPartner] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
+  const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
@@ -414,6 +417,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     : "portal");
             if (source !== clientSource) return false;
           }
+          if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
+            return false;
+          }
           return true;
         })
         .sort((a, b) =>
@@ -422,7 +428,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             numeric: true,
           }),
         ),
-    [items, drafts, query, curator, partner, approvalStatus, clientSource],
+    [items, drafts, query, curator, partner, approvalStatus, clientSource, lawyerFilter],
   );
 
   const reviewSections = useMemo(() => {
@@ -481,6 +487,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setPartner("");
     setApprovalStatus("");
     setClientSource("");
+    setLawyerFilter("");
   };
 
   const exportFilteredCsv = () => {
@@ -1596,6 +1603,17 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               Новые клиенты из клиентского портала
             </option>
             <option value="manual">Добавленные вручную</option>
+          </select>
+          <select
+            className={styles.select}
+            value={lawyerFilter}
+            onChange={(e) =>
+              setLawyerFilter(e.target.value as LawyerFilter)
+            }
+            aria-label="Адвокат"
+          >
+            <option value="">Адвокат: все</option>
+            <option value="assigned">Передан адвокату</option>
           </select>
           <button
             type="button"

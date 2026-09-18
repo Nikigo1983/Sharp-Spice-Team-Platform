@@ -487,6 +487,11 @@ export async function executeSearchClients(
     );
     const ambiguous = highOrMed.length > 1;
 
+    if (!ambiguous && highOrMed.length === 1) {
+      const only = highOrMed[0]!;
+      _ctx.onUniqueClientResolved?.(only.clientId, only.displayName);
+    }
+
     return baseResult("search_clients", started, {
       ok: true,
       errorCode: ambiguous ? "AMBIGUOUS" : null,
@@ -515,7 +520,7 @@ export async function executeSearchClients(
 
 export async function executeGetClient(
   rawArgs: unknown,
-  _ctx: WorkspaceToolContext,
+  ctx: WorkspaceToolContext,
 ): Promise<Omit<WorkspaceToolResult, "toolCallId" | "cacheHit">> {
   const started = Date.now();
   const validated = validateGetClientArgs(rawArgs);
@@ -552,6 +557,7 @@ export async function executeGetClient(
         sourceTags: ["CLIENT"],
       });
     }
+    ctx.onUniqueClientResolved?.(safe.clientId, safe.name);
     const finance = await getPortalFinanceSnapshot(validated.value.clientId);
     if (finance) {
       const amountLabel = displayContractAmount(finance.contractAmount);

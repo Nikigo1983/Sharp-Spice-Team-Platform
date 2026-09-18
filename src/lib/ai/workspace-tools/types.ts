@@ -29,6 +29,11 @@ export type WorkspaceToolContext = {
   chatId: string | null;
   /** Optional validated active client from prior turns (server-set). */
   activeClientId?: string | null;
+  /**
+   * Called when a tool uniquely resolves a questionnaire UUID ClientRef.
+   * Used to lock conversation identity before final SSE (never AMBIGUOUS).
+   */
+  onUniqueClientResolved?: (clientId: string, displayLabel?: string | null) => void;
 };
 
 export type WorkspaceToolCall = {

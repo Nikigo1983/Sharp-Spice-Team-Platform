@@ -16,11 +16,9 @@ import {
 } from "@/lib/ai/answer-grounding";
 import { classifyCurrentTask, taskRequiresClientRef } from "@/lib/ai/current-task";
 import {
-  applyClientSwitch,
   bindClientBoundDraftToCaseMemory,
   caseMemoryForModelIngress,
   clientRefFromCaseMemory,
-  lockClientRefIntoCaseMemory,
 } from "@/lib/ai/conversation-client-lock";
 import {
   formatEvidencePackForModel,
@@ -40,7 +38,12 @@ import {
   shouldAttemptClientResolve,
   toTraceClientResolutionOutcome,
 } from "@/lib/ai/resolve-client";
-import type { ClientRef } from "@/lib/ai/client-ref";
+import { createClientRef, type ClientRef } from "@/lib/ai/client-ref";
+import {
+  commitUniqueClientResolution,
+  persistDurableClientRefIdentity,
+  clientRefFromAgentToolMessages,
+} from "@/lib/ai/clientref-resolution-lock";
 import { queryRequiresVolatileRefetch } from "@/lib/ai/volatile-facts";
 import { getAiRuntimeConfig } from "@/lib/ai/config";
 import { decideKbGrounding } from "@/lib/ai/kb-grounding";
@@ -951,23 +954,16 @@ async function prepareWorkspaceRequest(
           nameHint: hint || name,
         });
         const previousLock = clientRefFromCaseMemory(caseMemory);
-        if (
-          previousLock &&
-          previousLock.clientId !== resolvedDebt.clientRef.clientId &&
-          !resolvedDebt.reusedLock
-        ) {
-          const switched = applyClientSwitch({
-            memory: caseMemory,
-            previous: previousLock,
-            next: resolvedDebt.clientRef,
-          });
-          caseMemory = switched.memory;
-        } else {
-          caseMemory = lockClientRefIntoCaseMemory(
-            caseMemory,
-            resolvedDebt.clientRef,
-          );
-        }
+        const committed = commitUniqueClientResolution({
+          memory: caseMemory,
+          ref: resolvedDebt.clientRef,
+          switchExplicit: Boolean(
+            previousLock &&
+              previousLock.clientId !== resolvedDebt.clientRef.clientId &&
+              !resolvedDebt.reusedLock,
+          ),
+        });
+        caseMemory = committed.memory;
         trace.selectedRoutes = ["finance_client_debt_direct"];
         trace.clientRefPresent = true;
         trace.notes.push(
@@ -1127,25 +1123,18 @@ async function prepareWorkspaceRequest(
           ),
         });
         const previousLock = clientRefFromCaseMemory(caseMemory);
-        if (
-          previousLock &&
-          previousLock.clientId !== resolvedLetter.clientRef.clientId
-        ) {
-          const switched = applyClientSwitch({
-            memory: caseMemory,
-            previous: previousLock,
-            next: resolvedLetter.clientRef,
-          });
-          caseMemory = bindClientBoundDraftToCaseMemory(
-            switched.memory,
-            resolvedLetter.clientRef.clientId,
-          );
-        } else {
-          caseMemory = bindClientBoundDraftToCaseMemory(
-            lockClientRefIntoCaseMemory(caseMemory, resolvedLetter.clientRef),
-            resolvedLetter.clientRef.clientId,
-          );
-        }
+        const committed = commitUniqueClientResolution({
+          memory: caseMemory,
+          ref: resolvedLetter.clientRef,
+          switchExplicit: Boolean(
+            previousLock &&
+              previousLock.clientId !== resolvedLetter.clientRef.clientId,
+          ),
+        });
+        caseMemory = bindClientBoundDraftToCaseMemory(
+          committed.memory,
+          resolvedLetter.clientRef.clientId,
+        );
         trace.selectedRoutes = ["client_debt_letter_direct"];
         trace.clientRefPresent = true;
         trace.notes.push(
@@ -1283,10 +1272,10 @@ async function prepareWorkspaceRequest(
       lockedClientRef &&
       selectedRef.clientId !== lockedClientRef.clientId
     ) {
-      const switched = applyClientSwitch({
+      const switched = commitUniqueClientResolution({
         memory: caseMemory,
-        previous: lockedClientRef,
-        next: selectedRef,
+        ref: selectedRef,
+        switchExplicit: true,
       });
       caseMemory = switched.memory;
       trace.notes.push("client_ref_switched_via_selection");
@@ -1333,23 +1322,20 @@ async function prepareWorkspaceRequest(
           resolved.outcome === "RESOLVED_LOCKED") &&
         resolved.clientRef
       ) {
-        if (
-          lockedClientRef &&
-          resolved.clientRef.clientId !== lockedClientRef.clientId &&
-          !resolved.reusedLock
-        ) {
-          const switched = applyClientSwitch({
-            memory: caseMemory,
-            previous: lockedClientRef,
-            next: resolved.clientRef,
-          });
-          caseMemory = switched.memory;
+        const committed = commitUniqueClientResolution({
+          memory: caseMemory,
+          ref: resolved.clientRef,
+          switchExplicit: Boolean(
+            lockedClientRef &&
+              resolved.clientRef.clientId !== lockedClientRef.clientId &&
+              !resolved.reusedLock,
+          ),
+        });
+        caseMemory = committed.memory;
+        if (committed.switched) {
           trace.notes.push("client_ref_switched");
         } else {
-          caseMemory = lockClientRefIntoCaseMemory(
-            caseMemory,
-            resolved.clientRef,
-          );
+          trace.notes.push("client_ref_locked_from_resolve");
         }
         trace.clientRefPresent = true;
         if (resolved.client) {
@@ -1415,21 +1401,19 @@ async function prepareWorkspaceRequest(
         const searchRef = clientRefFromResolved(clientContext);
         if (searchRef) {
           const previousLock = clientRefFromCaseMemory(caseMemory);
-          if (
-            previousLock &&
-            previousLock.clientId !== searchRef.clientId
-          ) {
-            const switched = applyClientSwitch({
-              memory: caseMemory,
-              previous: previousLock,
-              next: searchRef,
-            });
-            caseMemory = switched.memory;
-            trace.notes.push("client_ref_switched_from_search_single");
-          } else {
-            caseMemory = lockClientRefIntoCaseMemory(caseMemory, searchRef);
-            trace.notes.push("client_ref_locked_from_search_single");
-          }
+          const committed = commitUniqueClientResolution({
+            memory: caseMemory,
+            ref: searchRef,
+            switchExplicit: Boolean(
+              previousLock && previousLock.clientId !== searchRef.clientId,
+            ),
+          });
+          caseMemory = committed.memory;
+          trace.notes.push(
+            committed.switched
+              ? "client_ref_switched_from_search_single"
+              : "client_ref_locked_from_search_single",
+          );
           trace.clientRefPresent = true;
           if (trace.clientResolutionOutcome === "UNKNOWN") {
             trace.clientResolutionOutcome = "RESOLVED";
@@ -1643,21 +1627,28 @@ async function prepareWorkspaceRequest(
       trace.latencyMs.prepare = Date.now() - started;
       {
         // Agent path returns BEFORE the EvidencePack lock block below.
-        // Trace whether ClientRef is already durable in caseMemory at exit.
+        // UNIQUE prepare-time resolve must still lock before SSE/model.
+        if (!clientRefFromCaseMemory(caseMemory) && clientContext) {
+          const fromCtx = clientRefFromResolved(clientContext, "RESOLVED");
+          if (fromCtx) {
+            const committed = commitUniqueClientResolution({
+              memory: caseMemory,
+              ref: fromCtx,
+            });
+            caseMemory = committed.memory;
+            trace.clientRefPresent = true;
+            trace.notes.push("client_ref_locked_before_agent_exit");
+          }
+        }
         const lockedAtAgentEntry = clientRefFromCaseMemory(caseMemory);
-        const fromCtx = clientContext
-          ? clientRefFromResolved(clientContext, "RESOLVED")
-          : null;
         logClientRefLifecycleTrace({
           checkpoint: "SERVER_RESOLVED_CLIENTREF",
           requestId,
           hasClientRef: Boolean(lockedAtAgentEntry),
-          clientId: lockedAtAgentEntry?.clientId ?? fromCtx?.clientId ?? null,
+          clientId: lockedAtAgentEntry?.clientId ?? null,
           uiTransition: lockedAtAgentEntry
             ? "prepare_agent_exit_locked"
-            : fromCtx
-              ? "prepare_agent_exit_context_unlocked"
-              : "prepare_agent_exit_no_client",
+            : "prepare_agent_exit_no_client",
         });
       }
       return {
@@ -1816,7 +1807,11 @@ async function prepareWorkspaceRequest(
   // Invariant: uniquely resolved ClientRef must be durable conversation state
   // for this request — not only an EvidencePack assembly input.
   if (activeClientRef && !clientRefFromCaseMemory(caseMemory)) {
-    caseMemory = lockClientRefIntoCaseMemory(caseMemory, activeClientRef);
+    const committed = commitUniqueClientResolution({
+      memory: caseMemory,
+      ref: activeClientRef,
+    });
+    caseMemory = committed.memory;
     trace.notes.push("client_ref_locked_from_active_context");
   }
   {
@@ -2179,6 +2174,10 @@ async function executeAgentPrepared(params: {
   stream: boolean;
   onStatus?: (event: AgentToolStatusEvent) => void | Promise<void>;
   onFinalDelta?: (delta: string) => void | Promise<void>;
+  /** Fired when tools uniquely lock a ClientRef mid-loop (stream meta). */
+  onClientRefLocked?: (
+    memory: WorkspaceCaseMemory,
+  ) => void | Promise<void>;
 }): Promise<{
   result: WorkspaceAiResult;
   statusEvents: AgentToolStatusEvent[];
@@ -2219,11 +2218,38 @@ async function executeAgentPrepared(params: {
     });
   }
 
+  let lockedCaseMemory = prepared.caseMemory;
+  const applyUniqueToolLock = (clientId: string, displayLabel?: string | null) => {
+    const ref = createClientRef({
+      clientId,
+      displayLabel,
+      resolutionOutcome: "RESOLVED",
+    });
+    if (!ref) return;
+    if (clientRefFromCaseMemory(lockedCaseMemory)?.clientId === ref.clientId) {
+      return;
+    }
+    const previous = clientRefFromCaseMemory(lockedCaseMemory);
+    const committed = commitUniqueClientResolution({
+      memory: lockedCaseMemory,
+      ref,
+      switchExplicit: Boolean(
+        previous && previous.clientId !== ref.clientId,
+      ),
+    });
+    lockedCaseMemory = committed.memory;
+    prepared.caseMemory = lockedCaseMemory;
+    prepared.trace.clientRefPresent = true;
+    prepared.trace.notes.push("client_ref_locked_from_agent_tool");
+    void params.onClientRefLocked?.(lockedCaseMemory);
+  };
+
   const toolContext = {
     requestId: prepared.requestId,
     userId: params.memoryContext?.userId ?? "anonymous",
     chatId: params.memoryContext?.chatId ?? null,
     activeClientId,
+    onUniqueClientResolved: applyUniqueToolLock,
   };
 
   prepared.trace.agentMode = true;
@@ -2259,6 +2285,31 @@ async function executeAgentPrepared(params: {
 
     if (loop.stopReason !== "final_answer" || !loop.answer) {
       throw new AiCompletionError(loop.lastCompletion?.error || (loop.stopReason === "timeout" ? "AI_TIMEOUT" : "MODEL_STREAM_INTERRUPTED"));
+    }
+
+    // Belt-and-suspenders: parse tool transcript if callback missed a unique resolve.
+    if (!clientRefFromCaseMemory(lockedCaseMemory)) {
+      const fromTools = clientRefFromAgentToolMessages(loop.messages);
+      if (fromTools) {
+        const committed = commitUniqueClientResolution({
+          memory: lockedCaseMemory,
+          ref: fromTools,
+        });
+        lockedCaseMemory = committed.memory;
+        prepared.caseMemory = lockedCaseMemory;
+        prepared.trace.clientRefPresent = true;
+        prepared.trace.notes.push("client_ref_locked_from_tool_transcript");
+        void params.onClientRefLocked?.(lockedCaseMemory);
+      }
+    }
+
+    const lockedRef = clientRefFromCaseMemory(lockedCaseMemory);
+    if (lockedRef) {
+      await persistDurableClientRefIdentity({
+        userId: params.memoryContext?.userId,
+        chatId: params.memoryContext?.chatId,
+        ref: lockedRef,
+      });
     }
 
     const guarded = applyPostAnswerGroundingGuards({
@@ -2299,7 +2350,7 @@ async function executeAgentPrepared(params: {
         conversationSummary: memory.conversationSummary,
         summaryThroughMessageCount: memory.summaryThroughMessageCount,
         caseMemory: selectAuthoritativeCaseMemory({
-          prepared: prepared.caseMemory,
+          prepared: lockedCaseMemory,
           refreshed: memory.caseMemory,
         }),
       },
@@ -2591,6 +2642,18 @@ export async function* runWorkspaceAiStream(
       userMessage,
       assistantReply: prepared.reply,
     });
+    const authoritative = selectAuthoritativeCaseMemory({
+      prepared: prepared.caseMemory,
+      refreshed: memory.caseMemory,
+    });
+    const directRef = clientRefFromCaseMemory(authoritative);
+    if (directRef) {
+      await persistDurableClientRefIdentity({
+        userId: memoryContext?.userId,
+        chatId: memoryContext?.chatId,
+        ref: directRef,
+      });
+    }
     yield {
       sources: prepared.sources,
       demo: false,
@@ -2600,7 +2663,7 @@ export async function* runWorkspaceAiStream(
       clientListContinuation: prepared.clientListContinuation ?? null,
       conversationSummary: memory.conversationSummary,
       summaryThroughMessageCount: memory.summaryThroughMessageCount,
-      caseMemory: selectAuthoritativeCaseMemory({ prepared: prepared.caseMemory, refreshed: memory.caseMemory }),
+      caseMemory: authoritative,
     };
     yield prepared.reply;
     return;
@@ -2618,19 +2681,39 @@ export async function* runWorkspaceAiStream(
         requestId: prepared.requestId,
         caseMemory: agentEarly,
       };
+      const earlyRef = clientRefFromCaseMemory(agentEarly);
+      if (earlyRef) {
+        void persistDurableClientRefIdentity({
+          userId: memoryContext?.userId,
+          chatId: memoryContext?.chatId,
+          ref: earlyRef,
+        });
+      }
     }
     yield { status: "generating" };
 
     let agentOutcome: Awaited<ReturnType<typeof executeAgentPrepared>> = null;
     for await (const item of streamTask<
       Awaited<ReturnType<typeof executeAgentPrepared>>,
-      AgentToolStatusEvent
+      AgentToolStatusEvent | { type: "client_ref_locked"; memory: WorkspaceCaseMemory }
     >(emit => executeAgentPrepared({
       prepared, memoryContext, userMessage, history, stream: true,
       onStatus: emit,
+      onClientRefLocked: (memory) => {
+        void emit({ type: "client_ref_locked", memory });
+      },
     }))) {
       if ("result" in item) { agentOutcome = item.result; continue; }
       const event = item.event;
+      if (event.type === "client_ref_locked") {
+        yield {
+          sources: [],
+          demo: false,
+          requestId: prepared.requestId,
+          caseMemory: event.memory,
+        };
+        continue;
+      }
       if (event.type === "tool_started") {
         yield { status: "tool_started", tool: event.tool, label: event.label };
       } else if (event.type === "tool_completed") {

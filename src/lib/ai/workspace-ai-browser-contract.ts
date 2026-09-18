@@ -252,13 +252,9 @@ export type ClientRefLifecycleCheckpoint =
   | "UI_CLIENTREF_AFTER_STREAM_COMPLETE"
   | "TURN2_POST_CLIENTREF";
 
-/** Browser console traces — Preview only via NEXT_PUBLIC flag. */
+/** Browser console traces — hard-disabled after diagnostic pass. */
 export function isClientRefLifecycleBrowserTraceEnabled(): boolean {
-  if (typeof process === "undefined") return false;
-  if (process.env.NEXT_PUBLIC_VERCEL_ENV === "production") return false;
-  const flag =
-    process.env.NEXT_PUBLIC_AI_WORKSPACE_CLIENTREF_TRACE?.trim().toLowerCase();
-  return flag === "1" || flag === "true" || flag === "yes";
+  return false;
 }
 
 export function logClientRefLifecycleBrowserTrace(params: {

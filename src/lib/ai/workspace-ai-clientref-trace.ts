@@ -14,12 +14,10 @@ export function clientRefFingerprint(
 
 /**
  * Preview-only ClientRef lifecycle tracing.
- * Hard-disabled in Vercel Production. Off unless AI_WORKSPACE_CLIENTREF_TRACE=1.
+ * Hard-disabled after diagnostic pass — keep off until explicitly re-enabled.
  */
 export function isClientRefLifecycleTraceEnabled(): boolean {
-  if (process.env.VERCEL_ENV === "production") return false;
-  const flag = process.env.AI_WORKSPACE_CLIENTREF_TRACE?.trim().toLowerCase();
-  return flag === "1" || flag === "true" || flag === "yes";
+  return false;
 }
 
 export function logClientRefLifecycleTrace(params: {

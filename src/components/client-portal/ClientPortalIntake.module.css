@@ -66,6 +66,43 @@
   align-items: center;
 }
 
+.submittedMonthRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.submittedMonthLabel {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+  margin-right: 0.15rem;
+}
+
+.submittedMonthChip {
+  min-height: 2rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 20, 28, 0.7);
+  color: #e5e7eb;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.submittedMonthChip:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.submittedMonthChipActive {
+  border-color: rgba(99, 102, 241, 0.7);
+  background: rgba(99, 102, 241, 0.22);
+  color: #fff;
+  font-weight: 600;
+}
+
 .select {
   appearance: none;
   -webkit-appearance: none;

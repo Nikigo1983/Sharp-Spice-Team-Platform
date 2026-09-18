@@ -74,3 +74,20 @@ export function matchesPresenceFilter(
   if (filter === "yes") return present;
   return !present;
 }
+
+/** Match submission date to a calendar month (`YYYY-MM`). Empty filter = all. */
+export function matchesSubmittedMonth(
+  raw: string | null | undefined,
+  yearMonth: string,
+): boolean {
+  const key = yearMonth.trim();
+  if (!key) return true;
+  const match = key.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return true;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!year || month < 1 || month > 12) return true;
+  const date = parseFlexibleDate(raw);
+  if (!date) return false;
+  return date.getFullYear() === year && date.getMonth() + 1 === month;
+}

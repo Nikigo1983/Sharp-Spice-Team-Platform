@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dateInRange, matchesApprovalFilter, matchesPresenceFilter } from "@/lib/clients/list-filter-utils";
+import { dateInRange, matchesApprovalFilter, matchesPresenceFilter, matchesSubmittedMonth } from "@/lib/clients/list-filter-utils";
 import { findFormgridFilterColumns } from "@/lib/clients/formgrid-filter-columns";
 import { clientMatchesFilters } from "@/lib/google-sheets/parse";
 import type { Client } from "@/lib/google-sheets/types";
@@ -78,6 +78,14 @@ describe("list-filter-utils", () => {
     assert.equal(matchesPresenceFilter("", "no"), true);
     assert.equal(matchesApprovalFilter("01.01.2024", "approved"), true);
     assert.equal(matchesApprovalFilter("", "not_approved"), true);
+  });
+
+  it("matchesSubmittedMonth by YYYY-MM", () => {
+    assert.equal(matchesSubmittedMonth("15.03.2026", "2026-03"), true);
+    assert.equal(matchesSubmittedMonth("2026-03-15T12:00:00.000Z", "2026-03"), true);
+    assert.equal(matchesSubmittedMonth("15.03.2026", "2026-04"), false);
+    assert.equal(matchesSubmittedMonth(null, "2026-03"), false);
+    assert.equal(matchesSubmittedMonth("15.03.2026", ""), true);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   getBookingEndAlert,
   type BookingEndAlert,
 } from "@/lib/client-portal/booking-end-alert";
+import { matchesSubmittedMonth } from "@/lib/clients/list-filter-utils";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
 import {
   EMPTY_STAFF_FIELDS,
@@ -44,7 +45,22 @@ type ListItem = {
 type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
 /** Empty lawyer field vs filled («Передан адвокату»). */
 type LawyerFilter = "" | "assigned";
-/** Booking end proximity from «Дата букинга (от и до)». */
+
+const SUBMITTED_MONTH_YEAR = 2026;
+const SUBMITTED_MONTH_OPTIONS = [
+  { value: "2026-01", label: "Янв" },
+  { value: "2026-02", label: "Фев" },
+  { value: "2026-03", label: "Мар" },
+  { value: "2026-04", label: "Апр" },
+  { value: "2026-05", label: "Май" },
+  { value: "2026-06", label: "Июн" },
+  { value: "2026-07", label: "Июл" },
+  { value: "2026-08", label: "Авг" },
+  { value: "2026-09", label: "Сен" },
+  { value: "2026-10", label: "Окт" },
+  { value: "2026-11", label: "Ноя" },
+  { value: "2026-12", label: "Дек" },
+] as const;
 type ReviewRow = {
   section: string;
   label: string;
@@ -153,6 +169,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [partner, setPartner] = useState("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
+  const [submittedMonth, setSubmittedMonth] = useState("");
   const [bookingAlertsOpen, setBookingAlertsOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -418,6 +435,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
             return false;
           }
+          if (!matchesSubmittedMonth(item.submittedAt, submittedMonth)) {
+            return false;
+          }
           return true;
         })
         .sort((a, b) =>
@@ -434,6 +454,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       partner,
       clientSource,
       lawyerFilter,
+      submittedMonth,
     ],
   );
 
@@ -519,6 +540,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setPartner("");
     setClientSource("");
     setLawyerFilter("");
+    setSubmittedMonth("");
   };
 
   const exportFilteredCsv = () => {
@@ -1663,6 +1685,38 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           >
             Выгрузить CSV
           </button>
+        </div>
+        <div
+          className={styles.submittedMonthRow}
+          role="group"
+          aria-label={`Дата подачи ${SUBMITTED_MONTH_YEAR}`}
+        >
+          <span className={styles.submittedMonthLabel}>
+            Дата подачи {SUBMITTED_MONTH_YEAR}:
+          </span>
+          <button
+            type="button"
+            className={`${styles.submittedMonthChip}${submittedMonth === "" ? ` ${styles.submittedMonthChipActive}` : ""}`}
+            aria-pressed={submittedMonth === ""}
+            onClick={() => setSubmittedMonth("")}
+          >
+            Все
+          </button>
+          {SUBMITTED_MONTH_OPTIONS.map((month) => (
+            <button
+              key={month.value}
+              type="button"
+              className={`${styles.submittedMonthChip}${submittedMonth === month.value ? ` ${styles.submittedMonthChipActive}` : ""}`}
+              aria-pressed={submittedMonth === month.value}
+              onClick={() =>
+                setSubmittedMonth((current) =>
+                  current === month.value ? "" : month.value,
+                )
+              }
+            >
+              {month.label}
+            </button>
+          ))}
         </div>
         {!loading ? (
           <p className={styles.filterMeta}>

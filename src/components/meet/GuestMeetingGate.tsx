@@ -11,12 +11,16 @@ export type GuestMeetingGateVariant =
   | "not_configured"
   | "left"
   | "waiting_room"
+  | "admitted"
   | "rejected";
 
 type GuestMeetingGateProps = {
   variant: GuestMeetingGateVariant;
   event?: CalendarEvent;
   message?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionDisabled?: boolean;
 };
 
 function getCopy(
@@ -56,6 +60,11 @@ function getCopy(
         title: "Ожидание подключения",
         body: "Организатор скоро впустит вас в видеовстречу. Не закрывайте эту страницу.",
       };
+    case "admitted":
+      return {
+        title: "Вас приняли",
+        body: "Нажмите «Войти в звонок», чтобы подключиться и включить звук.",
+      };
     case "rejected":
       return {
         title: "Подключение отклонено",
@@ -68,6 +77,9 @@ export function GuestMeetingGate({
   variant,
   event,
   message,
+  actionLabel,
+  onAction,
+  actionDisabled = false,
 }: GuestMeetingGateProps) {
   const copy = getCopy(variant, event);
 
@@ -84,6 +96,16 @@ export function GuestMeetingGate({
           </p>
         ) : null}
         <p className={styles.body}>{message ?? copy.body}</p>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            className={styles.action}
+            onClick={onAction}
+            disabled={actionDisabled}
+          >
+            {actionLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   );

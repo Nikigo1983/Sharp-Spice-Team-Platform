@@ -1,0 +1,29 @@
+.banner {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(calc(100% - 2rem), 22rem);
+  min-height: 3rem;
+  padding: 0.75rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111827;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.banner:hover {
+  background: #fbbf24;
+}
+
+@media (max-width: 640px) {
+  .banner {
+    bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

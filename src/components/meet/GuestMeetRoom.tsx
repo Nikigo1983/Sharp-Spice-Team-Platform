@@ -14,6 +14,7 @@ import { GuestMeetingGate } from "./GuestMeetingGate";
 import { MeetingControlBar } from "./MeetingControlBar";
 import { MeetingParticipantPanel } from "./MeetingParticipantPanel";
 import { MeetingSpeakerLayout } from "./MeetingSpeakerLayout";
+import { MeetingStartAudio } from "./MeetingStartAudio";
 import meetStyles from "./CalendarMeetRoom.module.css";
 import styles from "./GuestMeetRoom.module.css";
 
@@ -41,6 +42,13 @@ type ConnectState =
       displayName: string;
       admissionId: string;
       guestId: string;
+    }
+  | {
+      status: "admitted";
+      displayName: string;
+      admissionId: string;
+      guestId: string;
+      joining?: boolean;
     }
   | { status: "ready"; credentials: GuestTokenPayload; displayName: string }
   | { status: "error"; message: string }
@@ -136,6 +144,7 @@ function GuestMeetingStage({
       ) : null}
 
       <RoomAudioRenderer />
+      <MeetingStartAudio />
 
       <GuestAuditReporter
         inviteToken={inviteToken}
@@ -295,7 +304,9 @@ export function GuestMeetRoom({
         }
 
         if (payload.status === "admitted") {
-          await connectWithToken(waitingName, accessPassword, {
+          setConnectState({
+            status: "admitted",
+            displayName: waitingName,
             admissionId,
             guestId,
           });
@@ -324,7 +335,35 @@ export function GuestMeetRoom({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [accessPassword, connectState, connectWithToken, inviteToken]);
+  }, [connectState, inviteToken]);
+
+  const handleEnterAfterAdmit = useCallback(async () => {
+    if (connectState.status !== "admitted" || connectState.joining) {
+      return;
+    }
+
+    const { displayName: name, admissionId, guestId } = connectState;
+    setConnectState({
+      status: "admitted",
+      displayName: name,
+      admissionId,
+      guestId,
+      joining: true,
+    });
+
+    try {
+      // Must run from this click so the browser allows audio playback.
+      await connectWithToken(name, accessPassword, { admissionId, guestId });
+    } catch (error) {
+      setConnectState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Не удалось подключиться. Проверьте интернет и попробуйте снова.",
+      });
+    }
+  }, [accessPassword, connectState, connectWithToken]);
 
   const handleLeave = useCallback(() => {
     if (connectState.status === "ready") {
@@ -352,6 +391,20 @@ export function GuestMeetRoom({
 
   if (connectState.status === "waiting") {
     return <GuestMeetingGate variant="waiting_room" event={event} />;
+  }
+
+  if (connectState.status === "admitted") {
+    return (
+      <GuestMeetingGate
+        variant="admitted"
+        event={event}
+        actionLabel={
+          connectState.joining ? "Подключение…" : "Войти в звонок"
+        }
+        onAction={() => void handleEnterAfterAdmit()}
+        actionDisabled={Boolean(connectState.joining)}
+      />
+    );
   }
 
   if (

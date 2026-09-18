@@ -30,6 +30,7 @@ import { MeetingControlBar } from "./MeetingControlBar";
 import { MeetingDockGate } from "./MeetingDockGate";
 import { MeetingParticipantPanel } from "./MeetingParticipantPanel";
 import { MeetingSpeakerLayout } from "./MeetingSpeakerLayout";
+import { MeetingStartAudio } from "./MeetingStartAudio";
 import {
   MeetingGuestWaitingBanner,
   usePendingGuestAdmissions,
@@ -149,6 +150,7 @@ function MeetingStage({
       ) : null}
 
       <RoomAudioRenderer />
+      <MeetingStartAudio />
     </div>
   );
 }

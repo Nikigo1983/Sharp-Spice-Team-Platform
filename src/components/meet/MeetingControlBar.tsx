@@ -35,7 +35,12 @@ export function MeetingControlBar({
 
   return (
     <footer className={styles.bar}>
-      <div className={styles.controls}>
+      <div
+        className={styles.controls}
+        onClick={() => {
+          void room.startAudio();
+        }}
+      >
         <TrackToggle
           source={Track.Source.Microphone}
           showIcon={false}

@@ -11,7 +11,6 @@ import {
   type ApprovalFilter,
 } from "@/lib/clients/list-filter-utils";
 import {
-  BOOKING_END_WARN_DAYS,
   formatBookingEndAlertRu,
   getBookingEndAlert,
   type BookingEndAlert,
@@ -50,8 +49,6 @@ type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
 /** Empty lawyer field vs filled («Передан адвокату»). */
 type LawyerFilter = "" | "assigned";
 /** Booking end proximity from «Дата букинга (от и до)». */
-type BookingFilter = "" | "ending_soon" | "ended";
-
 type ReviewRow = {
   section: string;
   label: string;
@@ -161,7 +158,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
-  const [bookingFilter, setBookingFilter] = useState<BookingFilter>("");
   const [bookingAlertsOpen, setBookingAlertsOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -430,16 +426,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
             return false;
           }
-          if (bookingFilter) {
-            const alert = getBookingEndAlert(draft.bookingDate);
-            if (!alert) return false;
-            if (bookingFilter === "ending_soon" && alert.kind !== "ending_soon") {
-              return false;
-            }
-            if (bookingFilter === "ended" && alert.kind !== "ended") {
-              return false;
-            }
-          }
           return true;
         })
         .sort((a, b) =>
@@ -457,7 +443,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       approvalStatus,
       clientSource,
       lawyerFilter,
-      bookingFilter,
     ],
   );
 
@@ -544,7 +529,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setApprovalStatus("");
     setClientSource("");
     setLawyerFilter("");
-    setBookingFilter("");
   };
 
   const exportFilteredCsv = () => {
@@ -1672,39 +1656,17 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <option value="">Адвокат: все</option>
             <option value="assigned">Передан адвокату</option>
           </select>
-          <select
-            className={styles.select}
-            value={bookingFilter}
-            onChange={(e) =>
-              setBookingFilter(e.target.value as BookingFilter)
-            }
-            aria-label="Букинг"
-          >
-            <option value="">Букинг: все</option>
-            <option value="ending_soon">
-              Заканчивается (≤{BOOKING_END_WARN_DAYS} дн.)
-            </option>
-            <option value="ended">Уже закончился</option>
-          </select>
-          {!loading && listView === "active" && bookingAlerts.length > 0 ? (
+          {!loading &&
+          listView === "active" &&
+          bookingAlertsSoon.length > 0 ? (
             <button
               type="button"
-              className={
-                bookingAlertsEnded.length > 0
-                  ? styles.bookingAlertToggleEnded
-                  : styles.bookingAlertToggleSoon
-              }
+              className={styles.bookingAlertToggleSoon}
               aria-expanded={bookingAlertsOpen}
               aria-controls="booking-alerts-panel"
               onClick={() => setBookingAlertsOpen((open) => !open)}
             >
-              Букинг
-              {bookingAlertsSoon.length > 0
-                ? `: ${bookingAlertsSoon.length} скоро`
-                : ""}
-              {bookingAlertsEnded.length > 0
-                ? `${bookingAlertsSoon.length > 0 ? " · " : ": "}${bookingAlertsEnded.length} закончились`
-                : ""}
+              {`Букинг: внимание, ${bookingAlertsSoon.length} скоро закончатся`}
               <span aria-hidden>{bookingAlertsOpen ? " ▴" : " ▾"}</span>
             </button>
           ) : null}

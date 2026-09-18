@@ -1,5 +1,4 @@
 import type { MemberActivityStats } from "@/lib/presence/daily-activity-logic";
-import { rowsToCsv } from "@/lib/export/download-csv";
 
 export type HoursReportMeta = {
   memberName: string;
@@ -43,7 +42,7 @@ export function hoursReportFilename(
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-  return `otchet-chasov-${slugifyReportName(memberName)}-${period}-${rangeSlug || "period"}.csv`;
+  return `otchet-chasov-${slugifyReportName(memberName)}-${period}-${rangeSlug || "period"}.doc`;
 }
 
 export function buildHoursReportTable(
@@ -70,44 +69,7 @@ export function buildHoursReportTable(
   }));
 }
 
-export function buildHoursReportCsv(
-  meta: HoursReportMeta,
-  rows: HoursReportRow[],
-  mode: "days" | "months",
-): string {
-  const headers =
-    mode === "months"
-      ? ["Месяц", "Онлайн"]
-      : ["Дата", "Онлайн", "Начало", "Окончание"];
-
-  const csvRows =
-    mode === "months"
-      ? rows.map((row) => [row.label, row.onlineLabel])
-      : rows.map((row) => [
-          row.label,
-          row.onlineLabel,
-          row.startedLabel,
-          row.endedLabel,
-        ]);
-
-  const summary = rowsToCsv(
-    ["Сотрудник", "Email", "Период", "Диапазон", "Всего", "Сформирован"],
-    [
-      [
-        meta.memberName,
-        meta.memberEmail,
-        meta.periodLabel,
-        meta.rangeLabel,
-        meta.totalLabel,
-        meta.generatedAtLabel,
-      ],
-    ],
-  );
-
-  return `${summary}\r\n\r\n${rowsToCsv(headers, csvRows).replace(/^\uFEFF/, "")}`;
-}
-
-export function buildHoursReportHtml(
+function buildHoursReportBodyHtml(
   meta: HoursReportMeta,
   rows: HoursReportRow[],
   mode: "days" | "months",
@@ -124,23 +86,7 @@ export function buildHoursReportHtml(
     )
     .join("");
 
-  return `<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Отчёт об отработанных часах — ${escapeHtml(meta.memberName)}</title>
-  <style>
-    body { font-family: Segoe UI, Arial, sans-serif; margin: 2rem; color: #111; }
-    h1 { font-size: 1.35rem; margin: 0 0 0.5rem; }
-    .meta { margin: 0 0 1.25rem; color: #444; line-height: 1.5; }
-    table { border-collapse: collapse; width: 100%; max-width: 720px; }
-    th, td { border: 1px solid #ccc; padding: 0.5rem 0.65rem; text-align: left; }
-    th { background: #f3f3f3; }
-    tfoot td { font-weight: 600; }
-  </style>
-</head>
-<body>
+  return `
   <h1>Отчёт об отработанных часах</h1>
   <p class="meta">
     Сотрудник: <strong>${escapeHtml(meta.memberName)}</strong><br />
@@ -158,7 +104,69 @@ export function buildHoursReportHtml(
         <td>${escapeHtml(meta.totalLabel)}</td>
       </tr>
     </tfoot>
-  </table>
+  </table>`;
+}
+
+const REPORT_STYLES = `
+  body { font-family: Segoe UI, Arial, sans-serif; margin: 2rem; color: #111; }
+  h1 { font-size: 1.35rem; margin: 0 0 0.5rem; }
+  .meta { margin: 0 0 1.25rem; color: #444; line-height: 1.5; }
+  table { border-collapse: collapse; width: 100%; max-width: 720px; }
+  th, td { border: 1px solid #ccc; padding: 0.5rem 0.65rem; text-align: left; }
+  th { background: #f3f3f3; }
+  tfoot td { font-weight: 600; }
+`;
+
+/** Browser preview (Открыть). */
+export function buildHoursReportHtml(
+  meta: HoursReportMeta,
+  rows: HoursReportRow[],
+  mode: "days" | "months",
+): string {
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Отчёт об отработанных часах — ${escapeHtml(meta.memberName)}</title>
+  <style>${REPORT_STYLES}</style>
+</head>
+<body>
+${buildHoursReportBodyHtml(meta, rows, mode)}
+</body>
+</html>`;
+}
+
+/**
+ * Word-compatible HTML saved as .doc — opens in Microsoft Word / LibreOffice
+ * with the same table layout as the browser preview.
+ */
+export function buildHoursReportWordDoc(
+  meta: HoursReportMeta,
+  rows: HoursReportRow[],
+  mode: "days" | "months",
+): string {
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:w="urn:schemas-microsoft-com:office:word"
+ xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8" />
+  <title>Отчёт об отработанных часах — ${escapeHtml(meta.memberName)}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    ${REPORT_STYLES}
+    table { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  </style>
+</head>
+<body>
+${buildHoursReportBodyHtml(meta, rows, mode)}
 </body>
 </html>`;
 }

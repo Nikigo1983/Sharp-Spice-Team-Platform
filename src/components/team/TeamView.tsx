@@ -21,9 +21,9 @@ import {
 import { parseDateKey } from "@/lib/calendar/range";
 import { canViewTeamMemberActivity } from "@/lib/team/permissions";
 import {
-  buildHoursReportCsv,
   buildHoursReportHtml,
   buildHoursReportTable,
+  buildHoursReportWordDoc,
   downloadTextFile,
   hoursReportFilename,
   openHtmlReport,
@@ -413,9 +413,13 @@ export function TeamView({ user }: TeamViewProps) {
   const downloadHoursReport = () => {
     const built = buildCurrentHoursReport();
     if (!built) return;
-    const csv = buildHoursReportCsv(built.meta, built.rows, built.mode);
-    downloadTextFile(built.filename, csv, "text/csv;charset=utf-8");
-    setToast({ text: "Отчёт скачан." });
+    const doc = buildHoursReportWordDoc(built.meta, built.rows, built.mode);
+    downloadTextFile(
+      built.filename,
+      `\uFEFF${doc}`,
+      "application/msword;charset=utf-8",
+    );
+    setToast({ text: "Отчёт скачан (Word)." });
   };
 
   const openHoursReportFile = () => {
@@ -907,7 +911,7 @@ export function TeamView({ user }: TeamViewProps) {
                       </span>
                     </p>
                     <p className={styles.confirmText}>
-                      Файл можно открыть в браузере или скачать (CSV для Excel).
+                      Файл можно открыть в браузере или скачать в Word (таблица).
                     </p>
                   </>
                 )}

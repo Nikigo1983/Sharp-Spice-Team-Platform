@@ -62,4 +62,15 @@ describe("getBookingEndAlert", () => {
     const alert = getBookingEndAlert("01.06.2026-10.06.2026", { today });
     assert.equal(alert, null);
   });
+
+  it("flags ending within about a month", () => {
+    const today = new Date(2026, 4, 15); // 15 May
+    const soon = getBookingEndAlert("01.06.2026-10.06.2026", { today });
+    assert.ok(soon);
+    assert.equal(soon!.kind, "ending_soon");
+    assert.equal(soon!.daysRemaining, 26);
+
+    const later = getBookingEndAlert("01.07.2026-20.07.2026", { today });
+    assert.equal(later, null);
+  });
 });

@@ -2,7 +2,7 @@
  * Parse «Дата букинга (от и до)» end date and compute renew alerts.
  */
 
-export const BOOKING_END_WARN_DAYS = 7;
+export const BOOKING_END_WARN_DAYS = 30;
 
 export type BookingEndAlertKind = "ending_soon" | "ended";
 

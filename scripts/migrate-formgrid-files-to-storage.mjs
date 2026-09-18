@@ -37,6 +37,14 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 const dryRun = process.argv.includes("--dry-run");
+const nameArg = process.argv.find((a) => a.startsWith("--name="));
+const nameFilter = nameArg
+  ? nameArg
+      .slice("--name=".length)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+  : "";
 const BUCKET = "task-attachments";
 const OBJECT_PREFIX = "client-portal";
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -133,11 +141,26 @@ async function main() {
     from += pageSize;
   }
 
-  const formgridQs = questionnaires.filter((q) =>
-    mapper.isFormgridImport(q.answers || {}),
-  );
+  const formgridQs = questionnaires.filter((q) => {
+    if (!mapper.isFormgridImport(q.answers || {})) return false;
+    if (!nameFilter) return true;
+    const answers =
+      q.answers && typeof q.answers === "object" ? q.answers : {};
+    const fullName = String(
+      answers.full_name_cyrillic ||
+        answers.full_name_latin ||
+        q.first_name ||
+        "",
+    )
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    return fullName.includes(nameFilter);
+  });
   console.log(
-    `Questionnaires: ${questionnaires.length}, formgrid: ${formgridQs.length}`,
+    `Questionnaires: ${questionnaires.length}, formgrid: ${formgridQs.length}${
+      nameFilter ? ` (name filter: ${nameFilter})` : ""
+    }`,
   );
 
   let scannedUrls = 0;

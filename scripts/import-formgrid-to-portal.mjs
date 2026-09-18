@@ -8,7 +8,7 @@
  *
  * Flags:
  *   --dry-run       count only, no writes
- *   --create-only   skip questionnaires that already exist (no updates)
+ *   --name="ФИО"    import only leads whose fullName contains this (case-insensitive)
  */
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -43,6 +43,10 @@ loadEnvLocal();
 
 const dryRun = process.argv.includes("--dry-run");
 const createOnly = process.argv.includes("--create-only");
+const nameArg = process.argv.find((a) => a.startsWith("--name="));
+const nameFilter = nameArg
+  ? nameArg.slice("--name=".length).trim().toLowerCase().replace(/\s+/g, " ")
+  : "";
 
 /** Exact FIO match after normalize (case/space insensitive). */
 const EXCLUDED_FULL_NAMES = ["белоусова вероника николаевна"];
@@ -253,6 +257,7 @@ async function main() {
   const mapper = await loadMapper();
   console.log(dryRun ? "Mode: DRY-RUN" : "Mode: WRITE");
   console.log(createOnly ? "Create-only: yes" : "Create-only: no (upsert)");
+  if (nameFilter) console.log(`Name filter: ${nameFilter}`);
   console.log("Fetching Formgrid sheet CSV…");
 
   const sb = createClient(url, key, {
@@ -285,6 +290,13 @@ async function main() {
   );
 
   for (const lead of leads) {
+    if (
+      nameFilter &&
+      !normalizePersonName(lead.fields.fullName).includes(nameFilter)
+    ) {
+      continue;
+    }
+
     if (isExcludedName(lead.fields.fullName)) {
       skippedExcluded += 1;
       console.log(`skip excluded: ${lead.fields.fullName}`);
@@ -416,6 +428,9 @@ async function main() {
       created += 1;
       createdNames.push(lead.fields.fullName || lead.leadId);
     }
+    console.log(
+      `${existingQ ? "updated" : "created"} ${lead.fields.fullName || lead.leadId} · q=${questionnaireId} · sheetRow=${lead.sheetRow}`,
+    );
   }
 
   console.log(

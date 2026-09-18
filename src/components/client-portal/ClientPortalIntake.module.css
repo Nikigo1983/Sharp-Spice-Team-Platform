@@ -130,6 +130,75 @@
   font-size: 0.82rem;
 }
 
+.bookingAlerts {
+  margin: 0.85rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.bookingAlert {
+  margin: 0;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+
+.bookingAlertSoon {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+}
+
+.bookingAlertEnded {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
+}
+
+.bookingAlertTitle {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.bookingAlertList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.bookingAlertItem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: baseline;
+}
+
+.bookingAlertName {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bookingAlertName:hover {
+  opacity: 0.88;
+}
+
+.bookingAlertMeta {
+  opacity: 0.9;
+  font-size: 0.82rem;
+}
+
 .title {
   margin: 0;
   font-size: 1.4rem;

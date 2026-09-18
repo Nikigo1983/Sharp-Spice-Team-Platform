@@ -10,6 +10,12 @@ import {
   matchesApprovalFilter,
   type ApprovalFilter,
 } from "@/lib/clients/list-filter-utils";
+import {
+  BOOKING_END_WARN_DAYS,
+  formatBookingEndAlertRu,
+  getBookingEndAlert,
+  type BookingEndAlert,
+} from "@/lib/client-portal/booking-end-alert";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
 import {
   EMPTY_STAFF_FIELDS,
@@ -43,6 +49,8 @@ type ListItem = {
 type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
 /** Empty lawyer field vs filled («Передан адвокату»). */
 type LawyerFilter = "" | "assigned";
+/** Booking end proximity from «Дата букинга (от и до)». */
+type BookingFilter = "" | "ending_soon" | "ended";
 
 type ReviewRow = {
   section: string;
@@ -153,6 +161,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [approvalStatus, setApprovalStatus] = useState<ApprovalFilter>("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
+  const [bookingFilter, setBookingFilter] = useState<BookingFilter>("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [caseView, setCaseView] = useState<CaseView>("menu");
@@ -420,6 +429,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
             return false;
           }
+          if (bookingFilter) {
+            const alert = getBookingEndAlert(draft.bookingDate);
+            if (!alert) return false;
+            if (bookingFilter === "ending_soon" && alert.kind !== "ending_soon") {
+              return false;
+            }
+            if (bookingFilter === "ended" && alert.kind !== "ended") {
+              return false;
+            }
+          }
           return true;
         })
         .sort((a, b) =>
@@ -428,7 +447,43 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             numeric: true,
           }),
         ),
-    [items, drafts, query, curator, partner, approvalStatus, clientSource, lawyerFilter],
+    [
+      items,
+      drafts,
+      query,
+      curator,
+      partner,
+      approvalStatus,
+      clientSource,
+      lawyerFilter,
+      bookingFilter,
+    ],
+  );
+
+  const bookingAlerts = useMemo(() => {
+    if (listView === "archive") return [];
+    const rows: Array<{
+      item: ListItem;
+      alert: BookingEndAlert;
+      label: string;
+    }> = [];
+    for (const item of items) {
+      const draft = drafts[item.id] ?? EMPTY_STAFF_FIELDS;
+      const alert = getBookingEndAlert(draft.bookingDate);
+      if (!alert) continue;
+      rows.push({ item, alert, label: clientName(item) });
+    }
+    rows.sort((a, b) => a.alert.daysRemaining - b.alert.daysRemaining);
+    return rows;
+  }, [items, drafts, listView]);
+
+  const bookingAlertsSoon = useMemo(
+    () => bookingAlerts.filter((row) => row.alert.kind === "ending_soon"),
+    [bookingAlerts],
+  );
+  const bookingAlertsEnded = useMemo(
+    () => bookingAlerts.filter((row) => row.alert.kind === "ended"),
+    [bookingAlerts],
   );
 
   const reviewSections = useMemo(() => {
@@ -488,6 +543,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setApprovalStatus("");
     setClientSource("");
     setLawyerFilter("");
+    setBookingFilter("");
   };
 
   const exportFilteredCsv = () => {
@@ -1615,6 +1671,20 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <option value="">Адвокат: все</option>
             <option value="assigned">Передан адвокату</option>
           </select>
+          <select
+            className={styles.select}
+            value={bookingFilter}
+            onChange={(e) =>
+              setBookingFilter(e.target.value as BookingFilter)
+            }
+            aria-label="Букинг"
+          >
+            <option value="">Букинг: все</option>
+            <option value="ending_soon">
+              Заканчивается (≤{BOOKING_END_WARN_DAYS} дн.)
+            </option>
+            <option value="ended">Уже закончился</option>
+          </select>
           <button
             type="button"
             className={styles.filterBtn}
@@ -1635,6 +1705,66 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <p className={styles.filterMeta}>
             Показано: {filteredItems.length} из {items.length}
           </p>
+        ) : null}
+        {!loading && listView === "active" && bookingAlerts.length > 0 ? (
+          <div className={styles.bookingAlerts} role="status">
+            {bookingAlertsSoon.length > 0 ? (
+              <div
+                className={`${styles.bookingAlert} ${styles.bookingAlertSoon}`}
+              >
+                <span className={styles.bookingAlertTitle}>
+                  Скоро заканчивается букинг — продлите бронь
+                </span>
+                <ul className={styles.bookingAlertList}>
+                  {bookingAlertsSoon.map(({ item, alert, label }) => (
+                    <li key={item.id} className={styles.bookingAlertItem}>
+                      <button
+                        type="button"
+                        className={styles.bookingAlertName}
+                        onClick={() => void openCase(item)}
+                      >
+                        {label}
+                      </button>
+                      <span className={styles.bookingAlertMeta}>
+                        {formatBookingEndAlertRu(alert)}
+                        {drafts[item.id]?.bookingDate
+                          ? ` · ${drafts[item.id]!.bookingDate}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {bookingAlertsEnded.length > 0 ? (
+              <div
+                className={`${styles.bookingAlert} ${styles.bookingAlertEnded}`}
+              >
+                <span className={styles.bookingAlertTitle}>
+                  Букинг уже закончился — нужна новая бронь
+                </span>
+                <ul className={styles.bookingAlertList}>
+                  {bookingAlertsEnded.map(({ item, alert, label }) => (
+                    <li key={item.id} className={styles.bookingAlertItem}>
+                      <button
+                        type="button"
+                        className={styles.bookingAlertName}
+                        onClick={() => void openCase(item)}
+                      >
+                        {label}
+                      </button>
+                      <span className={styles.bookingAlertMeta}>
+                        {formatBookingEndAlertRu(alert)}
+                        {drafts[item.id]?.bookingDate
+                          ? ` · ${drafts[item.id]!.bookingDate}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

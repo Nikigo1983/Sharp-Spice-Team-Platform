@@ -35,18 +35,32 @@ import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
 function staffFieldsForList(
   answers: Record<string, unknown>,
 ): QuestionnaireStaffFields {
-  const staff = readStaffFields(answers);
-  if (staff.lawyer.trim()) return staff;
+  const staff = { ...readStaffFields(answers) };
+  const crm = readFormgridCrmOpsSheet(answers);
+  const legacySheet =
+    answers.__legacySheet &&
+    typeof answers.__legacySheet === "object" &&
+    !Array.isArray(answers.__legacySheet)
+      ? (answers.__legacySheet as Record<string, unknown>)
+      : null;
 
-  const fromCrm = readFormgridCrmOpsSheet(answers)["Адвокат"]?.trim() || "";
-  if (fromCrm) return { ...staff, lawyer: fromCrm };
+  const fromSheet = (label: string): string => {
+    const crmVal = crm[label as keyof typeof crm];
+    if (typeof crmVal === "string" && crmVal.trim()) return crmVal.trim();
+    if (legacySheet) {
+      const v = String(legacySheet[label] ?? "").trim();
+      if (v) return v;
+    }
+    return "";
+  };
 
-  const legacySheet = answers.__legacySheet;
-  if (legacySheet && typeof legacySheet === "object" && !Array.isArray(legacySheet)) {
-    const fromLegacy = String(
-      (legacySheet as Record<string, unknown>)["Адвокат"] ?? "",
-    ).trim();
-    if (fromLegacy) return { ...staff, lawyer: fromLegacy };
+  if (!staff.lawyer.trim()) {
+    const lawyer = fromSheet("Адвокат");
+    if (lawyer) staff.lawyer = lawyer;
+  }
+  if (!staff.bookingDate.trim()) {
+    const booking = fromSheet("Дата букинга (от и до)");
+    if (booking) staff.bookingDate = booking;
   }
 
   return staff;

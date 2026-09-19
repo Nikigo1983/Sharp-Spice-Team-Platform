@@ -43,8 +43,8 @@ type ListItem = {
 };
 
 type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
-/** Empty lawyer field vs filled («Передан адвокату»). */
-type LawyerFilter = "" | "assigned";
+/** Empty lawyer field vs filled («Передан адвокату» / «Остальные»). */
+type LawyerFilter = "" | "assigned" | "unassigned";
 
 const SUBMITTED_MONTH_YEAR = 2026;
 const SUBMITTED_MONTH_OPTIONS = [
@@ -433,6 +433,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             if (source !== clientSource) return false;
           }
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
+            return false;
+          }
+          if (lawyerFilter === "unassigned" && draft.lawyer.trim()) {
             return false;
           }
           if (!matchesSubmittedMonth(item.submittedAt, submittedMonth)) {
@@ -1655,6 +1658,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           >
             <option value="">Адвокат: все</option>
             <option value="assigned">Передан адвокату</option>
+            <option value="unassigned">Остальные</option>
           </select>
           {!loading &&
           listView === "active" &&

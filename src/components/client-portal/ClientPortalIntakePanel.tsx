@@ -23,6 +23,7 @@ import {
   STAFF_CASE_DOCUMENT_HINT,
   STAFF_CASE_DOCUMENT_TYPES_LABEL,
 } from "@/lib/client-portal/questionnaire-attachment-formats";
+import { findQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -195,6 +196,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [savingNote, setSavingNote] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [ensuringWord, setEnsuringWord] = useState(false);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
@@ -952,6 +954,34 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
+  async function ensureQuestionnaireWord() {
+    if (!selectedId) return;
+    setEnsuringWord(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases/questionnaire-word", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionnaireId: selectedId }),
+      });
+      const data = (await res.json()) as {
+        documents?: StaffDocument[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError("Не удалось сформировать анкету в Word.");
+        return;
+      }
+      setDocuments(data.documents ?? []);
+      setStatus("Анкета в Word готова");
+    } catch {
+      setError("Не удалось сформировать анкету в Word.");
+    } finally {
+      setEnsuringWord(false);
+    }
+  }
+
   if (selectedId) {
     const backToMenu = (
       <button
@@ -1363,6 +1393,49 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               />
               {uploadingDoc ? "Загрузка…" : "Добавить документы"}
             </label>
+            {(() => {
+              const wordDoc = findQuestionnaireWordDocument(documents);
+              return (
+                <div className={styles.questionnaireWordBlock}>
+                  <h3 className={styles.questionnaireWordTitle}>
+                    Анкета клиента в Word
+                  </h3>
+                  <p className={styles.questionnaireWordHint}>
+                    Заполненная анкета в виде таблицы — можно открыть или
+                    скачать.
+                  </p>
+                  {wordDoc ? (
+                    <div className={styles.fileActions}>
+                      <a
+                        className={styles.fileBtn}
+                        href={caseFileUrl(wordDoc.id, selectedId, "open")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Открыть
+                      </a>
+                      <a
+                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                        href={caseFileUrl(wordDoc.id, selectedId, "download")}
+                      >
+                        Скачать
+                      </a>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.primaryAction}
+                      disabled={ensuringWord}
+                      onClick={() => void ensureQuestionnaireWord()}
+                    >
+                      {ensuringWord
+                        ? "Формирование…"
+                        : "Сформировать Word"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </section>
         ) : null}
 

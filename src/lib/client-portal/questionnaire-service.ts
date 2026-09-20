@@ -35,6 +35,13 @@ import {
   saveQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
 import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT } from "./questionnaire-attachment-formats";
+import {
+  buildQuestionnaireWordDoc,
+  findQuestionnaireWordDocument,
+  questionnaireWordFilename,
+  QUESTIONNAIRE_WORD_UPLOADER_ID,
+  QUESTIONNAIRE_WORD_UPLOADER_NAME,
+} from "./questionnaire-word-export";
 import { writeStaffFields, type QuestionnaireStaffFields } from "./staff-fields";
 import {
   buildLegacyReviewRows,
@@ -300,7 +307,13 @@ export async function submitQuestionnaire(
   } catch (error) {
     console.error("[questionnaire] notifyNewClient failed", error);
   }
-  return next;
+  try {
+    const withWord = await ensureQuestionnaireWordDocument(next.id);
+    return withWord.record;
+  } catch (error) {
+    console.error("[questionnaire] Word export on submit failed", error);
+    return next;
+  }
 }
 
 /**
@@ -636,6 +649,58 @@ export async function addStaffCaseDocument(
     revision: current.revision + 1,
   });
   return { record, document };
+}
+
+/** Create Word copy of the filled questionnaire in «Документы по клиенту» if missing. */
+export async function ensureQuestionnaireWordDocument(
+  id: string,
+): Promise<{
+  record: QuestionnaireRecord;
+  document: StaffCaseDocument;
+  created: boolean;
+}> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+
+  const existing = findQuestionnaireWordDocument(
+    readStaffDocuments(current.answers),
+  );
+  if (existing) {
+    return { record: current, document: existing, created: false };
+  }
+
+  const clientName =
+    String(current.answers.full_name_cyrillic ?? "").trim() ||
+    String(current.answers.full_name_latin ?? "").trim() ||
+    current.firstName ||
+    current.email;
+  const submittedAtLabel = current.submittedAt
+    ? new Date(current.submittedAt).toLocaleString("ru-RU")
+    : "—";
+  const rows = buildReviewRows(current.answers, "ru").map((row) => ({
+    section: row.section,
+    label: row.label,
+    value: row.value,
+  }));
+  const html = buildQuestionnaireWordDoc({
+    clientName,
+    email: current.email,
+    submittedAtLabel,
+    rows,
+  });
+  const fileName = questionnaireWordFilename(clientName, current.submittedAt);
+  const result = await addStaffCaseDocument(id, {
+    fileName,
+    contentType: "application/msword",
+    data: Buffer.from(`\uFEFF${html}`, "utf8"),
+    uploadedByUserId: QUESTIONNAIRE_WORD_UPLOADER_ID,
+    uploadedByName: QUESTIONNAIRE_WORD_UPLOADER_NAME,
+  });
+  return {
+    record: result.record,
+    document: result.document,
+    created: true,
+  };
 }
 
 export async function deleteStaffCaseDocument(

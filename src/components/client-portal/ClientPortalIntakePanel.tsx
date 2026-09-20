@@ -197,6 +197,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [ensuringWord, setEnsuringWord] = useState(false);
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renamingSaving, setRenamingSaving] = useState(false);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
@@ -982,6 +985,60 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
+  function startRenameDocument(doc: StaffDocument) {
+    setRenamingDocId(doc.id);
+    setRenameDraft(doc.fileName);
+    setError(null);
+    setStatus(null);
+  }
+
+  function cancelRenameDocument() {
+    setRenamingDocId(null);
+    setRenameDraft("");
+  }
+
+  async function saveRenameDocument() {
+    if (!selectedId || !renamingDocId) return;
+    const nextName = renameDraft.trim();
+    if (!nextName) {
+      setError("Введите название файла.");
+      return;
+    }
+    setRenamingSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/client-cases/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId: selectedId,
+          documentId: renamingDocId,
+          fileName: nextName,
+        }),
+      });
+      const data = (await res.json()) as {
+        documents?: StaffDocument[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(
+          data.error === "INVALID_NAME"
+            ? "Некорректное название файла."
+            : "Не удалось переименовать документ.",
+        );
+        return;
+      }
+      setDocuments(data.documents ?? []);
+      setRenamingDocId(null);
+      setRenameDraft("");
+      setStatus("Документ переименован");
+    } catch {
+      setError("Не удалось переименовать документ.");
+    } finally {
+      setRenamingSaving(false);
+    }
+  }
+
   if (selectedId) {
     const backToMenu = (
       <button
@@ -1345,35 +1402,85 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 {documents.map((doc) => (
                   <li key={doc.id} className={styles.docItem}>
                     <div className={styles.docMeta}>
-                      <span className={styles.fileName}>{doc.fileName}</span>
+                      {renamingDocId === doc.id ? (
+                        <div className={styles.renameRow}>
+                          <input
+                            className={styles.renameInput}
+                            value={renameDraft}
+                            onChange={(event) =>
+                              setRenameDraft(event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void saveRenameDocument();
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                cancelRenameDocument();
+                              }
+                            }}
+                            disabled={renamingSaving}
+                            aria-label="Новое название файла"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className={styles.fileBtn}
+                            disabled={renamingSaving}
+                            onClick={() => void saveRenameDocument()}
+                          >
+                            {renamingSaving ? "…" : "Сохранить"}
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            disabled={renamingSaving}
+                            onClick={cancelRenameDocument}
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={styles.fileName}>{doc.fileName}</span>
+                      )}
                       <span className={styles.docSub}>
                         {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
                         {formatSubmittedAt(doc.createdAt)}
                       </span>
-                      <div className={styles.fileActions}>
-                        <a
-                          className={styles.fileBtn}
-                          href={caseFileUrl(doc.id, selectedId, "open")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Открыть
-                        </a>
-                        <a
-                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                          href={caseFileUrl(doc.id, selectedId, "download")}
-                        >
-                          Скачать
-                        </a>
-                        <button
-                          type="button"
-                          className={styles.docDelete}
-                          disabled={deletingDocId === doc.id}
-                          onClick={() => void removeDocument(doc.id)}
-                        >
-                          {deletingDocId === doc.id ? "…" : "Удалить"}
-                        </button>
-                      </div>
+                      {renamingDocId === doc.id ? null : (
+                        <div className={styles.fileActions}>
+                          <a
+                            className={styles.fileBtn}
+                            href={caseFileUrl(doc.id, selectedId, "open")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Открыть
+                          </a>
+                          <a
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            href={caseFileUrl(doc.id, selectedId, "download")}
+                          >
+                            Скачать
+                          </a>
+                          <button
+                            type="button"
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            onClick={() => startRenameDocument(doc)}
+                          >
+                            Переименовать
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.docDelete}
+                            disabled={deletingDocId === doc.id}
+                            onClick={() => void removeDocument(doc.id)}
+                          >
+                            {deletingDocId === doc.id ? "…" : "Удалить"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}

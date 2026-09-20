@@ -5,6 +5,7 @@ import {
   addStaffCaseDocument,
   deleteStaffCaseDocument,
   readStaffDocuments,
+  renameStaffCaseDocument,
 } from "@/lib/client-portal/questionnaire-service";
 
 export const runtime = "nodejs";
@@ -100,6 +101,52 @@ export async function DELETE(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "DELETE_FAILED";
     const status = message === "NOT_FOUND" ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  let body: {
+    questionnaireId?: string;
+    documentId?: string;
+    fileName?: string;
+  };
+  try {
+    body = (await request.json()) as {
+      questionnaireId?: string;
+      documentId?: string;
+      fileName?: string;
+    };
+  } catch {
+    return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  const questionnaireId = body.questionnaireId?.trim();
+  const documentId = body.documentId?.trim();
+  const fileName = body.fileName?.trim();
+  if (!questionnaireId || !documentId || !fileName) {
+    return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  try {
+    const { record, document } = await renameStaffCaseDocument(
+      questionnaireId,
+      documentId,
+      fileName,
+    );
+    return NextResponse.json({
+      document,
+      documents: readStaffDocuments(record.answers),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "RENAME_FAILED";
+    const status =
+      message === "NOT_FOUND" ? 404 : message === "INVALID_NAME" ? 400 : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

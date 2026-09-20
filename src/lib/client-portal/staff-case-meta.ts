@@ -113,6 +113,20 @@ export function removeStaffDocument(
   };
 }
 
+export function renameStaffDocument(
+  answers: Record<string, unknown>,
+  documentId: string,
+  fileName: string,
+): Record<string, unknown> {
+  const nextName = fileName.trim().slice(0, 255);
+  return {
+    ...answers,
+    [DOCS_KEY]: readStaffDocuments(answers).map((item) =>
+      item.id === documentId ? { ...item, fileName: nextName } : item,
+    ),
+  };
+}
+
 export function findStaffDocument(
   answers: Record<string, unknown> | null | undefined,
   documentId: string,

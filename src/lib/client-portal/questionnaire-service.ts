@@ -34,7 +34,7 @@ import {
   deleteQuestionnaireAttachmentFile,
   saveQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
-import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT } from "./questionnaire-attachment-formats";
+import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT, renameFileNamePreservingExt } from "./questionnaire-attachment-formats";
 import {
   buildQuestionnaireWordDoc,
   findQuestionnaireWordDocument,
@@ -72,6 +72,7 @@ import {
   readStaffDocuments,
   readStaffNotes,
   removeStaffDocument,
+  renameStaffDocument,
   staffDocumentsOwnerKey,
   type StaffCaseDocument,
   type StaffCaseNote,
@@ -724,6 +725,34 @@ export async function deleteStaffCaseDocument(
     updatedAt: now,
     revision: current.revision + 1,
   });
+}
+
+export async function renameStaffCaseDocument(
+  id: string,
+  documentId: string,
+  nextFileName: string,
+): Promise<{ record: QuestionnaireRecord; document: StaffCaseDocument }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const existing = findStaffDocument(current.answers, documentId);
+  if (!existing) throw new Error("NOT_FOUND");
+
+  const fileName = renameFileNamePreservingExt(existing.fileName, nextFileName);
+  if (!fileName) throw new Error("INVALID_NAME");
+  if (fileName === existing.fileName) {
+    return { record: current, document: existing };
+  }
+
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: renameStaffDocument(current.answers, documentId, fileName),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  const document = findStaffDocument(record.answers, documentId);
+  if (!document) throw new Error("NOT_FOUND");
+  return { record, document };
 }
 
 export async function updateSubmittedProcessStatus(

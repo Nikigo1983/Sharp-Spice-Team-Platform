@@ -33,6 +33,34 @@ export function extFromFileName(fileName: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
+/**
+ * Rename display name while keeping the original extension (storage path uses it).
+ */
+export function renameFileNamePreservingExt(
+  currentFileName: string,
+  nextFileName: string,
+): string | null {
+  const cleaned = nextFileName
+    .trim()
+    .replace(/[/\\]/g, "")
+    .replace(/[\u0000-\u001f]/g, "")
+    .slice(0, 200);
+  if (!cleaned) return null;
+
+  const oldExt = extFromFileName(currentFileName);
+  let base = cleaned;
+  const newExt = extFromFileName(base);
+  if (oldExt) {
+    if (!newExt) {
+      base = `${base}.${oldExt}`;
+    } else if (newExt !== oldExt) {
+      base = `${base.slice(0, base.lastIndexOf("."))}.${oldExt}`;
+    }
+  }
+  const result = base.slice(0, 255).trim();
+  return result || null;
+}
+
 export function contentTypeFromExt(ext: string): string {
   return EXT_TO_MIME[ext.toLowerCase()] ?? "application/octet-stream";
 }

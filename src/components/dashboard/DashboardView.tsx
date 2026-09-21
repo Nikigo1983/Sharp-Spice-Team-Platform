@@ -127,6 +127,10 @@ export function DashboardView({
         </div>
       </section>
 
+      <section className={styles.section} aria-label="Сейчас в сети">
+        <TeamOnlineBar variant="prominent" />
+      </section>
+
       <section className={styles.section} aria-labelledby="tasks-heading">
         <div className={styles.sectionHeadingRow}>
           <h2 id="tasks-heading" className={styles.sectionTitle}>
@@ -193,8 +197,6 @@ export function DashboardView({
           </Link>
         </div>
 
-        <TeamOnlineBar variant="prominent" />
-        <h3 className={styles.subsectionTitle}>Последние сообщения</h3>
         <DashboardTeamMessages messages={teamRecentMessages} />
       </section>
 

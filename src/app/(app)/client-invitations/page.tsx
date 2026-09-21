@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { AppShell } from "@/components/layout/AppShell";
 import {
   ClientInvitationsPanel,
   type InvitationRow,
@@ -32,5 +33,9 @@ export default async function ClientInvitationsPage() {
     inviteUrl: buildInviteUrl(item.token, origin),
   }));
 
-  return <ClientInvitationsPanel initialInvitations={rows} />;
+  return (
+    <AppShell sectionTitle="Приглашения">
+      <ClientInvitationsPanel initialInvitations={rows} />
+    </AppShell>
+  );
 }

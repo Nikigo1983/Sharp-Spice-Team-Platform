@@ -1,52 +1,48 @@
-import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
-import { ROLE_LABELS } from "@/lib/auth/types";
-import { getSession } from "@/lib/auth/session";
-import { AppShellNotifications } from "./AppShellNotifications";
-import { Sidebar } from "./Sidebar";
-import { Topbar, type TopbarProps } from "./Topbar";
-import styles from "./AppShell.module.css";
+"use client";
 
-export type AppShellProps = Omit<TopbarProps, "userName" | "userRole"> & {
+import { useLayoutEffect, type ReactNode } from "react";
+import {
+  useStaffChromeSetter,
+  type StaffChromeOptions,
+} from "./StaffAppChrome";
+
+export type AppShellProps = StaffChromeOptions & {
   children: ReactNode;
-  contentClassName?: string;
+  /** @deprecated Search change callbacks are unused; kept for API compatibility. */
+  onSearchChange?: (value: string) => void;
 };
 
-export async function AppShell({
+/**
+ * Registers page chrome options (title, content class) into the persistent StaffAppChrome.
+ * Does not render a second sidebar — layout owns the shell.
+ */
+export function AppShell({
   children,
   sectionTitle,
+  contentClassName,
   searchPlaceholder,
   defaultSearchValue,
-  onSearchChange,
-  contentClassName,
 }: AppShellProps) {
-  const session = await getSession();
-  if (!session) {
-    redirect("/login");
-  }
+  const chrome = useStaffChromeSetter();
 
-  return (
-    <div className={styles.shell}>
-      <Sidebar role={session.role} />
-      <AppShellNotifications>
-        <div className={styles.main}>
-          <Topbar
-            sectionTitle={sectionTitle}
-            userName={session?.name ?? "Пользователь"}
-            userRole={session ? ROLE_LABELS[session.role] : ""}
-            searchPlaceholder={searchPlaceholder}
-            defaultSearchValue={defaultSearchValue}
-            onSearchChange={onSearchChange}
-          />
-          <main
-            className={[styles.content, contentClassName]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {children}
-          </main>
-        </div>
-      </AppShellNotifications>
-    </div>
-  );
+  useLayoutEffect(() => {
+    if (!chrome) return;
+    chrome.setOptions({
+      sectionTitle,
+      contentClassName,
+      searchPlaceholder,
+      defaultSearchValue,
+    });
+    return () => {
+      chrome.setOptions({});
+    };
+  }, [
+    chrome,
+    sectionTitle,
+    contentClassName,
+    searchPlaceholder,
+    defaultSearchValue,
+  ]);
+
+  return <>{children}</>;
 }

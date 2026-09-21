@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AppShell } from "@/components/layout/AppShell";
 import { ClientPortalIntakePanel } from "@/components/client-portal/ClientPortalIntakePanel";
 import { getSession } from "@/lib/auth/session";
 
@@ -13,5 +14,9 @@ export default async function ClientPortalIntakePage({ searchParams }: PageProps
   }
 
   const { id } = await searchParams;
-  return <ClientPortalIntakePanel initialCaseId={id ?? null} />;
+  return (
+    <AppShell sectionTitle="Клиенты">
+      <ClientPortalIntakePanel initialCaseId={id ?? null} />
+    </AppShell>
+  );
 }

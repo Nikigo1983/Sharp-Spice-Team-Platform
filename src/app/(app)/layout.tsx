@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PresenceProvider } from "@/components/providers/PresenceProvider";
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import { StaffAppChrome } from "@/components/layout/StaffAppChrome";
 import { getSession } from "@/lib/auth/session";
 
 export default async function AppLayout({
@@ -15,7 +16,9 @@ export default async function AppLayout({
 
   return (
     <SessionProvider user={session}>
-      <PresenceProvider>{children}</PresenceProvider>
+      <PresenceProvider>
+        <StaffAppChrome user={session}>{children}</StaffAppChrome>
+      </PresenceProvider>
     </SessionProvider>
   );
 }

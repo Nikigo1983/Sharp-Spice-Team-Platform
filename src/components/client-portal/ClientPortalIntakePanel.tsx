@@ -1571,27 +1571,84 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       установленная программа).
                     </p>
                     {wordDoc ? (
-                      <div className={styles.fileActions}>
-                        <button
-                          type="button"
-                          className={styles.fileBtn}
-                          disabled={openingWordId === wordDoc.id}
-                          onClick={() => void openDocumentInWord(wordDoc.id)}
-                        >
-                          {openingWordId === wordDoc.id
-                            ? "…"
-                            : "Открыть в Word"}
-                        </button>
-                        <a
-                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                          href={caseFileUrl(
-                            wordDoc.id,
-                            selectedId,
-                            "download",
-                          )}
-                        >
-                          Скачать
-                        </a>
+                      <div className={styles.docMeta}>
+                        {renamingDocId === wordDoc.id ? (
+                          <div className={styles.renameRow}>
+                            <input
+                              className={styles.renameInput}
+                              value={renameDraft}
+                              onChange={(event) =>
+                                setRenameDraft(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void saveRenameDocument();
+                                }
+                                if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  cancelRenameDocument();
+                                }
+                              }}
+                              disabled={renamingSaving}
+                              aria-label="Новое название файла анкеты"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              className={styles.fileBtn}
+                              disabled={renamingSaving}
+                              onClick={() => void saveRenameDocument()}
+                            >
+                              {renamingSaving ? "…" : "Сохранить"}
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                              disabled={renamingSaving}
+                              onClick={cancelRenameDocument}
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={styles.fileName}>
+                            {wordDoc.fileName}
+                          </span>
+                        )}
+                        {renamingDocId === wordDoc.id ? null : (
+                          <div className={styles.fileActions}>
+                            <button
+                              type="button"
+                              className={styles.fileBtn}
+                              disabled={openingWordId === wordDoc.id}
+                              onClick={() =>
+                                void openDocumentInWord(wordDoc.id)
+                              }
+                            >
+                              {openingWordId === wordDoc.id
+                                ? "…"
+                                : "Открыть в Word"}
+                            </button>
+                            <a
+                              className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                              href={caseFileUrl(
+                                wordDoc.id,
+                                selectedId,
+                                "download",
+                              )}
+                            >
+                              Скачать
+                            </a>
+                            <button
+                              type="button"
+                              className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                              onClick={() => startRenameDocument(wordDoc)}
+                            >
+                              Переименовать
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <button

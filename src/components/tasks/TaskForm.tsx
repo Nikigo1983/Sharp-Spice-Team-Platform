@@ -2,10 +2,21 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { CalendarDateSelect } from "@/components/calendar/CalendarDateSelect";
+import { buildDateKey } from "@/lib/calendar/datetime-input";
 import type { Task, TaskStatus } from "@/lib/tasks/types";
 import { TASK_STATUS_OPTIONS } from "@/lib/tasks/format";
 import { TaskAttachmentPicker } from "./TaskAttachments";
 import styles from "./TaskForm.module.css";
+
+function todayDateKey() {
+  const now = new Date();
+  return buildDateKey({
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    day: now.getDate(),
+  });
+}
 
 export type TaskFormValues = {
   title: string;
@@ -95,15 +106,58 @@ export function TaskForm({
         />
       </label>
 
-      <label className={styles.field}>
+      <div className={styles.field}>
         <span className={styles.label}>Срок выполнения</span>
-        <input
-          type="date"
-          className={styles.input}
-          value={values.dueDate}
-          onChange={(e) => setValues({ ...values, dueDate: e.target.value })}
-        />
-      </label>
+        {values.dueDate ? (
+          <div className={styles.dueDateBox}>
+            <CalendarDateSelect
+              value={values.dueDate}
+              onChange={(dueDate) => setValues({ ...values, dueDate })}
+            />
+            <div className={styles.dueDateActions}>
+              <button
+                type="button"
+                className={styles.clearDueDate}
+                onClick={() => setValues({ ...values, dueDate: "" })}
+              >
+                Убрать срок
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={styles.dueDateTrigger}
+            onClick={() => setValues({ ...values, dueDate: todayDateKey() })}
+          >
+            <span>Выбрать дату</span>
+            <svg
+              className={styles.dueDateTriggerIcon}
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden
+            >
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="1.75"
+              />
+              <path
+                d="M8 3v4M16 3v4M3 10h18"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <TaskAttachmentPicker
         files={pendingFiles}
@@ -117,27 +171,29 @@ export function TaskForm({
           Можно выбрать одного или нескольких. Назначенные смогут менять статус
           задачи.
         </p>
-        <div className={styles.assigneeList}>
-          {teamMembers.map((member) => {
-            const checked = values.assigneeIds.includes(member.id);
-            return (
-              <label key={member.id} className={styles.assigneeItem}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) => {
-                    setValues((prev) => ({
-                      ...prev,
-                      assigneeIds: e.target.checked
-                        ? [...prev.assigneeIds, member.id]
-                        : prev.assigneeIds.filter((id) => id !== member.id),
-                    }));
-                  }}
-                />
-                <span>{member.name}</span>
-              </label>
-            );
-          })}
+        <div className={styles.assigneeBox}>
+          <div className={styles.assigneeList}>
+            {teamMembers.map((member) => {
+              const checked = values.assigneeIds.includes(member.id);
+              return (
+                <label key={member.id} className={styles.assigneeItem}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setValues((prev) => ({
+                        ...prev,
+                        assigneeIds: e.target.checked
+                          ? [...prev.assigneeIds, member.id]
+                          : prev.assigneeIds.filter((id) => id !== member.id),
+                      }));
+                    }}
+                  />
+                  <span>{member.name}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       </fieldset>
 

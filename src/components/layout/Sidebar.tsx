@@ -15,6 +15,7 @@ import {
   type NavBadgesMap,
 } from "@/lib/nav-badges/types";
 import styles from "./Sidebar.module.css";
+import { useMobileNav } from "./StaffAppChrome";
 
 export type NavItem = {
   href: string;
@@ -66,6 +67,7 @@ function formatBadgeCount(count: number): string {
 
 export function Sidebar({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const mobileNav = useMobileNav();
   const navItems = getNavItemsForRole(role);
   const [badges, setBadges] = useState<NavBadgesMap>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -209,6 +211,7 @@ export function Sidebar({ role }: { role: UserRole }) {
         href={item.href}
         className={className}
         aria-current={active ? "page" : undefined}
+        onClick={() => mobileNav?.closeMobileNav()}
       >
         {content}
       </Link>
@@ -216,13 +219,34 @@ export function Sidebar({ role }: { role: UserRole }) {
   }
 
   return (
-    <aside className={styles.sidebar}>
-      <Logo
-        href="/dashboard"
-        size="sidebar"
-        priority
-        className={styles.brand}
-      />
+    <aside
+      id="staff-mobile-nav"
+      className={[
+        styles.sidebar,
+        mobileNav?.mobileNavOpen ? styles.sidebarOpen : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-modal={mobileNav?.mobileNavOpen ? true : undefined}
+      role={mobileNav?.mobileNavOpen ? "dialog" : undefined}
+    >
+      <div className={styles.brandRow}>
+        <Logo
+          href="/dashboard"
+          size="sidebar"
+          priority
+          className={styles.brand}
+          onClick={() => mobileNav?.closeMobileNav()}
+        />
+        <button
+          type="button"
+          className={styles.mobileClose}
+          onClick={() => mobileNav?.closeMobileNav()}
+          aria-label="Закрыть меню"
+        >
+          <i className="fa-solid fa-xmark" aria-hidden />
+        </button>
+      </div>
 
       <nav className={styles.nav} aria-label="Основная навигация">
         <ul className={styles.navList}>
@@ -255,6 +279,7 @@ export function Sidebar({ role }: { role: UserRole }) {
                         aria-current={
                           pathname === entry.href ? "page" : undefined
                         }
+                        onClick={() => mobileNav?.closeMobileNav()}
                       >
                         <i
                           className={[entry.icon, styles.icon].join(" ")}

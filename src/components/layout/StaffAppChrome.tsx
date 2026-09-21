@@ -2,7 +2,9 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -23,6 +25,10 @@ export type StaffChromeOptions = {
 
 type StaffChromeContextValue = {
   setOptions: (next: StaffChromeOptions) => void;
+  mobileNavOpen: boolean;
+  openMobileNav: () => void;
+  closeMobileNav: () => void;
+  toggleMobileNav: () => void;
 };
 
 const StaffChromeContext = createContext<StaffChromeContextValue | null>(null);
@@ -54,6 +60,20 @@ export function useStaffChromeSetter(): StaffChromeContextValue | null {
   return useContext(StaffChromeContext);
 }
 
+export function useMobileNav(): Pick<
+  StaffChromeContextValue,
+  "mobileNavOpen" | "openMobileNav" | "closeMobileNav" | "toggleMobileNav"
+> | null {
+  const ctx = useContext(StaffChromeContext);
+  if (!ctx) return null;
+  return {
+    mobileNavOpen: ctx.mobileNavOpen,
+    openMobileNav: ctx.openMobileNav,
+    closeMobileNav: ctx.closeMobileNav,
+    toggleMobileNav: ctx.toggleMobileNav,
+  };
+}
+
 type StaffAppChromeProps = {
   user: SessionUser;
   children: ReactNode;
@@ -63,15 +83,49 @@ type StaffAppChromeProps = {
 export function StaffAppChrome({ user, children }: StaffAppChromeProps) {
   const pathname = usePathname() || "/";
   const [options, setOptions] = useState<StaffChromeOptions>({});
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isVideoMeet = pathname.startsWith("/calendar/meet");
+
+  const openMobileNav = useCallback(() => setMobileNavOpen(true), []);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const toggleMobileNav = useCallback(
+    () => setMobileNavOpen((prev) => !prev),
+    [],
+  );
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   const contextValue = useMemo(
     () => ({
       setOptions: (next: StaffChromeOptions) => {
         setOptions(next);
       },
+      mobileNavOpen,
+      openMobileNav,
+      closeMobileNav,
+      toggleMobileNav,
     }),
-    [],
+    [mobileNavOpen, openMobileNav, closeMobileNav, toggleMobileNav],
   );
 
   if (isVideoMeet) {

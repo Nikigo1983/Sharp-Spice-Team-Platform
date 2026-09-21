@@ -22,6 +22,7 @@ export type LogoProps = {
   priority?: boolean;
   className?: string;
   size?: LogoSize;
+  onClick?: () => void;
 };
 
 export function LogoMark({
@@ -72,6 +73,7 @@ export function Logo({
   priority = false,
   className,
   size = "md",
+  onClick,
 }: LogoProps) {
   const mark = <LogoMark priority={priority} size={size} />;
 
@@ -95,7 +97,7 @@ export function Logo({
 
   if (href) {
     return (
-      <Link href={href} className={rootClass}>
+      <Link href={href} className={rootClass} onClick={onClick}>
         {content}
       </Link>
     );

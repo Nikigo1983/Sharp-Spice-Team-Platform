@@ -137,6 +137,33 @@
   background: var(--hero-glow);
 }
 
+.menuBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--white);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.menuBtn:hover {
+  border-color: var(--border-burgundy);
+  background: var(--hero-glow);
+}
+
+.menuBtn i {
+  font-size: 1.05rem;
+}
+
 .avatar {
   display: flex;
   align-items: center;
@@ -171,7 +198,22 @@
 }
 
 @media (max-width: 900px) {
+  .topbar {
+    gap: 0.65rem;
+    min-height: 64px;
+    padding: 0 0.85rem;
+  }
+
   .backLabel {
+    display: none;
+  }
+
+  .sectionTitle {
+    max-width: min(160px, 36vw);
+    font-size: 1.05rem;
+  }
+
+  .searchWrap {
     display: none;
   }
 
@@ -181,5 +223,13 @@
 
   .logoutLabel {
     display: none;
+  }
+
+  .avatar {
+    display: none;
+  }
+
+  .menuBtn {
+    display: inline-flex;
   }
 }

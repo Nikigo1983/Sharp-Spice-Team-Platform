@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { signOutAction } from "@/app/login/actions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useMobileNav } from "./StaffAppChrome";
 import styles from "./Topbar.module.css";
 
 export type TopbarClientProps = {
@@ -24,6 +25,7 @@ export function TopbarClient({
 }: TopbarClientProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const mobileNav = useMobileNav();
 
   function handleBack() {
     if (typeof window === "undefined") return;
@@ -86,6 +88,23 @@ export function TopbarClient({
             <span className={styles.logoutLabel}>Выйти</span>
           </button>
         </form>
+        <button
+          type="button"
+          className={styles.menuBtn}
+          onClick={() => mobileNav?.toggleMobileNav()}
+          aria-label={
+            mobileNav?.mobileNavOpen
+              ? "Закрыть меню навигации"
+              : "Открыть меню навигации"
+          }
+          aria-expanded={mobileNav?.mobileNavOpen ?? false}
+          aria-controls="staff-mobile-nav"
+        >
+          <i
+            className={`fa-solid ${mobileNav?.mobileNavOpen ? "fa-xmark" : "fa-bars"}`}
+            aria-hidden
+          />
+        </button>
       </div>
     </header>
   );

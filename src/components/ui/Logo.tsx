@@ -40,7 +40,13 @@ export function LogoMark({
   return (
     <span
       className={[styles.frame, styles[size], className].filter(Boolean).join(" ")}
-      style={{ width: dims.width, height: dims.height }}
+      style={{
+        width: "100%",
+        maxWidth: dims.width,
+        height: "auto",
+        maxHeight: dims.height,
+        aspectRatio: `${dims.width} / ${dims.height}`,
+      }}
       aria-hidden={false}
     >
       {isSvg ? (

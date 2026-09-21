@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  box-sizing: border-box;
   width: 260px;
   min-width: 260px;
   height: 100vh;
@@ -201,12 +202,19 @@
     position: fixed;
     inset: 0;
     z-index: 300;
+    box-sizing: border-box;
     width: 100%;
-    min-width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: 100dvh;
     height: 100vh;
-    padding: 0.75rem 1rem 1.5rem;
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
     border-right: none;
+    overflow-x: hidden;
+    overflow-y: auto;
     transform: translateX(-100%);
     visibility: hidden;
     pointer-events: none;
@@ -221,13 +229,44 @@
     pointer-events: auto;
   }
 
+  .brandRow {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .brandRow .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 3rem);
+  }
+
   .mobileClose {
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
+  .nav {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .navList,
+  .navGroup,
+  .groupRow,
+  .subList {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .navLink {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 0.9rem 1rem;
     font-size: 1rem;
   }
@@ -235,5 +274,9 @@
   .navLinkNested {
     padding: 0.75rem 0.9rem 0.75rem 1.1rem;
     font-size: 0.9375rem;
+  }
+
+  .groupToggle {
+    flex-shrink: 0;
   }
 }

@@ -32,8 +32,10 @@
 
 .sidebar {
   width: 100%;
-  max-width: 252px;
-  height: 108px;
+  max-width: min(252px, 100%);
+  height: auto;
+  aspect-ratio: 252 / 108;
+  max-height: 108px;
 }
 
 .image {
@@ -54,8 +56,10 @@
 .markOnly {
   display: inline-flex;
   align-items: center;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   width: 100%;
+  max-width: 100%;
 }
 
 .brandText {

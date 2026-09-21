@@ -329,65 +329,6 @@
   box-sizing: border-box;
 }
 
-.rowActionsDesktop {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  align-items: stretch;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.rowActionsMobile {
-  display: none;
-  position: relative;
-  width: 100%;
-}
-
-.actionsMenuBtn {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 2.2rem;
-  padding: 0.4rem 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.actionsMenu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.3rem);
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 9.5rem;
-  width: max-content;
-  max-width: min(70vw, 12rem);
-  padding: 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 10px;
-  background: rgba(18, 18, 22, 0.98);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-}
-
-.actionsMenu .saveBtn,
-.actionsMenu .archiveBtn,
-.actionsMenu .deleteCaseBtn {
-  width: 100%;
-}
-
-.actionsHeaderLabel {
-  display: none;
-  font-size: 0.68rem;
-}
-
 .stickyActions {
   position: sticky;
   right: 0;
@@ -1480,10 +1421,12 @@
   }
 
   .tableScrollTop {
-    min-height: 14px;
+    display: none;
   }
 
   .tableScroll {
+    overflow-x: auto;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
@@ -1500,65 +1443,86 @@
   }
 
   .table {
-    min-width: 1400px;
+    min-width: 1480px;
   }
 
   .table th,
   .table td {
-    padding: 0.45rem 0.35rem;
+    padding: 0.55rem 0.5rem;
+  }
+
+  /* Like «Новые лиды»: no sticky columns — swipe right to the end for actions */
+  .stickyNum,
+  .stickyName,
+  .stickyActions {
+    position: static;
+    left: auto;
+    right: auto;
+    z-index: auto;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .table th.stickyNum,
+  .table th.stickyName,
+  .table th.stickyActions {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    z-index: 2;
+    background: rgba(18, 18, 22, 0.98);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .numCell {
-    width: 2.2rem;
-    min-width: 2.2rem;
-  }
-
-  .stickyName {
-    left: 2.2rem;
+    width: 2.4rem;
+    min-width: 2.4rem;
   }
 
   .nameCell {
-    min-width: 132px;
-    max-width: 150px;
+    min-width: 160px;
+    max-width: 200px;
   }
 
   .nameText {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
   }
 
   .emailLine {
-    font-size: 0.68rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 0.7rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
 
   .stickyActions {
-    min-width: 5.25rem;
-    width: 5.25rem;
-    padding-left: 0.35rem !important;
-    padding-right: 0.4rem !important;
+    min-width: 8.5rem;
+    width: 8.5rem;
+    padding-left: 0.5rem !important;
+    padding-right: 0.65rem !important;
   }
 
-  .rowActionsDesktop {
-    display: none;
+  .rowActions {
+    gap: 0.4rem;
   }
 
-  .rowActionsMobile {
-    display: block;
-  }
-
-  .actionsHeaderLabel {
-    display: inline;
-  }
-
-  .actionsMenuBtn {
-    font-size: 0.72rem;
-    padding: 0.35rem 0.3rem;
+  .saveBtn,
+  .archiveBtn,
+  .deleteCaseBtn {
+    width: 100%;
+    min-height: 2.15rem;
+    font-size: 0.78rem;
   }
 
   .cellInput {
-    min-width: 96px;
-    font-size: 0.78rem;
+    min-width: 100px;
+    font-size: 0.8rem;
+  }
+
+  .rowHighlighted .stickyNum,
+  .rowHighlighted .stickyName,
+  .rowHighlighted .stickyActions {
+    background: #1f6b45 !important;
   }
 }

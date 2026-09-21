@@ -25,7 +25,6 @@ import { ChatMessageReply, ChatReplyQuote } from "./ChatReplyQuote";
 import { ChatPinnedBar } from "./ChatPinnedBar";
 import { TeamChatSharedPanel } from "./TeamChatSharedPanel";
 import { Card } from "@/components/ui/Card";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FileTypeIcon, UiIcon } from "@/components/ui/UiIcon";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
 import styles from "./TeamChatView.module.css";
@@ -688,41 +687,18 @@ export function TeamChatView({
 
   return (
     <div className={styles.wrap}>
-      <SectionHeader
-        title="Командный чат"
-        subtitle="Внутреннее пространство для общения команды Sharp & Spice"
-        action={
-          isOwner ? (
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => setClearOpen(true)}
-            >
-              Очистить чат
-            </Button>
-          ) : null
-        }
-      />
-
-      <div className={styles.searchRow}>
-        <input
-          className={styles.search}
-          type="search"
-          placeholder="Поиск по тексту и автору…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          disabled={viewMode === "shared"}
-        />
-        <Button
-          type="button"
-          variant={viewMode === "shared" ? "primary" : "secondary"}
-          className={styles.viewToggleBtn}
-          onClick={() =>
-            setViewMode((current) => (current === "chat" ? "shared" : "chat"))
-          }
-        >
-          {viewMode === "shared" ? "К чату" : "Материалы"}
-        </Button>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>Командный чат</h1>
+        {isOwner ? (
+          <Button
+            type="button"
+            variant="danger"
+            className={styles.clearChatBtn}
+            onClick={() => setClearOpen(true)}
+          >
+            Очистить чат
+          </Button>
+        ) : null}
       </div>
 
       {viewMode === "chat" && pinnedMessages.length > 0 ? (
@@ -817,6 +793,7 @@ export function TeamChatView({
       </div>
       )}
 
+      <div className={styles.bottomDock}>
       <div className={styles.composer}>
         {replyTarget ? (
           <div className={styles.composerReply}>
@@ -1001,6 +978,27 @@ export function TeamChatView({
         )}
       </div>
 
+        <div className={styles.searchRow}>
+          <input
+            className={styles.search}
+            type="search"
+            placeholder="Поиск по тексту и автору…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            disabled={viewMode === "shared"}
+          />
+          <Button
+            type="button"
+            variant={viewMode === "shared" ? "primary" : "secondary"}
+            className={styles.viewToggleBtn}
+            onClick={() =>
+              setViewMode((current) => (current === "chat" ? "shared" : "chat"))
+            }
+          >
+            {viewMode === "shared" ? "К чату" : "Материалы"}
+          </Button>
+        </div>
+
       {voiceRecorder.state === "idle" ? (
         <p className={styles.composerHint}>
           Прикрепите файл или скриншот, добавьте подпись и нажмите «Отправить» — всё
@@ -1012,6 +1010,7 @@ export function TeamChatView({
         <p className={styles.error}>{voiceRecorder.error}</p>
       ) : null}
       {error ? <p className={styles.error}>{error}</p> : null}
+      </div>
 
       {deleteTarget ? (
         <Modal title="Удалить сообщение?" onClose={() => setDeleteTarget(null)}>

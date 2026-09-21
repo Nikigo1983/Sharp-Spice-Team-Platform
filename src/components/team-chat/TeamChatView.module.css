@@ -6,6 +6,34 @@
   min-height: 0;
 }
 
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-family: Sora, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--white);
+}
+
+.clearChatBtn {
+  flex-shrink: 0;
+}
+
+.bottomDock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
 .searchRow {
   display: flex;
   align-items: center;
@@ -752,16 +780,95 @@
   border-color: var(--border-burgundy);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
+  .wrap {
+    gap: 0.55rem;
+  }
+
+  .pageHeader {
+    min-height: 0;
+  }
+
+  .pageTitle {
+    display: none;
+  }
+
+  .clearChatBtn {
+    margin-left: auto;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .bottomDock {
+    gap: 0.5rem;
+  }
+
   .searchRow {
-    flex-direction: column;
+    flex-direction: row;
     align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .search {
+    min-width: 0;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .viewToggleBtn {
+    flex-shrink: 0;
+    min-height: 2.35rem;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.8125rem;
+  }
+
+  .list {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    gap: 0.55rem;
+  }
+
+  .messageCard {
+    padding: 0.75rem 0.85rem;
+    border-radius: 14px;
+  }
+
+  .messageActions {
+    gap: 0.25rem;
+  }
+
+  .actionBtn {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.7rem;
   }
 
   .composer {
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-    padding-bottom: 1rem;
+    position: static;
+    padding: 0.55rem;
+    gap: 0.5rem;
+    border-radius: 14px;
+  }
+
+  .composerInput {
+    padding: 0.6rem 0.7rem;
+    font-size: 0.9rem;
+    min-height: 2.75rem;
+  }
+
+  .composerHint {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .search {
+    flex: 1 1 auto;
+  }
+
+  .viewToggleBtn {
+    flex: 0 0 auto;
+    width: auto;
   }
 }

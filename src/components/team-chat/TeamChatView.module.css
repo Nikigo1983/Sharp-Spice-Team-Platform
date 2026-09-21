@@ -518,6 +518,18 @@
   border-color: var(--border-burgundy);
 }
 
+.actionBtnDanger {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.actionBtnDanger:hover {
+  color: #fff;
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.2);
+}
+
 .actionIcon {
   font-size: 0.8rem;
 }
@@ -837,11 +849,13 @@
 
   .messageActions {
     gap: 0.25rem;
+    flex-wrap: nowrap;
   }
 
   .actionBtn {
     padding: 0.25rem 0.4rem;
     font-size: 0.7rem;
+    white-space: nowrap;
   }
 
   .composer {

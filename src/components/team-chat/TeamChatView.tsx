@@ -763,14 +763,15 @@ export function TeamChatView({
                       {message.is_pinned ? "Открепить" : "Закрепить"}
                     </button>
                     {showDelete ? (
-                      <Button
+                      <button
                         type="button"
-                        variant="danger"
-                        className={styles.deleteBtn}
+                        className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
                         onClick={() => setDeleteTarget(message)}
+                        title="Удалить"
                       >
-                        🗑 Удалить
-                      </Button>
+                        <UiIcon icon="trash" className={styles.actionIcon} />
+                        Удалить
+                      </button>
                     ) : null}
                   </div>
                 </div>

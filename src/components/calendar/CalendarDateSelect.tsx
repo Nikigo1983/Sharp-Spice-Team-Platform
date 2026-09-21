@@ -3,7 +3,7 @@
 import {
   buildDateKey,
   buildYearOptions,
-  CALENDAR_MONTHS_RU,
+  CALENDAR_MONTHS_RU_SHORT,
   daysInMonth,
   formatDateKeyRu,
   parseDateKey,
@@ -60,7 +60,7 @@ export function CalendarDateSelect({ value, onChange, id }: CalendarDateSelectPr
           value={parsed.month}
           onChange={(event) => update({ month: Number(event.target.value) })}
         >
-          {CALENDAR_MONTHS_RU.map((label, index) => (
+          {CALENDAR_MONTHS_RU_SHORT.map((label, index) => (
             <option key={label} value={index + 1}>
               {label}
             </option>

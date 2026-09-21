@@ -13,6 +13,22 @@ export const CALENDAR_MONTHS_RU = [
   "Декабрь",
 ] as const;
 
+/** Короткие названия для узких select на мобильных. */
+export const CALENDAR_MONTHS_RU_SHORT = [
+  "Янв",
+  "Фев",
+  "Мар",
+  "Апр",
+  "Май",
+  "Июн",
+  "Июл",
+  "Авг",
+  "Сен",
+  "Окт",
+  "Ноя",
+  "Дек",
+] as const;
+
 export type DateKeyParts = {
   year: number;
   month: number;

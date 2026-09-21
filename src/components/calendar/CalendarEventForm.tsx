@@ -84,6 +84,8 @@ export function CalendarEventForm({
       ...current,
       eventType,
       allDay: eventType === "video_meeting" ? false : current.allDay,
+      endDate:
+        eventType === "video_meeting" ? current.startDate : current.endDate,
       videoInviteMode:
         eventType === "video_meeting"
           ? current.scope === "personal"
@@ -396,7 +398,16 @@ export function CalendarEventForm({
             <span className={styles.label}>Начало *</span>
             <CalendarDateSelect
               value={values.startDate}
-              onChange={(startDate) => setValues({ ...values, startDate })}
+              onChange={(startDate) =>
+                setValues({
+                  ...values,
+                  startDate,
+                  endDate:
+                    values.eventType === "video_meeting"
+                      ? startDate
+                      : values.endDate,
+                })
+              }
             />
             {!values.allDay ? (
               <CalendarTimeSelect
@@ -408,10 +419,12 @@ export function CalendarEventForm({
 
           <div className={styles.field}>
             <span className={styles.label}>Окончание *</span>
-            <CalendarDateSelect
-              value={values.endDate}
-              onChange={(endDate) => setValues({ ...values, endDate })}
-            />
+            {values.eventType === "video_meeting" ? null : (
+              <CalendarDateSelect
+                value={values.endDate}
+                onChange={(endDate) => setValues({ ...values, endDate })}
+              />
+            )}
             {!values.allDay ? (
               <CalendarTimeSelect
                 value={values.endTime}

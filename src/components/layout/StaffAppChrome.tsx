@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
-import { ROLE_LABELS, type SessionUser } from "@/lib/auth/types";
+import { getRoleDisplayLabel, type SessionUser } from "@/lib/auth/types";
 import { AppShellNotifications } from "./AppShellNotifications";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -143,7 +143,7 @@ export function StaffAppChrome({ user, children }: StaffAppChromeProps) {
             <Topbar
               sectionTitle={sectionTitle}
               userName={user.name}
-              userRole={ROLE_LABELS[user.role]}
+              userRole={getRoleDisplayLabel(user)}
               searchPlaceholder={options.searchPlaceholder}
               defaultSearchValue={options.defaultSearchValue}
             />

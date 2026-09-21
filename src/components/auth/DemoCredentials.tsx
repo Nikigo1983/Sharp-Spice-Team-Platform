@@ -2,12 +2,12 @@ import styles from "./DemoCredentials.module.css";
 
 const DEMO_ACCOUNTS = [
   {
-    role: "Админ (owner)",
+    role: "Вероника (Админ)",
     email: "virineya1983@gmail.com",
     password: "veronika-dev",
   },
   {
-    role: "Владелец",
+    role: "Злата (Владелец)",
     email: "gujenova220371@gmail.com",
     password: "manager1-dev",
   },

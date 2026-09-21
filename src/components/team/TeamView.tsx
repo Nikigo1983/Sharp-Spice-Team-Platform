@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { OnlineIndicator } from "@/components/presence/OnlineIndicator";
-import { ROLE_LABELS, type SessionUser } from "@/lib/auth/types";
+import { getRoleDisplayLabel, type SessionUser } from "@/lib/auth/types";
 import { PRESENCE_POLL_INTERVAL_MS } from "@/lib/presence/constants";
 import type {
   ActivityDayStat,
@@ -566,7 +566,7 @@ export function TeamView({ user }: TeamViewProps) {
                       <p className={styles.stats}>Сегодня в сети не был(а)</p>
                     )}
                     <span className={styles.role}>
-                      {ROLE_LABELS[member.role]}
+                      {getRoleDisplayLabel(member)}
                     </span>
                   </div>
                   {canReport || showDelete ? (

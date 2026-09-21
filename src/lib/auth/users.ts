@@ -9,14 +9,14 @@ const TEAM_USERS: TeamUser[] = [
   {
     id: "veronika",
     email: "virineya1983@gmail.com",
-    name: "Админ",
+    name: "Вероника",
     role: "owner",
     passwordEnvKey: "AUTH_PASSWORD_VERONIKA",
   },
   {
     id: "manager-1",
     email: "gujenova220371@gmail.com",
-    name: "Владелец",
+    name: "Злата",
     role: "manager",
     passwordEnvKey: "AUTH_PASSWORD_MANAGER_1",
   },

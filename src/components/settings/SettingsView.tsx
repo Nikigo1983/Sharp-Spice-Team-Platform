@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ROLE_LABELS } from "@/lib/auth/types";
+import { getRoleDisplayLabel } from "@/lib/auth/types";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast, type ToastMessage } from "@/components/tasks/Toast";
@@ -173,7 +173,7 @@ export function SettingsView() {
                       <span className={styles.memberName}>{member.name}</span>
                       <div className={styles.memberEmail}>{member.email}</div>
                     </td>
-                    <td>{ROLE_LABELS[member.role]}</td>
+                    <td>{getRoleDisplayLabel(member)}</td>
                     <td>
                       {member.deleted ? (
                         <span className={`${styles.badge} ${styles.badgeMuted}`}>

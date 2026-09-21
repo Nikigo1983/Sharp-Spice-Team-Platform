@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { createClientInvitationAction } from "@/app/(app)/client-invitations/actions";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
@@ -17,12 +17,27 @@ export type InvitationRow = {
 
 type CreatedCredentials = {
   invitationId: string;
+  firstName: string;
   email: string;
   loginUrl: string;
   temporaryPassword: string;
   emailSent: boolean;
   emailWarning?: string;
 };
+
+function buildMessengerInviteText(created: CreatedCredentials): string {
+  return [
+    `Здравствуйте, ${created.firstName}!`,
+    "",
+    `Вас пригласили в клиентский портал ${CLIENT_PORTAL_BRAND_NAME}.`,
+    "",
+    `Ссылка для входа: ${created.loginUrl}`,
+    `Email: ${created.email}`,
+    `Временный пароль: ${created.temporaryPassword}`,
+    "",
+    "После входа можно сменить пароль через «Забыли пароль?» на странице входа.",
+  ].join("\n");
+}
 
 export function ClientInvitationsPanel({
   initialInvitations,
@@ -34,8 +49,22 @@ export function ClientInvitationsPanel({
   const [firstName, setFirstName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedCredentials | null>(null);
-  const [copied, setCopied] = useState<"password" | "login" | null>(null);
+  const [copied, setCopied] = useState<
+    "password" | "login" | "message" | null
+  >(null);
   const [pending, startTransition] = useTransition();
+
+  const messengerText = useMemo(
+    () => (created ? buildMessengerInviteText(created) : ""),
+    [created],
+  );
+
+  const whatsAppUrl = messengerText
+    ? `https://wa.me/?text=${encodeURIComponent(messengerText)}`
+    : null;
+  const telegramUrl = messengerText
+    ? `https://t.me/share/url?url=${encodeURIComponent(created?.loginUrl ?? "")}&text=${encodeURIComponent(messengerText)}`
+    : null;
 
   function onCreate(event: React.FormEvent) {
     event.preventDefault();
@@ -50,6 +79,7 @@ export function ClientInvitationsPanel({
       setInvitations((prev) => [result.invitation, ...prev]);
       setCreated({
         invitationId: result.invitation.id,
+        firstName: result.invitation.firstName,
         email: result.invitation.email,
         loginUrl: result.loginUrl,
         temporaryPassword: result.temporaryPassword,
@@ -61,7 +91,10 @@ export function ClientInvitationsPanel({
     });
   }
 
-  async function copyText(kind: "password" | "login", value: string) {
+  async function copyText(
+    kind: "password" | "login" | "message",
+    value: string,
+  ) {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(kind);
@@ -83,8 +116,10 @@ export function ClientInvitationsPanel({
         <div>
           <h1 className={styles.title}>Приглашения в клиентский портал</h1>
           <p className={styles.lead}>
-            Создайте приглашение — {CLIENT_PORTAL_BRAND_NAME} отправит ссылку и временный
-            пароль на email клиента.
+            Создайте приглашение — {CLIENT_PORTAL_BRAND_NAME} отправит ссылку и
+            временный пароль на email клиента. Сразу после создания ссылка и
+            пароль появятся здесь: их можно скопировать и отправить в WhatsApp,
+            Telegram или другом мессенджере.
           </p>
           <p className={styles.lead}>
             Приглашение нужно только для первого доступа. После регистрации
@@ -139,31 +174,91 @@ export function ClientInvitationsPanel({
             <p className={styles.warning}>{created.emailWarning}</p>
           ) : null}
           <p className={styles.meta}>
-            Email: <strong>{created.email}</strong>
+            Клиент: <strong>{created.firstName}</strong> ·{" "}
+            <strong>{created.email}</strong>
           </p>
+
+          <label className={styles.fieldLabel}>
+            Ссылка для входа
+            <div className={styles.urlRow}>
+              <input
+                className={styles.urlInput}
+                value={created.loginUrl}
+                readOnly
+                aria-label="Ссылка для входа в клиентский портал"
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <button
+                type="button"
+                className={styles.copy}
+                onClick={() => void copyText("login", created.loginUrl)}
+              >
+                {copied === "login" ? "Скопировано" : "Скопировать ссылку"}
+              </button>
+            </div>
+          </label>
+
+          <label className={styles.fieldLabel}>
+            Временный пароль
+            <div className={styles.urlRow}>
+              <input
+                className={styles.urlInput}
+                value={created.temporaryPassword}
+                readOnly
+                aria-label="Временный пароль клиента"
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <button
+                type="button"
+                className={styles.copy}
+                onClick={() =>
+                  void copyText("password", created.temporaryPassword)
+                }
+              >
+                {copied === "password" ? "Скопировано" : "Скопировать пароль"}
+              </button>
+            </div>
+          </label>
+
+          <label className={styles.fieldLabel}>
+            Текст для мессенджера
+            <textarea
+              className={styles.invitePreview}
+              value={messengerText}
+              readOnly
+              rows={9}
+              aria-label="Готовый текст приглашения для мессенджера"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </label>
+
           <div className={styles.createdActions}>
             <button
               type="button"
               className={styles.copy}
-              onClick={() => void copyText("login", created.loginUrl)}
+              onClick={() => void copyText("message", messengerText)}
             >
-              {copied === "login" ? "Ссылка скопирована" : "Скопировать вход"}
+              {copied === "message"
+                ? "Текст скопирован"
+                : "Скопировать текст приглашения"}
             </button>
-            <button
-              type="button"
-              className={styles.copy}
-              onClick={() =>
-                void copyText("password", created.temporaryPassword)
-              }
+            <a
+              className={styles.shareButton}
+              href={whatsAppUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              {copied === "password"
-                ? "Пароль скопирован"
-                : "Скопировать временный пароль"}
-            </button>
+              В WhatsApp
+            </a>
+            <a
+              className={styles.shareButton}
+              href={telegramUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              В Telegram
+            </a>
           </div>
-          <p className={styles.passwordReveal}>
-            Временный пароль: <code>{created.temporaryPassword}</code>
-          </p>
         </div>
       ) : null}
 

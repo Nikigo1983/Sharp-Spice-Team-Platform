@@ -2,6 +2,10 @@
   max-width: 880px;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 3rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .wrapWide {
@@ -1180,6 +1184,11 @@
   background: rgba(26, 26, 26, 0.55);
   display: grid;
   gap: 0.9rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .currentStatus {
@@ -1187,6 +1196,8 @@
   font-size: 0.92rem;
   color: rgba(255, 255, 255, 0.78);
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .currentStatus strong {
@@ -1196,15 +1207,18 @@
 
 .statusControls {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.65rem;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
 .statusSelect {
-  flex: 1 1 280px;
-  min-width: 0;
+  display: block;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 9px;
@@ -1232,21 +1246,32 @@
   color: #fff;
 }
 
+.statusControls .primaryAction {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .staffBlockHead {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .staffBlockTitle {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .staffBlockHint {
   margin: 0;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.58);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .questionnaireWordBlock {
@@ -1396,6 +1421,15 @@
 }
 
 @media (max-width: 900px) {
+  .wrap {
+    padding: 1rem 0.75rem 2rem;
+  }
+
+  .staffBlock {
+    margin-top: 1.25rem;
+    padding: 0.9rem 0.85rem 1rem;
+  }
+
   .wrapWide {
     max-width: 100%;
     margin: 0;

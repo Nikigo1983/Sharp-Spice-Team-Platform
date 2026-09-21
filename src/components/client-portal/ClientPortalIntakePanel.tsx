@@ -19,6 +19,7 @@ import {
   type QuestionnaireStaffFields,
 } from "@/lib/client-portal/staff-fields";
 import {
+  isWordDocumentFileName,
   STAFF_CASE_DOCUMENT_ACCEPT,
   STAFF_CASE_DOCUMENT_HINT,
   STAFF_CASE_DOCUMENT_TYPES_LABEL,
@@ -200,6 +201,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingSaving, setRenamingSaving] = useState(false);
+  const [openingWordId, setOpeningWordId] = useState<string | null>(null);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
@@ -1039,6 +1041,42 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
+  async function openDocumentInWord(fileId: string) {
+    if (!selectedId) return;
+    setOpeningWordId(fileId);
+    setError(null);
+    try {
+      const res = await fetch("/api/client-cases/files/office-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId: selectedId,
+          fileId,
+        }),
+      });
+      const data = (await res.json()) as {
+        msWordUri?: string;
+        fileUrl?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.msWordUri) {
+        setError(
+          "Не удалось открыть в Word. Скачайте файл и откройте его на компьютере.",
+        );
+        return;
+      }
+      // Desktop Word protocol (requires Microsoft Word installed).
+      window.location.href = data.msWordUri;
+      setStatus("Открываем в Microsoft Word…");
+    } catch {
+      setError(
+        "Не удалось открыть в Word. Скачайте файл и откройте его на компьютере.",
+      );
+    } finally {
+      setOpeningWordId(null);
+    }
+  }
+
   if (selectedId) {
     const backToMenu = (
       <button
@@ -1462,18 +1500,33 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                             </span>
                             {renamingDocId === doc.id ? null : (
                               <div className={styles.fileActions}>
-                                <a
-                                  className={styles.fileBtn}
-                                  href={caseFileUrl(
-                                    doc.id,
-                                    selectedId,
-                                    "open",
-                                  )}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  Открыть
-                                </a>
+                                {isWordDocumentFileName(doc.fileName) ? (
+                                  <button
+                                    type="button"
+                                    className={styles.fileBtn}
+                                    disabled={openingWordId === doc.id}
+                                    onClick={() =>
+                                      void openDocumentInWord(doc.id)
+                                    }
+                                  >
+                                    {openingWordId === doc.id
+                                      ? "…"
+                                      : "Открыть в Word"}
+                                  </button>
+                                ) : (
+                                  <a
+                                    className={styles.fileBtn}
+                                    href={caseFileUrl(
+                                      doc.id,
+                                      selectedId,
+                                      "open",
+                                    )}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Открыть
+                                  </a>
+                                )}
                                 <a
                                   className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
                                   href={caseFileUrl(
@@ -1513,19 +1566,22 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       Анкета клиента в Word
                     </h3>
                     <p className={styles.questionnaireWordHint}>
-                      Заполненная анкета в виде таблицы — можно открыть или
-                      скачать.
+                      Заполненная анкета в виде таблицы. «Открыть в Word»
+                      запускает Microsoft Word на компьютере (нужна
+                      установленная программа).
                     </p>
                     {wordDoc ? (
                       <div className={styles.fileActions}>
-                        <a
+                        <button
+                          type="button"
                           className={styles.fileBtn}
-                          href={caseFileUrl(wordDoc.id, selectedId, "open")}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          disabled={openingWordId === wordDoc.id}
+                          onClick={() => void openDocumentInWord(wordDoc.id)}
                         >
-                          Открыть
-                        </a>
+                          {openingWordId === wordDoc.id
+                            ? "…"
+                            : "Открыть в Word"}
+                        </button>
                         <a
                           className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
                           href={caseFileUrl(

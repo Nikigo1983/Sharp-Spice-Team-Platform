@@ -33,6 +33,10 @@ export function extFromFileName(fileName: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
+export function isWordDocumentFileName(fileName: string): boolean {
+  return /\.docx?$/i.test(fileName.trim());
+}
+
 /**
  * Rename display name while keeping the original extension (storage path uses it).
  */

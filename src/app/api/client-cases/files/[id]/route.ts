@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
+import { verifyCaseFileAccessToken } from "@/lib/client-portal/case-file-access-token";
 import { readQuestionnaireAttachmentFile } from "@/lib/client-portal/questionnaire-attachment-storage";
 import {
   findFileAnswerInRecord,
@@ -21,16 +22,31 @@ function resolveDisposition(requestUrl: URL): "inline" | "attachment" {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  }
-
-  const { id } = await context.params;
   const requestUrl = new URL(request.url);
+  const { id } = await context.params;
   const questionnaireId = requestUrl.searchParams.get("questionnaireId");
+  const accessToken = requestUrl.searchParams.get("accessToken");
+  const forOffice = requestUrl.searchParams.get("forOffice") === "1";
+
   if (!questionnaireId) {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+  }
+
+  let allowed = false;
+  if (accessToken) {
+    const claims = await verifyCaseFileAccessToken(accessToken);
+    allowed = Boolean(
+      claims &&
+        claims.fileId === id &&
+        claims.questionnaireId === questionnaireId,
+    );
+  } else {
+    const session = await getSession();
+    allowed = Boolean(session);
+  }
+
+  if (!allowed) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
   const record = await getSubmittedForStaff(questionnaireId);
@@ -64,6 +80,7 @@ export async function GET(request: Request, context: RouteContext) {
     .trimStart()
     .toLowerCase();
   const isHtmlWordExport =
+    !forOffice &&
     disposition === "inline" &&
     (owned.fileName.toLowerCase().endsWith(".doc") ||
       file.contentType.includes("msword")) &&
@@ -75,7 +92,9 @@ export async function GET(request: Request, context: RouteContext) {
   const contentDisposition =
     disposition === "attachment"
       ? `attachment; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`
-      : "inline";
+      : forOffice
+        ? `inline; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`
+        : "inline";
 
   return new Response(new Uint8Array(file.data), {
     status: 200,

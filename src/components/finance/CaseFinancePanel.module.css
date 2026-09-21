@@ -290,6 +290,22 @@
     padding-bottom: 2rem;
   }
 
+  .panelHead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .panelHead .panelTitle {
+    margin: 0;
+  }
+
+  .addPaymentBtn {
+    width: 100%;
+    justify-content: center;
+  }
+
   .panelTitle {
     font-size: 0.95rem;
     margin-bottom: 0.55rem;
@@ -306,8 +322,20 @@
 
   .paymentItem {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .voidPaymentBtn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .paymentMeta {
+    display: block;
+    margin-top: 0.25rem;
+    line-height: 1.45;
   }
 
   .emptyPayments {

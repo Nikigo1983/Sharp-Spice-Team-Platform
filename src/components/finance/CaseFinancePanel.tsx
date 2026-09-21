@@ -399,6 +399,7 @@ export function CaseFinancePanel({ caseId, showHeader = false }: Props) {
           {hasContract ? (
             <Button
               type="button"
+              className={styles.addPaymentBtn}
               onClick={() => {
                 setModalDate("");
                 setModal({ type: "addPayment" });
@@ -429,6 +430,7 @@ export function CaseFinancePanel({ caseId, showHeader = false }: Props) {
                 <Button
                   type="button"
                   variant="danger"
+                  className={styles.voidPaymentBtn}
                   onClick={() => setModal({ type: "void", paymentId: p.id })}
                 >
                   Аннулировать

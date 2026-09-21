@@ -25,6 +25,7 @@ import {
   STAFF_CASE_DOCUMENT_TYPES_LABEL,
 } from "@/lib/client-portal/questionnaire-attachment-formats";
 import { findQuestionnaireWordDocument, isQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
+import { supportsDesktopMsWordProtocol } from "@/lib/client-portal/case-file-access-token";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -1054,6 +1055,20 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setOpeningWordId(fileId);
     setError(null);
     try {
+      // On phones / PWA the ms-word: protocol does nothing — download instead.
+      if (!supportsDesktopMsWordProtocol()) {
+        const anchor = document.createElement("a");
+        anchor.href = caseFileUrl(fileId, selectedId, "download");
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setStatus(
+          "Файл скачивается. Откройте его в приложении Word или другом редакторе.",
+        );
+        return;
+      }
+
       const res = await fetch("/api/client-cases/files/office-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1576,9 +1591,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       Анкета клиента в Word
                     </h3>
                     <p className={styles.questionnaireWordHint}>
-                      Заполненная анкета в виде таблицы. «Открыть в Word»
-                      запускает Microsoft Word на компьютере (нужна
-                      установленная программа).
+                      Заполненная анкета в виде таблицы. На компьютере «Открыть в
+                      Word» запускает Microsoft Word. На телефоне файл
+                      скачивается — откройте его в приложении Word.
                     </p>
                     {wordDoc ? (
                       <div className={styles.docMeta}>

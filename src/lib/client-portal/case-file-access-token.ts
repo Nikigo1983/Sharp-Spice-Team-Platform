@@ -57,3 +57,22 @@ export async function verifyCaseFileAccessToken(
 export function toMsWordOpenUri(absoluteFileUrl: string): string {
   return `ms-word:ofv|u|${absoluteFileUrl}`;
 }
+
+/** True when the browser can hand a file URL to desktop Microsoft Word. */
+export function supportsDesktopMsWordProtocol(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const coarseOrNarrow =
+    window.matchMedia("(max-width: 768px)").matches ||
+    window.matchMedia("(pointer: coarse)").matches;
+  const pwa =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean(
+      (window.navigator as Navigator & { standalone?: boolean }).standalone,
+    );
+  const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(
+    window.navigator.userAgent,
+  );
+
+  return !(coarseOrNarrow || pwa || mobileUa);
+}

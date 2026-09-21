@@ -110,6 +110,10 @@
 .select {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 13.75rem;
+  max-width: 100%;
+  min-width: 0;
   padding: 0.45rem 2rem 0.45rem 0.65rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
@@ -121,7 +125,6 @@
   color: #fff;
   font: inherit;
   font-size: 0.82rem;
-  max-width: 220px;
 }
 
 .dateField {
@@ -1428,6 +1431,22 @@
   .staffBlock {
     margin-top: 1.25rem;
     padding: 0.9rem 0.85rem 1rem;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters .select {
+    width: 100%;
+  }
+
+  .bookingAlertToggleSoon,
+  .bookingAlertToggleEnded {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
   }
 
   .wrapWide {

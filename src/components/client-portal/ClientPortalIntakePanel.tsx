@@ -216,6 +216,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [counts, setCounts] = useState({ active: 0, archive: 0 });
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionsMenuId, setActionsMenuId] = useState<string | null>(null);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addFirstName, setAddFirstName] = useState("");
@@ -526,6 +527,25 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     };
   }, [filteredItems.length, loading, listView]);
 
+  useEffect(() => {
+    if (!actionsMenuId) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(`[data-actions-menu="${actionsMenuId}"]`)) return;
+      setActionsMenuId(null);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setActionsMenuId(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [actionsMenuId]);
+
   function syncFromTopScroll() {
     const top = topScrollRef.current;
     const main = tableScrollRef.current;
@@ -542,6 +562,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     scrollSyncLock.current = true;
     top.scrollLeft = main.scrollLeft;
     scrollSyncLock.current = false;
+    if (actionsMenuId) setActionsMenuId(null);
   }
 
   const clearListFilters = () => {
@@ -2177,7 +2198,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                   {STAFF_FIELD_COLUMNS.map((col) => (
                     <th key={col.key}>{col.label}</th>
                   ))}
-                  <th className={styles.stickyActions}></th>
+                  <th className={styles.stickyActions}>
+                    <span className={styles.actionsHeaderLabel}>Действия</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -2241,7 +2264,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       </td>
                     ))}
                     <td className={styles.stickyActions}>
-                      <div className={styles.rowActions}>
+                      <div className={styles.rowActionsDesktop}>
                         <button
                           type="button"
                           className={styles.saveBtn}
@@ -2276,6 +2299,77 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         >
                           {deletingId === item.id ? "…" : "Удалить"}
                         </button>
+                      </div>
+                      <div
+                        className={styles.rowActionsMobile}
+                        data-actions-menu={item.id}
+                      >
+                        <button
+                          type="button"
+                          className={styles.actionsMenuBtn}
+                          aria-expanded={actionsMenuId === item.id}
+                          aria-haspopup="menu"
+                          onClick={() =>
+                            setActionsMenuId((current) =>
+                              current === item.id ? null : item.id,
+                            )
+                          }
+                        >
+                          Действия
+                        </button>
+                        {actionsMenuId === item.id ? (
+                          <div className={styles.actionsMenu} role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={styles.saveBtn}
+                              disabled={savingId === item.id}
+                              onClick={() => {
+                                setActionsMenuId(null);
+                                void saveRow(item.id);
+                              }}
+                            >
+                              {savingId === item.id ? "…" : "Сохранить"}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={styles.archiveBtn}
+                              disabled={
+                                archivingId === item.id ||
+                                deletingId === item.id
+                              }
+                              onClick={() => {
+                                setActionsMenuId(null);
+                                void setArchived(
+                                  item.id,
+                                  listView !== "archive",
+                                );
+                              }}
+                            >
+                              {archivingId === item.id
+                                ? "…"
+                                : listView === "archive"
+                                  ? "Вернуть"
+                                  : "В архив"}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={styles.deleteCaseBtn}
+                              disabled={
+                                deletingId === item.id ||
+                                archivingId === item.id
+                              }
+                              onClick={() => {
+                                setActionsMenuId(null);
+                                void deleteCase(item.id, name);
+                              }}
+                            >
+                              {deletingId === item.id ? "…" : "Удалить"}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

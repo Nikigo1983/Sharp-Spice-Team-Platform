@@ -1,13 +1,19 @@
 .section {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 1rem;
   padding: 0.9rem;
   border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: var(--radius-sm);
   background: rgba(99, 102, 241, 0.08);
+  overflow: hidden;
 }
 
 .header {
   margin-bottom: 0.75rem;
+  min-width: 0;
 }
 
 .title {
@@ -21,6 +27,7 @@
   color: #94a3b8;
   font-size: 0.88rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .status {
@@ -36,9 +43,13 @@
 }
 
 .invitePreview {
+  box-sizing: border-box;
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 11rem;
-  margin-bottom: 0.65rem;
+  margin: 0 0 0.65rem;
   padding: 0.75rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-sm);
@@ -48,23 +59,33 @@
   font-size: 0.88rem;
   line-height: 1.55;
   resize: vertical;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .actionRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .urlRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .urlInput {
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   min-height: 2.4rem;
   padding: 0.45rem 0.65rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -77,7 +98,9 @@
 .copyButton,
 .shareButton,
 .regenerateButton {
+  box-sizing: border-box;
   min-height: 2.4rem;
+  max-width: 100%;
   padding: 0 0.85rem;
   border: 1px solid rgba(99, 102, 241, 0.45);
   border-radius: var(--radius-sm);
@@ -124,6 +147,9 @@
 
 .regenerateBlock {
   margin-top: 0.65rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .regenerateButton {
@@ -135,6 +161,7 @@
   color: #94a3b8;
   font-size: 0.82rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .regenerateButton:disabled {
@@ -142,13 +169,26 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
+  .section {
+    padding: 0.75rem;
+  }
+
+  .invitePreview {
+    min-height: 9rem;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.84rem;
+  }
+
   .actionRow {
     flex-direction: column;
   }
 
   .copyButton,
-  .shareButton {
+  .shareButton,
+  .regenerateButton {
     width: 100%;
+    white-space: normal;
+    text-align: center;
   }
 }

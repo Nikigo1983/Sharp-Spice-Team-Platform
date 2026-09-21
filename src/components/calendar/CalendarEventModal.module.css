@@ -16,10 +16,34 @@
 
 .modal {
   position: relative;
+  box-sizing: border-box;
   width: min(100%, 34rem);
+  max-width: 100%;
   max-height: calc(100vh - 2rem);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .overlay {
+    padding: 0.65rem;
+    align-items: flex-start;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 1.3rem);
+    padding: 1rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
 }
 
 .header {

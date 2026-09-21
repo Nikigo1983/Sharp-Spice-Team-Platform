@@ -117,7 +117,7 @@ const REPORT_STYLES = `
   tfoot td { font-weight: 600; }
 `;
 
-/** Browser preview (Открыть). */
+/** Browser preview HTML (Открыть). */
 export function buildHoursReportHtml(
   meta: HoursReportMeta,
   rows: HoursReportRow[],
@@ -185,9 +185,32 @@ export function downloadTextFile(
   URL.revokeObjectURL(url);
 }
 
-export function openHtmlReport(html: string): void {
+/**
+ * Try opening the HTML report in a new browser tab.
+ * Returns false on mobile / PWA / when the popup is blocked —
+ * callers should fall back to an in-app preview.
+ */
+export function openHtmlReport(html: string): boolean {
+  if (typeof window === "undefined") return false;
+
+  const preferInAppPreview =
+    window.matchMedia("(max-width: 768px)").matches ||
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean(
+      (window.navigator as Navigator & { standalone?: boolean }).standalone,
+    );
+
+  if (preferInAppPreview) {
+    return false;
+  }
+
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const opened = window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), opened ? 60_000 : 0);
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    return false;
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return true;
 }

@@ -179,6 +179,9 @@ export function TeamView({ user }: TeamViewProps) {
   );
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(false);
+  const [reportPreviewHtml, setReportPreviewHtml] = useState<string | null>(
+    null,
+  );
   const [portalReady, setPortalReady] = useState(false);
   const [overlayDismissArmed, setOverlayDismissArmed] = useState(false);
 
@@ -337,6 +340,7 @@ export function TeamView({ user }: TeamViewProps) {
     setReportTarget(null);
     setReportStats(null);
     setReportError(false);
+    setReportPreviewHtml(null);
   };
 
   const changeStatsPeriod = (period: ActivityPeriod) => {
@@ -426,7 +430,12 @@ export function TeamView({ user }: TeamViewProps) {
     const built = buildCurrentHoursReport();
     if (!built) return;
     const html = buildHoursReportHtml(built.meta, built.rows, built.mode);
-    openHtmlReport(html);
+    // Mobile / PWA often block window.open(blob). Prefer in-app preview;
+    // still try a new tab on desktop when the browser allows it.
+    const openedInTab = openHtmlReport(html);
+    if (!openedInTab) {
+      setReportPreviewHtml(html);
+    }
   };
 
   const openMonthFromYear = (month: ActivityMonthStat) => {
@@ -941,6 +950,35 @@ export function TeamView({ user }: TeamViewProps) {
                   </Button>
                 </div>
               </Card>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {portalReady && reportPreviewHtml
+        ? createPortal(
+            <div
+              className={styles.reportPreview}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Просмотр отчёта"
+            >
+              <header className={styles.reportPreviewHeader}>
+                <h2 className={styles.reportPreviewTitle}>Отчёт</h2>
+                <button
+                  type="button"
+                  className={styles.reportPreviewClose}
+                  onClick={() => setReportPreviewHtml(null)}
+                >
+                  Закрыть
+                </button>
+              </header>
+              <iframe
+                className={styles.reportPreviewFrame}
+                title="Отчёт об отработанных часах"
+                srcDoc={reportPreviewHtml}
+                sandbox=""
+              />
             </div>,
             document.body,
           )

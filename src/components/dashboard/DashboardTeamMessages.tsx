@@ -100,7 +100,7 @@ export function DashboardTeamMessages({ messages }: DashboardTeamMessagesProps) 
       ))}
       {visible.length === 0 ? (
         <li className={styles.chatEmpty}>
-          <p>Нет новых сообщений за последние 30 минут.</p>
+          <p>Нет новых сообщений за последние 6 часов.</p>
         </li>
       ) : null}
     </ul>

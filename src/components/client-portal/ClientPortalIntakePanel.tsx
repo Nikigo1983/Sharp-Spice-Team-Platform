@@ -23,7 +23,7 @@ import {
   STAFF_CASE_DOCUMENT_HINT,
   STAFF_CASE_DOCUMENT_TYPES_LABEL,
 } from "@/lib/client-portal/questionnaire-attachment-formats";
-import { findQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
+import { findQuestionnaireWordDocument, isQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -1395,152 +1395,178 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 {STAFF_CASE_DOCUMENT_HINT}
               </p>
             </div>
-            {documents.length === 0 ? (
-              <p className={styles.muted}>Пока нет загруженных документов.</p>
-            ) : (
-              <ul className={styles.docList}>
-                {documents.map((doc) => (
-                  <li key={doc.id} className={styles.docItem}>
-                    <div className={styles.docMeta}>
-                      {renamingDocId === doc.id ? (
-                        <div className={styles.renameRow}>
-                          <input
-                            className={styles.renameInput}
-                            value={renameDraft}
-                            onChange={(event) =>
-                              setRenameDraft(event.target.value)
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void saveRenameDocument();
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                cancelRenameDocument();
-                              }
-                            }}
-                            disabled={renamingSaving}
-                            aria-label="Новое название файла"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            className={styles.fileBtn}
-                            disabled={renamingSaving}
-                            onClick={() => void saveRenameDocument()}
-                          >
-                            {renamingSaving ? "…" : "Сохранить"}
-                          </button>
-                          <button
-                            type="button"
-                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                            disabled={renamingSaving}
-                            onClick={cancelRenameDocument}
-                          >
-                            Отмена
-                          </button>
-                        </div>
-                      ) : (
-                        <span className={styles.fileName}>{doc.fileName}</span>
-                      )}
-                      <span className={styles.docSub}>
-                        {formatBytes(doc.sizeBytes)} · {doc.uploadedByName} ·{" "}
-                        {formatSubmittedAt(doc.createdAt)}
-                      </span>
-                      {renamingDocId === doc.id ? null : (
-                        <div className={styles.fileActions}>
-                          <a
-                            className={styles.fileBtn}
-                            href={caseFileUrl(doc.id, selectedId, "open")}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Открыть
-                          </a>
-                          <a
-                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                            href={caseFileUrl(doc.id, selectedId, "download")}
-                          >
-                            Скачать
-                          </a>
-                          <button
-                            type="button"
-                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                            onClick={() => startRenameDocument(doc)}
-                          >
-                            Переименовать
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.docDelete}
-                            disabled={deletingDocId === doc.id}
-                            onClick={() => void removeDocument(doc.id)}
-                          >
-                            {deletingDocId === doc.id ? "…" : "Удалить"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <label className={styles.primaryAction}>
-              <input
-                type="file"
-                multiple
-                accept={STAFF_CASE_DOCUMENT_ACCEPT}
-                disabled={uploadingDoc}
-                onChange={(event) => {
-                  const selected = Array.from(event.target.files ?? []);
-                  event.target.value = "";
-                  void uploadDocuments(selected);
-                }}
-              />
-              {uploadingDoc ? "Загрузка…" : "Добавить документы"}
-            </label>
             {(() => {
               const wordDoc = findQuestionnaireWordDocument(documents);
+              const listDocuments = documents.filter(
+                (doc) => !isQuestionnaireWordDocument(doc),
+              );
               return (
-                <div className={styles.questionnaireWordBlock}>
-                  <h3 className={styles.questionnaireWordTitle}>
-                    Анкета клиента в Word
-                  </h3>
-                  <p className={styles.questionnaireWordHint}>
-                    Заполненная анкета в виде таблицы — можно открыть или
-                    скачать.
-                  </p>
-                  {wordDoc ? (
-                    <div className={styles.fileActions}>
-                      <a
-                        className={styles.fileBtn}
-                        href={caseFileUrl(wordDoc.id, selectedId, "open")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Открыть
-                      </a>
-                      <a
-                        className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
-                        href={caseFileUrl(wordDoc.id, selectedId, "download")}
-                      >
-                        Скачать
-                      </a>
-                    </div>
+                <>
+                  {listDocuments.length === 0 ? (
+                    <p className={styles.muted}>
+                      Пока нет загруженных документов.
+                    </p>
                   ) : (
-                    <button
-                      type="button"
-                      className={styles.primaryAction}
-                      disabled={ensuringWord}
-                      onClick={() => void ensureQuestionnaireWord()}
-                    >
-                      {ensuringWord
-                        ? "Формирование…"
-                        : "Сформировать Word"}
-                    </button>
+                    <ul className={styles.docList}>
+                      {listDocuments.map((doc) => (
+                        <li key={doc.id} className={styles.docItem}>
+                          <div className={styles.docMeta}>
+                            {renamingDocId === doc.id ? (
+                              <div className={styles.renameRow}>
+                                <input
+                                  className={styles.renameInput}
+                                  value={renameDraft}
+                                  onChange={(event) =>
+                                    setRenameDraft(event.target.value)
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      void saveRenameDocument();
+                                    }
+                                    if (event.key === "Escape") {
+                                      event.preventDefault();
+                                      cancelRenameDocument();
+                                    }
+                                  }}
+                                  disabled={renamingSaving}
+                                  aria-label="Новое название файла"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  className={styles.fileBtn}
+                                  disabled={renamingSaving}
+                                  onClick={() => void saveRenameDocument()}
+                                >
+                                  {renamingSaving ? "…" : "Сохранить"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                                  disabled={renamingSaving}
+                                  onClick={cancelRenameDocument}
+                                >
+                                  Отмена
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={styles.fileName}>
+                                {doc.fileName}
+                              </span>
+                            )}
+                            <span className={styles.docSub}>
+                              {formatBytes(doc.sizeBytes)} ·{" "}
+                              {doc.uploadedByName} ·{" "}
+                              {formatSubmittedAt(doc.createdAt)}
+                            </span>
+                            {renamingDocId === doc.id ? null : (
+                              <div className={styles.fileActions}>
+                                <a
+                                  className={styles.fileBtn}
+                                  href={caseFileUrl(
+                                    doc.id,
+                                    selectedId,
+                                    "open",
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Открыть
+                                </a>
+                                <a
+                                  className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                                  href={caseFileUrl(
+                                    doc.id,
+                                    selectedId,
+                                    "download",
+                                  )}
+                                >
+                                  Скачать
+                                </a>
+                                <button
+                                  type="button"
+                                  className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                                  onClick={() => startRenameDocument(doc)}
+                                >
+                                  Переименовать
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.docDelete}
+                                  disabled={deletingDocId === doc.id}
+                                  onClick={() => void removeDocument(doc.id)}
+                                >
+                                  {deletingDocId === doc.id
+                                    ? "…"
+                                    : "Удалить"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </div>
+                  <div className={styles.questionnaireWordBlock}>
+                    <h3 className={styles.questionnaireWordTitle}>
+                      Анкета клиента в Word
+                    </h3>
+                    <p className={styles.questionnaireWordHint}>
+                      Заполненная анкета в виде таблицы — можно открыть или
+                      скачать.
+                    </p>
+                    {wordDoc ? (
+                      <div className={styles.fileActions}>
+                        <a
+                          className={styles.fileBtn}
+                          href={caseFileUrl(wordDoc.id, selectedId, "open")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Открыть
+                        </a>
+                        <a
+                          className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                          href={caseFileUrl(
+                            wordDoc.id,
+                            selectedId,
+                            "download",
+                          )}
+                        >
+                          Скачать
+                        </a>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.primaryAction}
+                        disabled={ensuringWord}
+                        onClick={() => void ensureQuestionnaireWord()}
+                      >
+                        {ensuringWord
+                          ? "Формирование…"
+                          : "Сформировать Word"}
+                      </button>
+                    )}
+                  </div>
+                  <label
+                    className={`${styles.primaryAction} ${styles.addDocumentsBottom}`}
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      accept={STAFF_CASE_DOCUMENT_ACCEPT}
+                      disabled={uploadingDoc}
+                      onChange={(event) => {
+                        const selected = Array.from(event.target.files ?? []);
+                        event.target.value = "";
+                        void uploadDocuments(selected);
+                      }}
+                    />
+                    {uploadingDoc ? "Загрузка…" : "Добавить документы"}
+                  </label>
+                </>
               );
             })()}
           </section>

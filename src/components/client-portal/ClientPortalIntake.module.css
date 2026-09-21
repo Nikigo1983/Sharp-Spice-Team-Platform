@@ -1269,6 +1269,10 @@
   line-height: 1.45;
 }
 
+.addDocumentsBottom {
+  margin-top: 1.25rem;
+}
+
 .docList,
 .noteList {
   list-style: none;

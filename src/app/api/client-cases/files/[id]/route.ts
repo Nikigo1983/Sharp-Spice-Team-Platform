@@ -57,12 +57,33 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const disposition = resolveDisposition(requestUrl);
+  const rawHead = file.data
+    .subarray(0, 80)
+    .toString("utf8")
+    .replace(/^\uFEFF/, "")
+    .trimStart()
+    .toLowerCase();
+  const isHtmlWordExport =
+    disposition === "inline" &&
+    (owned.fileName.toLowerCase().endsWith(".doc") ||
+      file.contentType.includes("msword")) &&
+    (rawHead.startsWith("<!doctype html") || rawHead.startsWith("<html"));
+
+  const contentType = isHtmlWordExport
+    ? "text/html; charset=utf-8"
+    : file.contentType;
+  const contentDisposition =
+    disposition === "attachment"
+      ? `attachment; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`
+      : "inline";
+
   return new Response(new Uint8Array(file.data), {
     status: 200,
     headers: {
-      "Content-Type": file.contentType,
-      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`,
+      "Content-Type": contentType,
+      "Content-Disposition": contentDisposition,
       "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

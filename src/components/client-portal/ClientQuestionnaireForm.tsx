@@ -167,6 +167,10 @@ function FileField({
 
   async function onRemove() {
     if (!file || disabled) return;
+    const confirmed = window.confirm(
+      `Вы действительно хотите удалить «${file.fileName}»?`,
+    );
+    if (!confirmed) return;
     setUploading(true);
     setError(null);
     try {

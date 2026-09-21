@@ -934,8 +934,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
-  async function removeDocument(documentId: string) {
+  async function removeDocument(documentId: string, fileName?: string) {
     if (!selectedId) return;
+    const label =
+      fileName?.trim() ||
+      documents.find((doc) => doc.id === documentId)?.fileName ||
+      "этот документ";
+    const confirmed = window.confirm(
+      `Вы действительно хотите удалить «${label}»?`,
+    );
+    if (!confirmed) return;
     setDeletingDocId(documentId);
     setError(null);
     setStatus(null);
@@ -1548,7 +1556,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                                   type="button"
                                   className={styles.docDelete}
                                   disabled={deletingDocId === doc.id}
-                                  onClick={() => void removeDocument(doc.id)}
+                                  onClick={() =>
+                                    void removeDocument(doc.id, doc.fileName)
+                                  }
                                 >
                                   {deletingDocId === doc.id
                                     ? "…"

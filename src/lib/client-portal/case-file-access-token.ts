@@ -62,17 +62,11 @@ export function toMsWordOpenUri(absoluteFileUrl: string): string {
 export function supportsDesktopMsWordProtocol(): boolean {
   if (typeof window === "undefined") return false;
 
-  const coarseOrNarrow =
-    window.matchMedia("(max-width: 768px)").matches ||
-    window.matchMedia("(pointer: coarse)").matches;
-  const pwa =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    Boolean(
-      (window.navigator as Navigator & { standalone?: boolean }).standalone,
-    );
+  // Only treat real phone/tablet UAs as unsupported. Do NOT use `pointer: coarse`
+  // — Windows touch laptops would wrongly fall back to download instead of Word.
   const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(
     window.navigator.userAgent,
   );
 
-  return !(coarseOrNarrow || pwa || mobileUa);
+  return !mobileUa;
 }

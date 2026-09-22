@@ -1453,7 +1453,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               <span className={styles.section}>Документы сотрудника</span>
               <h2 className={styles.staffBlockTitle}>Документы по клиенту</h2>
               <p className={styles.staffBlockHint}>
-                {STAFF_CASE_DOCUMENT_HINT}
+                {STAFF_CASE_DOCUMENT_HINT} Файлы из отправленной анкеты
+                появляются здесь автоматически.
               </p>
             </div>
             {(() => {

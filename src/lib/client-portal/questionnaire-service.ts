@@ -35,9 +35,11 @@ import {
   saveQuestionnaireAttachmentFile,
 } from "./questionnaire-attachment-storage";
 import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT, renameFileNamePreservingExt } from "./questionnaire-attachment-formats";
+import { mirrorQuestionnaireFilesIntoStaffDocuments } from "./questionnaire-file-mirror";
 import {
   buildQuestionnaireWordDoc,
   findQuestionnaireWordDocument,
+  isQuestionnaireMirroredAttachment,
   questionnaireWordFilename,
   QUESTIONNAIRE_WORD_UPLOADER_ID,
   QUESTIONNAIRE_WORD_UPLOADER_NAME,
@@ -283,16 +285,21 @@ export async function submitQuestionnaire(
     updatedByUserId: null,
     updatedByName: null,
   });
+  const withCrmOps = {
+    ...withStatus,
+    [FORMGRID_CRM_OPS_KEY]: readFormgridCrmOpsSheet(withStatus),
+  };
+  const mirrored = mirrorQuestionnaireFilesIntoStaffDocuments(
+    withCrmOps,
+    now,
+  );
   const next: QuestionnaireRecord = {
     ...current,
     status: "submitted",
     submittedAt: now,
     updatedAt: now,
     revision: current.revision + 1,
-    answers: {
-      ...withStatus,
-      [FORMGRID_CRM_OPS_KEY]: readFormgridCrmOpsSheet(withStatus),
-    },
+    answers: mirrored.answers,
   };
   await upsertQuestionnaire(next);
   try {
@@ -652,6 +659,37 @@ export async function addStaffCaseDocument(
   return { record, document };
 }
 
+/**
+ * Copy client questionnaire file answers into `__staff_documents` (same file ids,
+ * storage stays under the portal user). Idempotent by attachment id.
+ */
+export { mirrorQuestionnaireFilesIntoStaffDocuments } from "./questionnaire-file-mirror";
+
+/** Backfill «Документы по клиенту» from questionnaire file fields for older cases. */
+export async function ensureQuestionnaireFileDocuments(
+  id: string,
+): Promise<{ record: QuestionnaireRecord; added: number }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+
+  const mirrored = mirrorQuestionnaireFilesIntoStaffDocuments(
+    current.answers,
+    current.submittedAt ?? current.updatedAt,
+  );
+  if (mirrored.added === 0) {
+    return { record: current, added: 0 };
+  }
+
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: mirrored.answers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, added: mirrored.added };
+}
+
 /** Create Word copy of the filled questionnaire in «Документы по клиенту» if missing. */
 export async function ensureQuestionnaireWordDocument(
   id: string,
@@ -713,11 +751,14 @@ export async function deleteStaffCaseDocument(
   const existing = findStaffDocument(current.answers, documentId);
   if (!existing) throw new Error("NOT_FOUND");
 
-  await deleteQuestionnaireAttachmentFile(
-    staffDocumentsOwnerKey(current.id),
-    existing.id,
-    existing.fileName,
-  );
+  // Mirrored questionnaire files live under the portal user — only unlink the list entry.
+  if (!isQuestionnaireMirroredAttachment(existing)) {
+    await deleteQuestionnaireAttachmentFile(
+      staffDocumentsOwnerKey(current.id),
+      existing.id,
+      existing.fileName,
+    );
+  }
   const now = new Date().toISOString();
   return upsertQuestionnaire({
     ...current,
@@ -946,5 +987,9 @@ export function isStaffUploadedDocument(
   record: QuestionnaireRecord,
   attachmentId: string,
 ): boolean {
-  return Boolean(findStaffDocument(record.answers, attachmentId));
+  const doc = findStaffDocument(record.answers, attachmentId);
+  if (!doc) return false;
+  // Bytes for mirrored questionnaire files are stored under the portal user id.
+  if (isQuestionnaireMirroredAttachment(doc)) return false;
+  return true;
 }

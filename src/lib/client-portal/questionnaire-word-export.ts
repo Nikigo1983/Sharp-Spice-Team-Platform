@@ -3,6 +3,16 @@ import type { StaffCaseDocument } from "@/lib/client-portal/staff-case-meta";
 export const QUESTIONNAIRE_WORD_UPLOADER_ID = "system-questionnaire-word";
 export const QUESTIONNAIRE_WORD_UPLOADER_NAME = "Система";
 
+/** Staff-list mirror of files the client uploaded in the questionnaire. */
+export const QUESTIONNAIRE_FILE_UPLOADER_ID = "system-questionnaire-file";
+export const QUESTIONNAIRE_FILE_UPLOADER_NAME = "Из анкеты";
+
+export function isQuestionnaireMirroredAttachment(
+  doc: Pick<StaffCaseDocument, "uploadedByUserId">,
+): boolean {
+  return doc.uploadedByUserId === QUESTIONNAIRE_FILE_UPLOADER_ID;
+}
+
 export type QuestionnaireWordRow = {
   section: string;
   label: string;

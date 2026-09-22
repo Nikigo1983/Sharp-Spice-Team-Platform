@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import {
   buildReviewRows,
   createManualCaseForStaff,
+  ensureQuestionnaireFileDocuments,
   getPublishedSchema,
   getSubmittedForStaff,
   isCaseArchived,
@@ -130,9 +131,15 @@ export async function GET(request: Request) {
 
   if (id) {
     const opened = await markQuestionnaireOpenedByStaff(id);
-    const record = opened ?? (await getSubmittedForStaff(id));
+    let record = opened ?? (await getSubmittedForStaff(id));
     if (!record) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    }
+    try {
+      const ensured = await ensureQuestionnaireFileDocuments(record.id);
+      record = ensured.record;
+    } catch (error) {
+      console.error("[client-cases] ensure questionnaire file docs failed", error);
     }
     return NextResponse.json({
       schemaTitle: isLegacyCrmImport(record.answers) || isFormgridImport(record.answers)

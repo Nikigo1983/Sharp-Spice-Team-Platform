@@ -69,7 +69,11 @@ export default async function ClientPortalHomePage() {
           className={styles.linkButton}
           style={{ marginTop: "0.85rem", width: "fit-content" }}
         >
-          {submitted ? "Открыть анкету" : "Продолжить анкету"}
+          {submitted
+            ? "Открыть анкету"
+            : needsCountry || progress === 0
+              ? "Начать заполнять анкету"
+              : "Продолжить анкету"}
         </Link>
       </section>
 

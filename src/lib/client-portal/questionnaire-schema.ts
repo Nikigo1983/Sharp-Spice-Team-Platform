@@ -530,8 +530,8 @@ export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 190,
           label: {
-            en: "Taxpayer identification number (INN)",
-            ru: "Номер ИНН",
+            en: "15. Taxpayer identification number (INN)",
+            ru: "15. Номер ИНН",
           },
           placeholder: { en: "1234567890", ru: "1234567890" },
           required: false,
@@ -542,8 +542,8 @@ export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 200,
           label: {
-            en: "SNILS number",
-            ru: "Номер СНИЛС",
+            en: "16. SNILS number",
+            ru: "16. Номер СНИЛС",
           },
           placeholder: { en: "123-456-789 00", ru: "123-456-789 00" },
           required: false,

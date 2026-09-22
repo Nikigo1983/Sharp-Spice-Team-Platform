@@ -63,7 +63,7 @@
 
 .form {
   display: grid;
-  grid-template-columns: 1fr 1.2fr auto;
+  grid-template-columns: 1fr 1.2fr auto auto;
   gap: 0.75rem;
   align-items: end;
   margin-bottom: 1rem;
@@ -75,6 +75,33 @@
   gap: 0.35rem;
   font-size: 0.82rem;
   color: var(--gray-300);
+}
+
+.checkLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--gray-200);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkLabel input {
+  margin-top: 0.15rem;
+  accent-color: #ffb74a;
+}
+
+.checkHint {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--gray-400);
+  font-size: 0.75rem;
 }
 
 .input {

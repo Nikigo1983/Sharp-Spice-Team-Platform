@@ -12,6 +12,7 @@ import type { InvitationRow } from "@/components/client-portal/ClientInvitations
 export async function createClientInvitationAction(input: {
   email: string;
   firstName: string;
+  preferredLocale?: "ru" | "en";
 }): Promise<
   | {
       ok: true;
@@ -20,6 +21,7 @@ export async function createClientInvitationAction(input: {
       loginUrl: string;
       emailSent: boolean;
       emailWarning?: string;
+      preferredLocale: "ru" | "en";
     }
   | { ok: false; error: string }
 > {
@@ -37,9 +39,13 @@ export async function createClientInvitationAction(input: {
       process.env.NEXT_PUBLIC_APP_URL?.trim() ||
       (host ? `${proto}://${host}` : "http://localhost:3000");
 
+    const preferredLocale =
+      input.preferredLocale === "en" ? "en" : "ru";
+
     const result = await createClientInvitation({
       email: input.email,
       firstName: input.firstName,
+      preferredLocale,
       createdByUserId: session.id,
       origin,
     });
@@ -57,6 +63,7 @@ export async function createClientInvitationAction(input: {
       temporaryPassword: result.temporaryPassword,
       loginUrl: result.loginUrl,
       emailSent: result.emailSent,
+      preferredLocale: result.invitation.preferredLocale,
       emailWarning: result.emailSent
         ? undefined
         : result.emailError === "EMAIL_NOT_CONFIGURED"

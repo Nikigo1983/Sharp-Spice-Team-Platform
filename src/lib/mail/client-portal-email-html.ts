@@ -33,7 +33,9 @@ export function buildClientPortalEmailHtml(input: {
   ctaLabel: string;
   ctaUrl: string;
   footerNote?: string;
+  locale?: "ru" | "en";
 }): string {
+  const locale = input.locale === "en" ? "en" : "ru";
   const logoUrl = escapeHtml(clientPortalEmailLogoUrl());
   const ctaUrl = escapeHtml(input.ctaUrl);
   const blue = CLIENT_PORTAL_COLORS.blue;
@@ -44,8 +46,21 @@ export function buildClientPortalEmailHtml(input: {
     )
     .join("");
 
+  const spamNote =
+    locale === "en"
+      ? "If this email landed in Spam, some services disable links and buttons. Mark it as Not spam so they work again."
+      : "Если письмо попало в «Спам», некоторые сервисы отключают ссылки и кнопки. Отметьте письмо как «Не спам» — и они снова станут активными.";
+  const linkFallback =
+    locale === "en"
+      ? "If the button does not open, use this link:"
+      : "Если кнопка не открывается, перейдите по ссылке:";
+  const teamSignOff =
+    locale === "en"
+      ? `— The ${CLIENT_PORTAL_BRAND_NAME} team`
+      : `— Команда ${CLIENT_PORTAL_BRAND_NAME}`;
+
   return `<!DOCTYPE html>
-<html lang="ru">
+<html lang="${locale}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -65,7 +80,7 @@ export function buildClientPortalEmailHtml(input: {
               <p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#334155;">${escapeHtml(input.greeting)}</p>
               ${paragraphsHtml}
               <p style="margin:0 0 18px;padding:12px 14px;font-size:13px;line-height:1.55;color:#475569;background:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
-                Если письмо попало в «Спам», некоторые сервисы отключают ссылки и кнопки. Отметьте письмо как «Не спам» — и они снова станут активными.
+                ${escapeHtml(spamNote)}
               </p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0;">
                 <tr>
@@ -77,7 +92,7 @@ export function buildClientPortalEmailHtml(input: {
                 </tr>
               </table>
               <p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#64748b;word-break:break-all;">
-                Если кнопка не открывается, перейдите по ссылке:<br />
+                ${escapeHtml(linkFallback)}<br />
                 <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer" style="color:${blue};text-decoration:underline;">${ctaUrl}</a>
               </p>
               ${
@@ -85,7 +100,7 @@ export function buildClientPortalEmailHtml(input: {
                   ? `<p style="margin:18px 0 0;font-size:13px;line-height:1.5;color:#64748b;">${escapeHtml(input.footerNote)}</p>`
                   : ""
               }
-              <p style="margin:22px 0 0;font-size:13px;line-height:1.5;color:#94a3b8;">— Команда ${escapeHtml(CLIENT_PORTAL_BRAND_NAME)}</p>
+              <p style="margin:22px 0 0;font-size:13px;line-height:1.5;color:#94a3b8;">${escapeHtml(teamSignOff)}</p>
             </td>
           </tr>
         </table>

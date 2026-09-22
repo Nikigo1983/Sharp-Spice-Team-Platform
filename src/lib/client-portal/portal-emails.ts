@@ -11,12 +11,55 @@ export async function sendClientInviteEmail(input: {
   firstName: string;
   loginUrl: string;
   temporaryPassword: string;
+  locale?: "ru" | "en";
 }): Promise<SendEmailResult> {
-  const subject = `${CLIENT_PORTAL_BRAND_NAME}: доступ в клиентский портал`;
+  const locale = input.locale === "en" ? "en" : "ru";
+  const brand = CLIENT_PORTAL_BRAND_NAME;
+
+  if (locale === "en") {
+    const subject = `${brand}: access to the client portal`;
+    const text = [
+      `Hello, ${input.firstName}!`,
+      "",
+      `You have been invited to the ${brand} client portal.`,
+      "",
+      `Sign in here: ${input.loginUrl}`,
+      `Email: ${input.to}`,
+      `Temporary password: ${input.temporaryPassword}`,
+      "",
+      'After signing in, you can change your password via “Forgot password?” on the login page.',
+      "",
+      `— The ${brand} team`,
+    ].join("\n");
+
+    const html = buildClientPortalEmailHtml({
+      locale: "en",
+      title: "Client portal access",
+      greeting: `Hello, ${input.firstName}!`,
+      paragraphs: [
+        `You have been invited to the ${brand} client portal.`,
+        `Sign-in email: ${input.to}`,
+        `Temporary password: ${input.temporaryPassword}`,
+        'After signing in, you can change your password via “Forgot password?” on the login page.',
+      ],
+      ctaLabel: "Open portal sign-in",
+      ctaUrl: input.loginUrl,
+    });
+
+    return sendEmail({
+      to: input.to,
+      subject,
+      text,
+      html,
+      fromName: FROM_NAME,
+    });
+  }
+
+  const subject = `${brand}: доступ в клиентский портал`;
   const text = [
     `Здравствуйте, ${input.firstName}!`,
     "",
-    `Вас пригласили в клиентский портал ${CLIENT_PORTAL_BRAND_NAME}.`,
+    `Вас пригласили в клиентский портал ${brand}.`,
     "",
     `Откройте вход: ${input.loginUrl}`,
     `Email: ${input.to}`,
@@ -24,14 +67,15 @@ export async function sendClientInviteEmail(input: {
     "",
     "После входа вы можете сменить пароль через «Забыли пароль?» на странице входа.",
     "",
-    `— Команда ${CLIENT_PORTAL_BRAND_NAME}`,
+    `— Команда ${brand}`,
   ].join("\n");
 
   const html = buildClientPortalEmailHtml({
+    locale: "ru",
     title: "Доступ в клиентский портал",
     greeting: `Здравствуйте, ${input.firstName}!`,
     paragraphs: [
-      `Вас пригласили в клиентский портал ${CLIENT_PORTAL_BRAND_NAME}.`,
+      `Вас пригласили в клиентский портал ${brand}.`,
       `Email для входа: ${input.to}`,
       `Временный пароль: ${input.temporaryPassword}`,
       "После входа вы можете сменить пароль через «Забыли пароль?» на странице входа.",

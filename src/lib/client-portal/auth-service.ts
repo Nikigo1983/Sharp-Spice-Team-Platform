@@ -96,13 +96,14 @@ export async function createClientInvitation(input: {
   await upsertClientPortalUser(user);
 
   const origin = input.origin.replace(/\/$/, "");
-  const loginUrl = `${origin}/client/login`;
+  const loginUrl = buildLoginUrl(origin, invitation.preferredLocale);
 
   const mailed = await sendClientInviteEmail({
     to: email,
     firstName: invitation.firstName,
     loginUrl,
     temporaryPassword,
+    locale: invitation.preferredLocale,
   });
 
   return {
@@ -293,8 +294,12 @@ export function buildInviteUrl(token: string, origin: string): string {
   return `${origin.replace(/\/$/, "")}/client/invite/${encodeURIComponent(token)}`;
 }
 
-export function buildLoginUrl(origin: string): string {
-  return `${origin.replace(/\/$/, "")}/client/login`;
+export function buildLoginUrl(
+  origin: string,
+  locale?: ClientPortalLocale,
+): string {
+  const base = `${origin.replace(/\/$/, "")}/client/login`;
+  return locale === "en" ? `${base}?lang=en` : base;
 }
 
 export async function updateClientPreferredLocale(input: {

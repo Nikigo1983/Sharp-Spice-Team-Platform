@@ -26,9 +26,23 @@ type CreatedCredentials = {
   temporaryPassword: string;
   emailSent: boolean;
   emailWarning?: string;
+  preferredLocale: "ru" | "en";
 };
 
 function buildMessengerInviteText(created: CreatedCredentials): string {
+  if (created.preferredLocale === "en") {
+    return [
+      `Hello, ${created.firstName}!`,
+      "",
+      `You have been invited to the ${CLIENT_PORTAL_BRAND_NAME} client portal.`,
+      "",
+      `Sign-in link: ${created.loginUrl}`,
+      `Email: ${created.email}`,
+      `Temporary password: ${created.temporaryPassword}`,
+      "",
+      'After signing in, you can change your password via “Forgot password?” on the login page.',
+    ].join("\n");
+  }
   return [
     `Здравствуйте, ${created.firstName}!`,
     "",
@@ -50,6 +64,7 @@ export function ClientInvitationsPanel({
   const [invitations, setInvitations] = useState(initialInvitations);
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [sendInEnglish, setSendInEnglish] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedCredentials | null>(null);
   const [copied, setCopied] = useState<
@@ -75,7 +90,11 @@ export function ClientInvitationsPanel({
     setError(null);
     setCreated(null);
     startTransition(async () => {
-      const result = await createClientInvitationAction({ email, firstName });
+      const result = await createClientInvitationAction({
+        email,
+        firstName,
+        preferredLocale: sendInEnglish ? "en" : "ru",
+      });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -89,9 +108,11 @@ export function ClientInvitationsPanel({
         temporaryPassword: result.temporaryPassword,
         emailSent: result.emailSent,
         emailWarning: result.emailWarning,
+        preferredLocale: result.preferredLocale,
       });
       setEmail("");
       setFirstName("");
+      setSendInEnglish(false);
     });
   }
 
@@ -177,6 +198,20 @@ export function ClientInvitationsPanel({
             required
             disabled={pending}
           />
+        </label>
+        <label className={styles.checkLabel}>
+          <input
+            type="checkbox"
+            checked={sendInEnglish}
+            onChange={(event) => setSendInEnglish(event.target.checked)}
+            disabled={pending}
+          />
+          <span>
+            Отправить на английском
+            <span className={styles.checkHint}>
+              Письмо и страница входа откроются на English
+            </span>
+          </span>
         </label>
         <button className={styles.submit} type="submit" disabled={pending}>
           {pending ? "Создание…" : "Создать приглашение"}

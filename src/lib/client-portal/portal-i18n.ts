@@ -349,7 +349,8 @@ const PROCESS_STATUS_EN: Record<ProcessStatusValue, string> = {
 export function normalizeClientLocale(
   value: string | null | undefined,
 ): ClientPortalLocale {
-  return isClientPortalLocale(value ?? "") ? value! : "ru";
+  if (value === "en" || value === "ru") return value;
+  return "ru";
 }
 
 export function t(

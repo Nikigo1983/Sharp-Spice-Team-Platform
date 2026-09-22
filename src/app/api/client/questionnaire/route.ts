@@ -21,15 +21,17 @@ export async function GET() {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
+  const locale = session.preferredLocale;
   const record = await getOrCreateQuestionnaire(session);
   const needsCountry = needsVnzhCountrySelection(record);
   const schema = needsCountry ? null : getSchemaForRecord(record);
   return NextResponse.json({
     schema,
+    locale,
     needsCountrySelection: needsCountry,
     countryOptions: VNZH_COUNTRY_OPTIONS.map((opt) => ({
       value: opt.value,
-      label: opt.labelRu,
+      label: locale === "en" ? opt.labelEn : opt.labelRu,
     })),
     questionnaire: record,
     progress: needsCountry

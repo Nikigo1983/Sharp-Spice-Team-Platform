@@ -5,13 +5,20 @@ import {
   clientForgotPasswordAction,
   type ClientAuthState,
 } from "@/app/client/actions";
+import { ClientLocaleSwitcher } from "@/components/client-portal/ClientLocaleSwitcher";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
+import { t } from "@/lib/client-portal/portal-i18n";
+import type { ClientPortalLocale } from "@/lib/client-portal/types";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
 
-export function ClientForgotPasswordForm() {
+export function ClientForgotPasswordForm({
+  locale,
+}: {
+  locale: ClientPortalLocale;
+}) {
   const [state, formAction, pending] = useActionState(
     clientForgotPasswordAction,
     initialState,
@@ -24,16 +31,14 @@ export function ClientForgotPasswordForm() {
           <div className={styles.logoWrap}>
             <EmigrantLogo size="auth" priority />
           </div>
-          <h1 className={styles.title}>Письмо отправлено</h1>
+          <ClientLocaleSwitcher locale={locale} variant="auth" />
+          <h1 className={styles.title}>{t("mailSentTitle", locale)}</h1>
           <div className={styles.statusOk} role="status">
-            <p className={styles.statusOkHint}>
-              Проверьте вашу почту. Если во входящих нет письма, загляните в
-              папку «Спам».
-            </p>
+            <p className={styles.statusOkHint}>{t("mailSentBody", locale)}</p>
           </div>
           <p className={styles.hint}>
             <a className={styles.forgotLink} href="/client/login">
-              Вернуться ко входу
+              {t("backToLogin", locale)}
             </a>
           </p>
         </div>
@@ -47,10 +52,10 @@ export function ClientForgotPasswordForm() {
         <div className={styles.logoWrap}>
           <EmigrantLogo size="auth" priority />
         </div>
-        <h1 className={styles.title}>Забыли пароль?</h1>
+        <ClientLocaleSwitcher locale={locale} variant="auth" />
+        <h1 className={styles.title}>{t("forgotTitle", locale)}</h1>
         <p className={styles.subtitle}>
-          Укажите email аккаунта клиентского портала {CLIENT_PORTAL_BRAND_NAME}. Если он есть
-          в системе, мы отправим ссылку для сброса пароля.
+          {t("forgotSubtitle", locale, { brand: CLIENT_PORTAL_BRAND_NAME })}
         </p>
         {state.error ? (
           <p className={styles.error} role="alert">
@@ -58,6 +63,7 @@ export function ClientForgotPasswordForm() {
           </p>
         ) : null}
         <form className={styles.form} action={formAction}>
+          <input type="hidden" name="locale" value={locale} />
           <label className={styles.label}>
             Email
             <input
@@ -70,12 +76,12 @@ export function ClientForgotPasswordForm() {
             />
           </label>
           <button className={styles.submit} type="submit" disabled={pending}>
-            {pending ? "Отправка…" : "Отправить ссылку"}
+            {pending ? t("sending", locale) : t("sendLink", locale)}
           </button>
         </form>
         <p className={styles.hint}>
           <a className={styles.forgotLink} href="/client/login">
-            Вернуться ко входу
+            {t("backToLogin", locale)}
           </a>
         </p>
       </div>

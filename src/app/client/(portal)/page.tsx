@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { clientSignOutAction } from "@/app/client/actions";
+import { ClientLocaleSwitcher } from "@/components/client-portal/ClientLocaleSwitcher";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import styles from "@/components/client-portal/ClientPortal.module.css";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
+import {
+  t,
+  translateProcessStatus,
+} from "@/lib/client-portal/portal-i18n";
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
@@ -19,6 +24,7 @@ export default async function ClientPortalHomePage() {
     redirect("/client/login");
   }
 
+  const locale = session.preferredLocale;
   const questionnaire = await getOrCreateQuestionnaire(session);
   const needsCountry = needsVnzhCountrySelection(questionnaire);
   const progress = needsCountry
@@ -40,29 +46,32 @@ export default async function ClientPortalHomePage() {
             <EmigrantLogo size="md" href="/client" />
           </div>
           <h1 className={styles.portalTitle}>
-            Здравствуйте, {session.firstName}
+            {t("hello", locale, { name: session.firstName })}
           </h1>
           <p className={styles.portalLead}>
-            Вас приветствует Клиентский портал {CLIENT_PORTAL_BRAND_NAME}.
+            {t("welcomeLead", locale, { brand: CLIENT_PORTAL_BRAND_NAME })}
             <br />
-            Это ваш личный кабинет.
+            {t("welcomeLead2", locale)}
           </p>
         </div>
-        <form action={clientSignOutAction} className={styles.signOutForm}>
-          <button type="submit" className={styles.signOut}>
-            Выйти
-          </button>
-        </form>
+        <div className={styles.portalHeaderActions}>
+          <ClientLocaleSwitcher locale={locale} />
+          <form action={clientSignOutAction} className={styles.signOutForm}>
+            <button type="submit" className={styles.signOut}>
+              {t("signOut", locale)}
+            </button>
+          </form>
+        </div>
       </header>
 
       <section className={styles.portalCard}>
-        <h2>Анкета</h2>
+        <h2>{t("questionnaire", locale)}</h2>
         <p>
           {submitted
-            ? "Анкета отправлена. Вы можете просмотреть ответы."
+            ? t("questionnaireSubmitted", locale)
             : needsCountry
-              ? "Выберите страну оформления ВНЖ и заполните анкету."
-              : `Заполните анкету. Прогресс: ${progress}%.`}
+              ? t("questionnairePickCountry", locale)
+              : t("questionnaireProgress", locale, { progress })}
         </p>
         <Link
           href="/client/questionnaire"
@@ -70,31 +79,35 @@ export default async function ClientPortalHomePage() {
           style={{ marginTop: "0.85rem", width: "fit-content" }}
         >
           {submitted
-            ? "Открыть анкету"
+            ? t("openQuestionnaire", locale)
             : needsCountry || progress === 0
-              ? "Начать заполнять анкету"
-              : "Продолжить анкету"}
+              ? t("startQuestionnaire", locale)
+              : t("continueQuestionnaire", locale)}
         </Link>
       </section>
 
       {processStatus ? (
         <section className={styles.portalCard}>
-          <h2>Статус процесса</h2>
-          <p className={styles.statusLabel}>Текущий статус вашего дела</p>
-          <p className={styles.statusValue}>{processStatus.value}</p>
+          <h2>{t("processStatus", locale)}</h2>
+          <p className={styles.statusLabel}>{t("processStatusLabel", locale)}</p>
+          <p className={styles.statusValue}>
+            {translateProcessStatus(processStatus.value, locale)}
+          </p>
           {processStatus.updatedAt ? (
             <p className={styles.statusUpdated}>
-              Обновлено:{" "}
-              {new Date(processStatus.updatedAt).toLocaleString("ru-RU")}
+              {t("updated", locale)}{" "}
+              {new Date(processStatus.updatedAt).toLocaleString(
+                locale === "en" ? "en-GB" : "ru-RU",
+              )}
             </p>
           ) : null}
         </section>
       ) : null}
 
       <section className={styles.portalCard}>
-        <h2>Ассистент</h2>
-        <p>Клиентский AI-ассистент подключим после базового кабинета.</p>
-        <span className={styles.comingSoon}>Скоро</span>
+        <h2>{t("assistant", locale)}</h2>
+        <p>{t("assistantSoon", locale)}</p>
+        <span className={styles.comingSoon}>{t("comingSoon", locale)}</span>
       </section>
     </div>
   );

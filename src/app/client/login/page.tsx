@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
 import { ClientPortalLoginForm } from "@/components/client-portal/ClientPortalLoginForm";
+import { redirect } from "next/navigation";
+import { resolveClientPortalLocale } from "@/lib/client-portal/resolve-locale";
 import { getClientSession } from "@/lib/client-portal/session";
 
 export default async function ClientLoginPage() {
@@ -7,5 +8,6 @@ export default async function ClientLoginPage() {
   if (session) {
     redirect("/client");
   }
-  return <ClientPortalLoginForm />;
+  const locale = await resolveClientPortalLocale();
+  return <ClientPortalLoginForm locale={locale} />;
 }

@@ -1,0 +1,41 @@
+.wrap,
+.authWrap {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.authWrap {
+  margin: 0 0 1rem;
+}
+
+.btn {
+  min-width: 2.4rem;
+  padding: 0.35rem 0.55rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  color: #1e3a8a;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.active {
+  background: #2563eb;
+  color: #fff;
+}

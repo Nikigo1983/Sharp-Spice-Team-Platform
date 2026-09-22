@@ -5,8 +5,11 @@ import {
   clientAcceptInviteAction,
   type ClientAuthState,
 } from "@/app/client/actions";
+import { ClientLocaleSwitcher } from "@/components/client-portal/ClientLocaleSwitcher";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
+import { t } from "@/lib/client-portal/portal-i18n";
+import type { ClientPortalLocale } from "@/lib/client-portal/types";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
@@ -15,6 +18,7 @@ type Props = {
   token: string;
   email: string;
   firstName: string;
+  locale: ClientPortalLocale;
   invalid?: boolean;
 };
 
@@ -22,6 +26,7 @@ export function ClientInviteAcceptForm({
   token,
   email,
   firstName,
+  locale,
   invalid = false,
 }: Props) {
   const [state, formAction, pending] = useActionState(
@@ -36,13 +41,15 @@ export function ClientInviteAcceptForm({
           <div className={styles.logoWrap}>
             <EmigrantLogo size="auth" priority />
           </div>
-          <h1 className={styles.title}>Приглашение недоступно</h1>
+          <ClientLocaleSwitcher locale={locale} variant="auth" />
+          <h1 className={styles.title}>{t("inviteUsed", locale)}</h1>
           <p className={styles.subtitle}>
-            Ссылка недействительна или уже использована. Запросите новое
-            приглашение у менеджера {CLIENT_PORTAL_BRAND_NAME}.
+            {locale === "en"
+              ? `The link is invalid or already used. Ask your ${CLIENT_PORTAL_BRAND_NAME} manager for a new invitation.`
+              : `Ссылка недействительна или уже использована. Запросите новое приглашение у менеджера ${CLIENT_PORTAL_BRAND_NAME}.`}
           </p>
           <a className={styles.linkButton} href="/client/login">
-            Перейти ко входу
+            {t("backToLogin", locale)}
           </a>
         </div>
       </div>
@@ -55,9 +62,16 @@ export function ClientInviteAcceptForm({
         <div className={styles.logoWrap}>
           <EmigrantLogo size="auth" priority />
         </div>
-        <h1 className={styles.title}>Добро пожаловать, {firstName}</h1>
+        <ClientLocaleSwitcher locale={locale} variant="auth" />
+        <h1 className={styles.title}>
+          {locale === "en"
+            ? `Welcome, ${firstName}`
+            : `Добро пожаловать, ${firstName}`}
+        </h1>
         <p className={styles.subtitle}>
-          Создайте пароль для клиентского портала {CLIENT_PORTAL_BRAND_NAME}. Email:{" "}
+          {locale === "en"
+            ? `Create a password for the ${CLIENT_PORTAL_BRAND_NAME} client portal. Email: `
+            : `Создайте пароль для клиентского портала ${CLIENT_PORTAL_BRAND_NAME}. Email: `}
           <strong>{email}</strong>
         </p>
         {state.error ? (
@@ -67,8 +81,9 @@ export function ClientInviteAcceptForm({
         ) : null}
         <form className={styles.form} action={formAction}>
           <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="locale" value={locale} />
           <label className={styles.label}>
-            Пароль
+            {t("password", locale)}
             <input
               className={styles.input}
               type="password"
@@ -80,7 +95,7 @@ export function ClientInviteAcceptForm({
             />
           </label>
           <label className={styles.label}>
-            Повторите пароль
+            {t("confirmPassword", locale)}
             <input
               className={styles.input}
               type="password"
@@ -92,7 +107,7 @@ export function ClientInviteAcceptForm({
             />
           </label>
           <button className={styles.submit} type="submit" disabled={pending}>
-            {pending ? "Создание…" : "Создать аккаунт"}
+            {pending ? t("creating", locale) : t("createAccount", locale)}
           </button>
         </form>
       </div>

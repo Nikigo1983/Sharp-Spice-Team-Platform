@@ -19,6 +19,9 @@ import {
   calculateProgress,
   validateRequiredAnswers,
 } from "@/lib/client-portal/questionnaire-progress";
+import { t } from "@/lib/client-portal/portal-i18n";
+import type { ClientPortalLocale } from "@/lib/client-portal/types";
+import { ClientLocaleSwitcher } from "./ClientLocaleSwitcher";
 import styles from "./ClientQuestionnaire.module.css";
 
 type LoadPayload = {
@@ -27,12 +30,17 @@ type LoadPayload = {
   progress: number;
   needsCountrySelection?: boolean;
   countryOptions?: Array<{ value: string; label: string }>;
+  locale?: ClientPortalLocale;
 };
 
-function scriptError(question: QuestionDefinition, value: unknown): string | null {
+function scriptError(
+  question: QuestionDefinition,
+  value: unknown,
+  locale: ClientPortalLocale,
+): string | null {
   if (question.script !== "latin") return null;
   if (!containsCyrillic(value)) return null;
-  return "Пожалуйста, заполните латиницей";
+  return t("fillLatin", locale);
 }
 
 /** Show unique file extensions only (accept also lists MIME types for the input). */
@@ -50,12 +58,18 @@ function formatAcceptHint(accept: string): string {
   return extensions.length > 0 ? extensions.join(", ") : ".pdf";
 }
 
-function LabelWithLink({ question }: { question: QuestionDefinition }) {
-  const text = pickLabel(question.label);
+function LabelWithLink({
+  question,
+  locale,
+}: {
+  question: QuestionDefinition;
+  locale: ClientPortalLocale;
+}) {
+  const text = pickLabel(question.label, locale);
   if (!question.linkHref || !question.linkLabel) {
     return <>{text}{question.required ? " *" : ""}</>;
   }
-  const linkText = pickLabel(question.linkLabel);
+  const linkText = pickLabel(question.linkLabel, locale);
   const idx = text.indexOf(linkText);
   if (idx < 0) {
     return (
@@ -83,10 +97,12 @@ function LabelWithLink({ question }: { question: QuestionDefinition }) {
 function YesNoButtons({
   value,
   disabled,
+  locale,
   onChange,
 }: {
   value: unknown;
   disabled: boolean;
+  locale: ClientPortalLocale;
   onChange: (next: "yes" | "no") => void;
 }) {
   return (
@@ -97,7 +113,7 @@ function YesNoButtons({
         disabled={disabled}
         onClick={() => onChange("yes")}
       >
-        Да
+        {t("yes", locale)}
       </button>
       <button
         type="button"
@@ -105,7 +121,7 @@ function YesNoButtons({
         disabled={disabled}
         onClick={() => onChange("no")}
       >
-        Нет
+        {t("no", locale)}
       </button>
     </div>
   );
@@ -115,6 +131,7 @@ function FileField({
   question,
   value,
   disabled,
+  locale,
   prepareUpload,
   onUploaded,
   onRemoved,
@@ -122,6 +139,7 @@ function FileField({
   question: QuestionDefinition;
   value: unknown;
   disabled: boolean;
+  locale: ClientPortalLocale;
   prepareUpload: () => Promise<{
     ok: boolean;
     answers: Record<string, unknown>;
@@ -148,7 +166,7 @@ function FileField({
     try {
       const prep = await prepareUpload();
       if (!prep.ok) {
-        setError("Сначала сохраните анкету и попробуйте снова");
+        setError(t("saveDraftFirst", locale));
         return;
       }
       const body = new FormData();
@@ -168,12 +186,12 @@ function FileField({
       if (!res.ok || !data.attachment || !data.questionnaire) {
         setError(
           data.error === "FILE_TOO_LARGE"
-            ? `Файл больше ${maxMb} МБ`
+            ? t("fileTooLarge", locale, { size: maxMb })
             : data.error === "UNSUPPORTED_FILE_TYPE"
-              ? "Недопустимый формат файла"
+              ? t("unsupportedFileType", locale)
               : data.error === "REVISION_CONFLICT"
-                ? "Анкета изменилась. Обновите страницу."
-                : "Не удалось загрузить файл",
+                ? t("revisionConflict", locale)
+                : t("uploadFailed", locale),
         );
         return;
       }
@@ -186,7 +204,9 @@ function FileField({
   async function onRemove() {
     if (!file || disabled) return;
     const confirmed = window.confirm(
-      `Вы действительно хотите удалить «${file.fileName}»?`,
+      locale === "en"
+        ? `Delete “${file.fileName}”?`
+        : `Вы действительно хотите удалить «${file.fileName}»?`,
     );
     if (!confirmed) return;
     setUploading(true);
@@ -194,7 +214,7 @@ function FileField({
     try {
       const prep = await prepareUpload();
       if (!prep.ok) {
-        setError("Сначала сохраните анкету и попробуйте снова");
+        setError(t("saveDraftFirst", locale));
         return;
       }
       const res = await fetch(
@@ -207,7 +227,9 @@ function FileField({
         error?: string;
       };
       if (!res.ok || !data.questionnaire) {
-        setError("Не удалось удалить файл");
+        setError(
+          locale === "en" ? "Could not delete the file" : "Не удалось удалить файл",
+        );
         return;
       }
       onRemoved(data.questionnaire, data.progress);
@@ -233,7 +255,7 @@ function FileField({
               disabled={uploading}
               onClick={() => void onRemove()}
             >
-              Удалить
+              {t("remove", locale)}
             </button>
           ) : null}
         </div>
@@ -248,11 +270,13 @@ function FileField({
               event.target.value = "";
             }}
           />
-          <span>{uploading ? "Загрузка…" : "Выбрать файл"}</span>
+          <span>{uploading ? t("uploading", locale) : t("selectFile", locale)}</span>
           <span className={styles.fileHint}>
-            Допустимые форматы: {acceptHint}
+            {t("allowedFormats", locale, { formats: acceptHint })}
           </span>
-          <span className={styles.fileHint}>Максимальный размер: {maxMb} МБ</span>
+          <span className={styles.fileHint}>
+            {t("maxSizeMb", locale, { size: maxMb })}
+          </span>
         </label>
       )}
       {error ? <p className={styles.error}>{error}</p> : null}
@@ -272,6 +296,7 @@ export function ClientQuestionnaireForm({
   const [countryOptions, setCountryOptions] = useState<
     Array<{ value: string; label: string }>
   >([]);
+  const [locale, setLocale] = useState<ClientPortalLocale>("ru");
   const [selectingCountry, setSelectingCountry] = useState(false);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -289,13 +314,18 @@ export function ClientQuestionnaireForm({
     setError(null);
     const res = await fetch("/api/client/questionnaire", { cache: "no-store" });
     if (!res.ok) {
-      setError("Не удалось загрузить анкету.");
+      setError(
+        locale === "en"
+          ? "Could not load the questionnaire."
+          : "Не удалось загрузить анкету.",
+      );
       return;
     }
     const data = (await res.json()) as LoadPayload;
     setSchema(data.schema);
     setNeedsCountry(Boolean(data.needsCountrySelection));
     setCountryOptions(data.countryOptions ?? []);
+    if (data.locale) setLocale(data.locale);
     setRecordSync(data.questionnaire);
     setProgress(data.progress);
   }, [setRecordSync]);
@@ -425,7 +455,7 @@ export function ClientQuestionnaireForm({
     setError(null);
     setStatus(null);
     try {
-      const missing = validateRequiredAnswers(current.answers, "ru", schema);
+      const missing = validateRequiredAnswers(current.answers, locale, schema);
       if (missing.length > 0) {
         setError(
           `Заполните обязательные поля: ${missing.join(", ")}. Проверьте все вкладки — ответы могли не сохраниться.`,
@@ -472,7 +502,7 @@ export function ClientQuestionnaireForm({
   if (!record) {
     return (
       <div className={styles.wrap}>
-        <p className={styles.muted}>{error ?? "Загрузка анкеты…"}</p>
+        <p className={styles.muted}>{error ?? t("loadingQuestionnaire", locale)}</p>
       </div>
     );
   }
@@ -482,20 +512,22 @@ export function ClientQuestionnaireForm({
       <div className={styles.wrap}>
         <header className={styles.header}>
           <div>
-            <h1 className={styles.title}>Анкета для вида на жительство</h1>
-            <p className={styles.lead}>
-              Чтобы подобрать нужную анкету, укажите страну, для которой вы
-              оформляете ВНЖ.
-            </p>
+            <h1 className={styles.title}>{t("countryPickerTitle", locale)}</h1>
+            <p className={styles.lead}>{t("countryPickerLead", locale)}</p>
           </div>
+          <ClientLocaleSwitcher
+            locale={locale}
+            onChanged={(next) => {
+              setLocale(next);
+              void load();
+            }}
+          />
         </header>
         <section className={styles.card}>
           <h2 className={styles.sectionTitle}>
-            Для какой страны вы оформляете вид на жительство?
+            {t("countryPickerQuestion", locale)}
           </h2>
-          <p className={styles.muted}>
-            Выберите один вариант — откроется анкета именно для этой страны.
-          </p>
+          <p className={styles.muted}>{t("countryPickerHint", locale)}</p>
           <div className={styles.countryGrid}>
             {countryOptions.map((opt) => (
               <button
@@ -518,7 +550,9 @@ export function ClientQuestionnaireForm({
   if (!schema || !section) {
     return (
       <div className={styles.wrap}>
-        <p className={styles.muted}>{error ?? "Загрузка анкеты…"}</p>
+        <p className={styles.muted}>
+          {error ?? t("loadingQuestionnaire", locale)}
+        </p>
       </div>
     );
   }
@@ -527,18 +561,34 @@ export function ClientQuestionnaireForm({
     <div className={styles.wrap}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.title}>{pickLabel(schema.title)}</h1>
+          <h1 className={styles.title}>{pickLabel(schema.title, locale)}</h1>
           <p className={styles.lead}>
-            {schema.description ? pickLabel(schema.description) : null}
+            {schema.description ? pickLabel(schema.description, locale) : null}
           </p>
         </div>
-        <div className={styles.progressBox}>
-          <span>{progress}%</span>
-          <div className={styles.progressTrack}>
-            <div
-              className={styles.progressFill}
-              style={{ width: `${progress}%` }}
-            />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "0.65rem",
+          }}
+        >
+          <ClientLocaleSwitcher
+            locale={locale}
+            onChanged={(next) => {
+              setLocale(next);
+              void load();
+            }}
+          />
+          <div className={styles.progressBox}>
+            <span>{progress}%</span>
+            <div className={styles.progressTrack}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -551,15 +601,15 @@ export function ClientQuestionnaireForm({
             className={index === sectionIndex ? styles.tabActive : styles.tab}
             onClick={() => setSectionIndex(index)}
           >
-            {pickLabel(item.title)}
+            {pickLabel(item.title, locale)}
           </button>
         ))}
       </nav>
 
       <section className={styles.card}>
-        <h2 className={styles.sectionTitle}>{pickLabel(section.title)}</h2>
+        <h2 className={styles.sectionTitle}>{pickLabel(section.title, locale)}</h2>
         {section.description ? (
-          <p className={styles.muted}>{pickLabel(section.description)}</p>
+          <p className={styles.muted}>{pickLabel(section.description, locale)}</p>
         ) : null}
 
         <div className={styles.fields}>
@@ -570,7 +620,7 @@ export function ClientQuestionnaireForm({
             if (question.type === "information") {
               return (
                 <div key={question.id} className={styles.field}>
-                  <p className={styles.info}>{pickLabel(question.label)}</p>
+                  <p className={styles.info}>{pickLabel(question.label, locale)}</p>
                 </div>
               );
             }
@@ -579,7 +629,7 @@ export function ClientQuestionnaireForm({
               return (
                 <div key={question.id} className={styles.field}>
                   <p className={styles.label}>
-                    <LabelWithLink question={question} />
+                    <LabelWithLink question={question} locale={locale} />
                   </p>
                   <div className={styles.yesNo}>
                     <button
@@ -603,12 +653,13 @@ export function ClientQuestionnaireForm({
               return (
                 <div key={question.id} className={styles.field}>
                   <label className={styles.label}>
-                    {pickLabel(question.label)}
+                    {pickLabel(question.label, locale)}
                     {question.required ? " *" : ""}
                   </label>
                   <YesNoButtons
                     value={record.answers[question.id]}
                     disabled={readOnly}
+                    locale={locale}
                     onChange={(next) => updateAnswer(question.id, next)}
                   />
                 </div>
@@ -619,13 +670,14 @@ export function ClientQuestionnaireForm({
               return (
                 <div key={question.id} className={styles.field}>
                   <label className={styles.label}>
-                    {pickLabel(question.label)}
+                    {pickLabel(question.label, locale)}
                     {question.required ? " *" : ""}
                   </label>
                   <FileField
                     question={question}
                     value={record.answers[question.id]}
                     disabled={readOnly}
+                    locale={locale}
                     prepareUpload={async () => {
                       const answers = recordRef.current?.answers ?? {};
                       const ok = await saveDraft(answers, { silent: true });
@@ -654,14 +706,14 @@ export function ClientQuestionnaireForm({
             }
 
             const placeholder = question.placeholder
-              ? pickLabel(question.placeholder)
+              ? pickLabel(question.placeholder, locale)
               : undefined;
 
             if (question.type === "select") {
               return (
                 <div key={question.id} className={fieldClass}>
                   <label className={styles.label}>
-                    {pickLabel(question.label)}
+                    {pickLabel(question.label, locale)}
                     {question.required ? " *" : ""}
                   </label>
                   <select
@@ -675,7 +727,7 @@ export function ClientQuestionnaireForm({
                     <option value="">Выберите…</option>
                     {(question.options ?? []).map((option) => (
                       <option key={option.value} value={option.value}>
-                        {pickLabel(option.label)}
+                        {pickLabel(option.label, locale)}
                       </option>
                     ))}
                   </select>
@@ -685,11 +737,11 @@ export function ClientQuestionnaireForm({
 
             if (question.type === "textarea") {
               const value = record.answers[question.id];
-              const latinHint = scriptError(question, value);
+              const latinHint = scriptError(question, value, locale);
               return (
                 <div key={question.id} className={fieldClass}>
                   <label className={styles.label}>
-                    {pickLabel(question.label)}
+                    {pickLabel(question.label, locale)}
                     {question.required ? " *" : ""}
                   </label>
                   <textarea
@@ -728,12 +780,12 @@ export function ClientQuestionnaireForm({
                     : "text";
 
             const value = record.answers[question.id];
-            const latinHint = scriptError(question, value);
+            const latinHint = scriptError(question, value, locale);
 
             return (
               <div key={question.id} className={fieldClass}>
                 <label className={styles.label}>
-                  {pickLabel(question.label)}
+                  {pickLabel(question.label, locale)}
                   {question.required ? " *" : ""}
                 </label>
                 <input
@@ -776,13 +828,22 @@ export function ClientQuestionnaireForm({
         ) : null}
         {submitted ? (
           <div className={styles.status} role="status">
-            <p>Спасибо!</p>
-            <p>Ваша анкета успешно отправлена.</p>
+            <p>{locale === "en" ? "Thank you!" : "Спасибо!"}</p>
             <p>
-              После рассмотрения менеджером ожидайте изменения статуса вашего
-              процесса.
+              {locale === "en"
+                ? "Your questionnaire was submitted successfully."
+                : "Ваша анкета успешно отправлена."}
             </p>
-            <p>Вы можете его отслеживать в личном кабинете.</p>
+            <p>
+              {locale === "en"
+                ? "After a manager reviews it, expect updates to your case status."
+                : "После рассмотрения менеджером ожидайте изменения статуса вашего процесса."}
+            </p>
+            <p>
+              {locale === "en"
+                ? "You can track it in your personal account."
+                : "Вы можете его отслеживать в личном кабинете."}
+            </p>
           </div>
         ) : status ? (
           <p className={styles.status}>{status}</p>
@@ -795,7 +856,7 @@ export function ClientQuestionnaireForm({
             disabled={sectionIndex === 0}
             onClick={() => setSectionIndex((value) => Math.max(0, value - 1))}
           >
-            Назад
+            {t("back", locale)}
           </button>
           {!readOnly ? (
             <button
@@ -804,7 +865,7 @@ export function ClientQuestionnaireForm({
               disabled={saving}
               onClick={() => void saveDraft()}
             >
-              {saving ? "Сохранение…" : "Сохранить"}
+              {saving ? t("savingAnswers", locale) : t("save", locale)}
             </button>
           ) : null}
           {sectionIndex < sections.length - 1 ? (
@@ -817,7 +878,7 @@ export function ClientQuestionnaireForm({
                 )
               }
             >
-              Далее
+              {t("next", locale)}
             </button>
           ) : !readOnly ? (
             <button
@@ -826,11 +887,13 @@ export function ClientQuestionnaireForm({
               disabled={submitting}
               onClick={() => void onSubmit()}
             >
-              {submitting ? "Отправка…" : "Отправить анкету"}
+              {submitting
+                ? t("submitting", locale)
+                : t("submitQuestionnaire", locale)}
             </button>
           ) : (
             <Link className={styles.primary} href="/client">
-              В кабинет
+              {locale === "en" ? "Back to account" : "В кабинет"}
             </Link>
           )}
         </div>

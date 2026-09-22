@@ -296,3 +296,28 @@ export function buildInviteUrl(token: string, origin: string): string {
 export function buildLoginUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}/client/login`;
 }
+
+export async function updateClientPreferredLocale(input: {
+  userId: string;
+  preferredLocale: ClientPortalLocale;
+}): Promise<ClientSession> {
+  const { findClientPortalUserById } = await import("./local-store");
+  const user = await findClientPortalUserById(input.userId);
+  if (!user) {
+    throw new Error("NOT_FOUND");
+  }
+  const updated = await upsertClientPortalUser({
+    ...user,
+    preferredLocale: input.preferredLocale,
+    updatedAt: new Date().toISOString(),
+  });
+  const session: ClientSession = {
+    id: updated.id,
+    email: updated.email,
+    firstName: updated.firstName,
+    preferredLocale: updated.preferredLocale,
+    invitationId: updated.invitationId,
+  };
+  await createClientSession(session);
+  return session;
+}

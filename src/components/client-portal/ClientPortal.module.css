@@ -183,6 +183,15 @@
   flex: 1;
 }
 
+.portalHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
 .portalTitle {
   margin: 0;
   font-family: Sora, sans-serif;

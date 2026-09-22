@@ -5,13 +5,22 @@ import {
   clientResetPasswordAction,
   type ClientAuthState,
 } from "@/app/client/actions";
+import { ClientLocaleSwitcher } from "@/components/client-portal/ClientLocaleSwitcher";
 import { EmigrantLogo } from "@/components/client-portal/EmigrantLogo";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
+import { t } from "@/lib/client-portal/portal-i18n";
+import type { ClientPortalLocale } from "@/lib/client-portal/types";
 import styles from "./ClientPortal.module.css";
 
 const initialState: ClientAuthState = {};
 
-export function ClientResetPasswordForm({ token }: { token: string }) {
+export function ClientResetPasswordForm({
+  token,
+  locale,
+}: {
+  token: string;
+  locale: ClientPortalLocale;
+}) {
   const [state, formAction, pending] = useActionState(
     clientResetPasswordAction,
     initialState,
@@ -24,12 +33,11 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
           <div className={styles.logoWrap}>
             <EmigrantLogo size="auth" priority />
           </div>
-          <h1 className={styles.title}>Ссылка недействительна</h1>
-          <p className={styles.subtitle}>
-            Запросите новую ссылку для сброса пароля.
-          </p>
+          <ClientLocaleSwitcher locale={locale} variant="auth" />
+          <h1 className={styles.title}>{t("invalidResetLink", locale)}</h1>
+          <p className={styles.subtitle}>{t("requestNewReset", locale)}</p>
           <a className={styles.linkButton} href="/client/forgot-password">
-            Забыли пароль?
+            {t("forgotPassword", locale)}
           </a>
         </div>
       </div>
@@ -43,11 +51,11 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
           <div className={styles.logoWrap}>
             <EmigrantLogo size="auth" priority />
           </div>
-          <h1 className={styles.title}>Пароль изменён</h1>
+          <ClientLocaleSwitcher locale={locale} variant="auth" />
+          <h1 className={styles.title}>{t("passwordChangedTitle", locale)}</h1>
           <div className={styles.statusOk} role="status">
             <p className={styles.statusOkHint}>
-              Ваш пароль успешно изменён. Теперь можно войти в клиентский
-              портал с новым паролем.
+              {t("passwordChangedBody", locale)}
             </p>
           </div>
           <a
@@ -55,7 +63,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
             href="/client/login"
             style={{ marginTop: "1.25rem" }}
           >
-            Войти в портал
+            {t("loginToPortal", locale)}
           </a>
         </div>
       </div>
@@ -68,9 +76,10 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
         <div className={styles.logoWrap}>
           <EmigrantLogo size="auth" priority />
         </div>
-        <h1 className={styles.title}>Новый пароль</h1>
+        <ClientLocaleSwitcher locale={locale} variant="auth" />
+        <h1 className={styles.title}>{t("resetTitle", locale)}</h1>
         <p className={styles.subtitle}>
-          Задайте новый пароль для клиентского портала {CLIENT_PORTAL_BRAND_NAME}.
+          {t("resetSubtitle", locale, { brand: CLIENT_PORTAL_BRAND_NAME })}
         </p>
         {state.error ? (
           <p className={styles.error} role="alert">
@@ -79,8 +88,9 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
         ) : null}
         <form className={styles.form} action={formAction}>
           <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="locale" value={locale} />
           <label className={styles.label}>
-            Новый пароль
+            {t("newPassword", locale)}
             <input
               className={styles.input}
               type="password"
@@ -92,7 +102,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
             />
           </label>
           <label className={styles.label}>
-            Повторите пароль
+            {t("confirmPassword", locale)}
             <input
               className={styles.input}
               type="password"
@@ -104,7 +114,7 @@ export function ClientResetPasswordForm({ token }: { token: string }) {
             />
           </label>
           <button className={styles.submit} type="submit" disabled={pending}>
-            {pending ? "Сохранение…" : "Сохранить пароль"}
+            {pending ? t("saving", locale) : t("savePassword", locale)}
           </button>
         </form>
       </div>

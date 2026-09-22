@@ -1,19 +1,30 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   acceptInvitation,
   requestClientPasswordReset,
   resetClientPasswordWithToken,
   signInClientPortal,
+  updateClientPreferredLocale,
 } from "@/lib/client-portal/auth-service";
+import {
+  CLIENT_LOCALE_COOKIE,
+  normalizeClientLocale,
+  t,
+} from "@/lib/client-portal/portal-i18n";
 import { destroyClientSession } from "@/lib/client-portal/session";
+import type { ClientPortalLocale } from "@/lib/client-portal/types";
 
 export type ClientAuthState = {
   error?: string;
   ok?: boolean;
 };
+
+function localeFromForm(formData: FormData): ClientPortalLocale {
+  return normalizeClientLocale(String(formData.get("locale") ?? ""));
+}
 
 export async function clientSignInAction(
   _prev: ClientAuthState,
@@ -21,15 +32,26 @@ export async function clientSignInAction(
 ): Promise<ClientAuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const locale = localeFromForm(formData);
 
   if (!email || !password) {
-    return { error: "Введите email и пароль." };
+    return { error: t("enterEmailPassword", locale) };
   }
 
   try {
-    await signInClientPortal({ email, password });
+    const session = await signInClientPortal({ email, password });
+    const cookieStore = await cookies();
+    const guestLocale = normalizeClientLocale(
+      cookieStore.get(CLIENT_LOCALE_COOKIE)?.value ?? locale,
+    );
+    if (guestLocale !== session.preferredLocale) {
+      await updateClientPreferredLocale({
+        userId: session.id,
+        preferredLocale: guestLocale,
+      });
+    }
   } catch {
-    return { error: "Неверный email или пароль." };
+    return { error: t("invalidCredentials", locale) };
   }
 
   redirect("/client");
@@ -42,28 +64,35 @@ export async function clientAcceptInviteAction(
   const token = String(formData.get("token") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+  const locale = localeFromForm(formData);
 
   if (!token) {
-    return { error: "Ссылка приглашения недействительна." };
+    return { error: t("inviteInvalid", locale) };
   }
   if (password.length < 8) {
-    return { error: "Пароль должен быть не короче 8 символов." };
+    return { error: t("passwordTooShort", locale) };
   }
   if (password !== passwordConfirm) {
-    return { error: "Пароли не совпадают." };
+    return { error: t("passwordsMismatch", locale) };
   }
 
   try {
-    await acceptInvitation({ token, password });
+    const session = await acceptInvitation({ token, password });
+    if (locale !== session.preferredLocale) {
+      await updateClientPreferredLocale({
+        userId: session.id,
+        preferredLocale: locale,
+      });
+    }
   } catch (error) {
     const code = error instanceof Error ? error.message : "INVITE_INVALID";
     if (code === "EMAIL_TAKEN") {
-      return { error: "Аккаунт с этим email уже создан. Войдите в портал." };
+      return { error: t("emailTaken", locale) };
     }
     if (code === "PASSWORD_TOO_SHORT") {
-      return { error: "Пароль должен быть не короче 8 символов." };
+      return { error: t("passwordTooShort", locale) };
     }
-    return { error: "Приглашение недействительно или уже использовано." };
+    return { error: t("inviteUsed", locale) };
   }
 
   redirect("/client");
@@ -74,8 +103,9 @@ export async function clientForgotPasswordAction(
   formData: FormData,
 ): Promise<ClientAuthState> {
   const email = String(formData.get("email") ?? "").trim();
+  const locale = localeFromForm(formData);
   if (!email) {
-    return { error: "Введите email." };
+    return { error: t("enterEmail", locale) };
   }
 
   const headerStore = await headers();
@@ -97,15 +127,16 @@ export async function clientResetPasswordAction(
   const token = String(formData.get("token") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+  const locale = localeFromForm(formData);
 
   if (!token) {
-    return { error: "Ссылка сброса недействительна." };
+    return { error: t("invalidReset", locale) };
   }
   if (password.length < 8) {
-    return { error: "Пароль должен быть не короче 8 символов." };
+    return { error: t("passwordTooShort", locale) };
   }
   if (password !== passwordConfirm) {
-    return { error: "Пароли не совпадают." };
+    return { error: t("passwordsMismatch", locale) };
   }
 
   try {
@@ -113,9 +144,9 @@ export async function clientResetPasswordAction(
   } catch (error) {
     const code = error instanceof Error ? error.message : "RESET_INVALID";
     if (code === "PASSWORD_TOO_SHORT") {
-      return { error: "Пароль должен быть не короче 8 символов." };
+      return { error: t("passwordTooShort", locale) };
     }
-    return { error: "Ссылка сброса недействительна или устарела." };
+    return { error: t("invalidReset", locale) };
   }
 
   return { ok: true };

@@ -9,6 +9,7 @@ import {
 import {
   needsVnzhCountrySelection,
   resolveSchemaForRecord,
+  resolveStaffCaseCountry,
   resolveVnzhCountry,
   VNZH_COUNTRY_ANSWER_KEY,
 } from "@/lib/client-portal/questionnaire-templates";
@@ -40,6 +41,32 @@ describe("questionnaire-templates", () => {
     };
     assert.equal(resolveVnzhCountry(record), null);
     assert.equal(needsVnzhCountrySelection(record), true);
+  });
+
+  it("resolves staff case country from picker and legacy direction", () => {
+    assert.equal(
+      resolveStaffCaseCountry({
+        status: "submitted",
+        answers: { [VNZH_COUNTRY_ANSWER_KEY]: "spain" },
+      }),
+      "spain",
+    );
+    assert.equal(
+      resolveStaffCaseCountry({
+        status: "submitted",
+        answers: {
+          __identity: { direction: "Испания" },
+        },
+      }),
+      "spain",
+    );
+    assert.equal(
+      resolveStaffCaseCountry({
+        status: "submitted",
+        answers: {},
+      }),
+      "croatia",
+    );
   });
 
   it("resolves Spain and Slovenia schemas from country answer", () => {

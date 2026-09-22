@@ -33,6 +33,10 @@ import { isFormgridImport, readFormgridCrmOpsSheet } from "@/lib/client-portal/f
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
+import {
+  resolveStaffCaseCountry,
+  vnzhCountryLabelRu,
+} from "@/lib/client-portal/questionnaire-templates";
 
 function staffFieldsForList(
   answers: Record<string, unknown>,
@@ -71,6 +75,7 @@ function staffFieldsForList(
 function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
   const identity = readLegacyIdentity(item.answers);
   const source = resolveIntakeClientSource(item.answers);
+  const vnzhCountry = resolveStaffCaseCountry(item);
   const displayName =
     identity?.fullNameCyrillic ||
     identity?.fullNameLatin ||
@@ -102,6 +107,8 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     isFormgrid: source === "formgrid",
     isManual: source === "manual",
     source,
+    vnzhCountry,
+    vnzhCountryLabel: vnzhCountryLabelRu(vnzhCountry),
     isArchived: isCaseArchived(item.answers),
     staffFields: staffFieldsForList(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),

@@ -41,6 +41,8 @@ type ListItem = {
   isFormgrid?: boolean;
   isManual?: boolean;
   source?: "legacy" | "formgrid" | "portal" | "manual";
+  vnzhCountry?: "croatia" | "spain" | "slovenia";
+  vnzhCountryLabel?: string;
   isArchived?: boolean;
   staffFields?: QuestionnaireStaffFields;
 };
@@ -48,6 +50,16 @@ type ListItem = {
 type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
 /** Empty lawyer field vs filled («Передан адвокату» / «Остальные»). */
 type LawyerFilter = "" | "assigned" | "unassigned";
+type VnzhCountryFilter = "" | "croatia" | "spain" | "slovenia";
+
+const VNZH_COUNTRY_FILTER_OPTIONS: Array<{
+  value: Exclude<VnzhCountryFilter, "">;
+  label: string;
+}> = [
+  { value: "croatia", label: "Хорватия" },
+  { value: "spain", label: "Испания" },
+  { value: "slovenia", label: "Словения" },
+];
 
 const SUBMITTED_MONTH_YEAR = 2026;
 const SUBMITTED_MONTH_OPTIONS = [
@@ -172,6 +184,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [partner, setPartner] = useState("");
   const [clientSource, setClientSource] = useState<ClientSourceFilter>("");
   const [lawyerFilter, setLawyerFilter] = useState<LawyerFilter>("");
+  const [vnzhCountryFilter, setVnzhCountryFilter] =
+    useState<VnzhCountryFilter>("");
   const [submittedMonth, setSubmittedMonth] = useState("");
   const [bookingAlertsOpen, setBookingAlertsOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -449,6 +463,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!matchesSubmittedMonth(item.submittedAt, submittedMonth)) {
             return false;
           }
+          if (
+            vnzhCountryFilter &&
+            (item.vnzhCountry ?? "croatia") !== vnzhCountryFilter
+          ) {
+            return false;
+          }
           return true;
         })
         .sort((a, b) =>
@@ -466,6 +486,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       clientSource,
       lawyerFilter,
       submittedMonth,
+      vnzhCountryFilter,
     ],
   );
 
@@ -551,6 +572,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setPartner("");
     setClientSource("");
     setLawyerFilter("");
+    setVnzhCountryFilter("");
     setSubmittedMonth("");
   };
 
@@ -558,6 +580,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     const headers = [
       "Клиент",
       "Email",
+      "Страна ВНЖ",
       "Дата подачи",
       ...STAFF_FIELD_COLUMNS.map((col) => col.label),
     ];
@@ -566,6 +589,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       return [
         clientName(item),
         item.email,
+        item.vnzhCountryLabel ??
+          VNZH_COUNTRY_FILTER_OPTIONS.find((o) => o.value === item.vnzhCountry)
+            ?.label ??
+          "Хорватия",
         formatSubmittedAt(item.submittedAt),
         ...STAFF_FIELD_COLUMNS.map((col) => draft[col.key]),
       ];
@@ -2038,6 +2065,36 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         <div
           className={styles.submittedMonthRow}
           role="group"
+          aria-label="Страна оформления ВНЖ"
+        >
+          <span className={styles.submittedMonthLabel}>Страна ВНЖ:</span>
+          <button
+            type="button"
+            className={`${styles.submittedMonthChip}${vnzhCountryFilter === "" ? ` ${styles.submittedMonthChipActive}` : ""}`}
+            aria-pressed={vnzhCountryFilter === ""}
+            onClick={() => setVnzhCountryFilter("")}
+          >
+            Все
+          </button>
+          {VNZH_COUNTRY_FILTER_OPTIONS.map((country) => (
+            <button
+              key={country.value}
+              type="button"
+              className={`${styles.submittedMonthChip}${vnzhCountryFilter === country.value ? ` ${styles.submittedMonthChipActive}` : ""}`}
+              aria-pressed={vnzhCountryFilter === country.value}
+              onClick={() =>
+                setVnzhCountryFilter((current) =>
+                  current === country.value ? "" : country.value,
+                )
+              }
+            >
+              {country.label}
+            </button>
+          ))}
+        </div>
+        <div
+          className={styles.submittedMonthRow}
+          role="group"
           aria-label={`Дата подачи ${SUBMITTED_MONTH_YEAR}`}
         >
           <span className={styles.submittedMonthLabel}>
@@ -2222,6 +2279,15 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     >
                       <span className={styles.nameText}>
                         {name}
+                        {item.vnzhCountryLabel || item.vnzhCountry ? (
+                          <span className={styles.countryBadge}>
+                            {item.vnzhCountryLabel ??
+                              VNZH_COUNTRY_FILTER_OPTIONS.find(
+                                (o) => o.value === item.vnzhCountry,
+                              )?.label ??
+                              "Хорватия"}
+                          </span>
+                        ) : null}
                         {item.isLegacy ? (
                           <span className={styles.legacyBadge}>
                             Из старой базы

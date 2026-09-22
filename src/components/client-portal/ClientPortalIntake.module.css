@@ -882,6 +882,19 @@
   margin-left: 0.35rem;
 }
 
+.countryBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: 0.35rem;
+}
+
 .manualBadge {
   display: inline-flex;
   align-items: center;

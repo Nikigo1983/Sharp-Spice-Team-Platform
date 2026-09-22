@@ -122,6 +122,54 @@ export function needsVnzhCountrySelection(
   return resolveVnzhCountry(record) === null;
 }
 
+/** Map legacy CRM direction / country labels onto TRP countries. */
+export function mapDirectionLabelToVnzhCountry(
+  value: unknown,
+): VnzhCountry | null {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return null;
+  if (raw.includes("spain") || raw.includes("испан")) return "spain";
+  if (raw.includes("slovenia") || raw.includes("словен")) return "slovenia";
+  if (raw.includes("croatia") || raw.includes("хорват")) return "croatia";
+  return null;
+}
+
+/**
+ * Country for staff lists/filters: explicit questionnaire choice first,
+ * then legacy CRM direction, then Croatia for submitted portal cases.
+ */
+export function resolveStaffCaseCountry(
+  record: Pick<QuestionnaireRecord, "status" | "answers">,
+): VnzhCountry {
+  const explicit = readVnzhCountry(record.answers);
+  if (explicit) return explicit;
+
+  const identityRaw = record.answers?.__identity;
+  const legacyDirection =
+    identityRaw &&
+    typeof identityRaw === "object" &&
+    !Array.isArray(identityRaw)
+      ? (identityRaw as { direction?: unknown }).direction
+      : undefined;
+
+  const fromDirection =
+    mapDirectionLabelToVnzhCountry(legacyDirection) ||
+    mapDirectionLabelToVnzhCountry(record.answers?.direction) ||
+    mapDirectionLabelToVnzhCountry(record.answers?.country);
+  if (fromDirection) return fromDirection;
+
+  return resolveVnzhCountry(record) ?? "croatia";
+}
+
+export function vnzhCountryLabelRu(country: VnzhCountry): string {
+  return (
+    VNZH_COUNTRY_OPTIONS.find((opt) => opt.value === country)?.labelRu ??
+    "Хорватия"
+  );
+}
+
 export function schemaQuestions(
   schema: QuestionnaireSchema,
 ): QuestionDefinition[] {

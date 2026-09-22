@@ -2,7 +2,11 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { ClientSession } from "./types";
-import { SHARP_SPICE_ONBOARDING_SCHEMA } from "./questionnaire-schema";
+import { CROATIA_TRP_SCHEMA } from "./questionnaire-schema";
+import {
+  needsVnzhCountrySelection,
+  resolveSchemaForRecord,
+} from "./questionnaire-templates";
 import type {
   QuestionnaireAnswers,
   QuestionnaireRecord,
@@ -95,21 +99,28 @@ export {
 } from "./questionnaire-progress";
 
 export function getPublishedSchema(): QuestionnaireSchema {
-  return SHARP_SPICE_ONBOARDING_SCHEMA;
+  return CROATIA_TRP_SCHEMA;
 }
 
-function allQuestions(): QuestionDefinition[] {
-  return SHARP_SPICE_ONBOARDING_SCHEMA.sections.flatMap(
-    (section) => section.questions,
-  );
+export function getSchemaForRecord(
+  record: Pick<QuestionnaireRecord, "status" | "answers">,
+): QuestionnaireSchema {
+  return resolveSchemaForRecord(record);
+}
+
+function allQuestions(
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
+): QuestionDefinition[] {
+  return schema.sections.flatMap((section) => section.questions);
 }
 
 function hydrateAnswers(
   answers: QuestionnaireAnswers,
   portalEmail: string,
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
 ): QuestionnaireAnswers {
   const next = { ...answers };
-  for (const question of allQuestions()) {
+  for (const question of allQuestions(schema)) {
     if (question.derivedFrom === "portal_email") {
       if (!next[question.id] || String(next[question.id]).trim() === "") {
         next[question.id] = portalEmail;
@@ -160,12 +171,13 @@ export async function getOrCreateQuestionnaire(
 ): Promise<QuestionnaireRecord> {
   const existing = await findQuestionnaireByUserId(session.id);
   if (existing) {
-    let answers = hydrateAnswers(existing.answers, session.email);
+    const schema = resolveSchemaForRecord(existing);
+    let answers = hydrateAnswers(existing.answers, session.email, schema);
     if (existing.status === "draft") {
       answers = stripLegacyNamePrefill(answers, session.firstName);
-      if (isOrphanedDraftAnswers(answers)) {
+      if (isOrphanedDraftAnswers(answers, schema)) {
         await purgeFileAnswers(session.id, answers);
-        answers = hydrateAnswers({}, session.email);
+        answers = hydrateAnswers({}, session.email, schema);
       }
       if (answersChanged(existing.answers, answers)) {
         const cleaned: QuestionnaireRecord = {
@@ -273,7 +285,15 @@ export async function submitQuestionnaire(
     });
   }
 
-  const missing = validateRequiredAnswers(current.answers, "ru");
+  if (needsVnzhCountrySelection(current)) {
+    throw new Error("COUNTRY_REQUIRED");
+  }
+
+  const missing = validateRequiredAnswers(
+    current.answers,
+    "ru",
+    getSchemaForRecord(current),
+  );
   if (missing.length > 0) {
     throw new Error(`MISSING_REQUIRED:${missing.join(", ")}`);
   }
@@ -898,7 +918,10 @@ export function buildReviewRows(
     fileId?: string;
     externalUrl?: string;
   }> = [];
-  for (const section of SHARP_SPICE_ONBOARDING_SCHEMA.sections) {
+  for (const section of resolveSchemaForRecord({
+    status: "submitted",
+    answers,
+  }).sections) {
     for (const question of section.questions) {
       if (question.type === "information") continue;
       if (!isQuestionVisible(question, answers)) continue;

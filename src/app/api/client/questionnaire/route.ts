@@ -3,9 +3,17 @@ import { getClientSession } from "@/lib/client-portal/session";
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
-  getPublishedSchema,
+  getSchemaForRecord,
   saveQuestionnaireAnswers,
 } from "@/lib/client-portal/questionnaire-service";
+import {
+  needsVnzhCountrySelection,
+  VNZH_COUNTRY_OPTIONS,
+  isVnzhCountry,
+  VNZH_COUNTRY_ANSWER_KEY,
+  hasQuestionnaireContentBeyondCountry,
+  readVnzhCountry,
+} from "@/lib/client-portal/questionnaire-templates";
 
 export async function GET() {
   const session = await getClientSession();
@@ -14,10 +22,19 @@ export async function GET() {
   }
 
   const record = await getOrCreateQuestionnaire(session);
+  const needsCountry = needsVnzhCountrySelection(record);
+  const schema = needsCountry ? null : getSchemaForRecord(record);
   return NextResponse.json({
-    schema: getPublishedSchema(),
+    schema,
+    needsCountrySelection: needsCountry,
+    countryOptions: VNZH_COUNTRY_OPTIONS.map((opt) => ({
+      value: opt.value,
+      label: opt.labelRu,
+    })),
     questionnaire: record,
-    progress: calculateProgress(record.answers),
+    progress: needsCountry
+      ? 0
+      : calculateProgress(record.answers, getSchemaForRecord(record)),
   });
 }
 
@@ -31,13 +48,54 @@ export async function PATCH(request: Request) {
     id?: string;
     answers?: Record<string, unknown>;
     expectedRevision?: number;
+    vnzhCountry?: string;
   };
 
-  if (!body.id || !body.answers || typeof body.expectedRevision !== "number") {
+  if (!body.id || typeof body.expectedRevision !== "number") {
     return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
   }
 
   try {
+    // Country selection for brand-new clients
+    if (body.vnzhCountry !== undefined) {
+      if (!isVnzhCountry(body.vnzhCountry)) {
+        return NextResponse.json({ error: "INVALID_COUNTRY" }, { status: 400 });
+      }
+      const current = await getOrCreateQuestionnaire(session);
+      if (current.id !== body.id) {
+        return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+      }
+      if (current.status !== "draft") {
+        return NextResponse.json({ error: "ALREADY_SUBMITTED" }, { status: 400 });
+      }
+      const existing = readVnzhCountry(current.answers);
+      if (
+        existing &&
+        existing !== body.vnzhCountry &&
+        hasQuestionnaireContentBeyondCountry(current.answers)
+      ) {
+        return NextResponse.json({ error: "COUNTRY_LOCKED" }, { status: 400 });
+      }
+      const record = await saveQuestionnaireAnswers(session, {
+        id: body.id,
+        answers: {
+          ...current.answers,
+          [VNZH_COUNTRY_ANSWER_KEY]: body.vnzhCountry,
+        },
+        expectedRevision: body.expectedRevision,
+      });
+      return NextResponse.json({
+        questionnaire: record,
+        schema: getSchemaForRecord(record),
+        needsCountrySelection: false,
+        progress: calculateProgress(record.answers, getSchemaForRecord(record)),
+      });
+    }
+
+    if (!body.answers) {
+      return NextResponse.json({ error: "INVALID_BODY" }, { status: 400 });
+    }
+
     const record = await saveQuestionnaireAnswers(session, {
       id: body.id,
       answers: body.answers,
@@ -45,7 +103,12 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({
       questionnaire: record,
-      progress: calculateProgress(record.answers),
+      schema: getSchemaForRecord(record),
+      needsCountrySelection: needsVnzhCountrySelection(record),
+      progress: calculateProgress(
+        record.answers,
+        getSchemaForRecord(record),
+      ),
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "SAVE_FAILED";

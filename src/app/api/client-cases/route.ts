@@ -5,6 +5,7 @@ import {
   createManualCaseForStaff,
   ensureQuestionnaireFileDocuments,
   getPublishedSchema,
+  getSchemaForRecord,
   getSubmittedForStaff,
   isCaseArchived,
   listSubmittedForStaff,
@@ -146,7 +147,7 @@ export async function GET(request: Request) {
         ? "Анкета клиента"
         : resolveIntakeClientSource(record.answers) === "manual"
           ? "Клиент добавлен вручную"
-          : pickLabel(getPublishedSchema().title, "ru"),
+          : pickLabel(getSchemaForRecord(record).title, "ru"),
       questionnaire: record,
       staffFields: readStaffFields(record.answers),
       notes: readStaffNotes(record.answers),

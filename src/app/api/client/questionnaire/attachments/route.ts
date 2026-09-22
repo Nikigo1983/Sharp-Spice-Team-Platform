@@ -8,7 +8,7 @@ import {
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
-  getPublishedSchema,
+  getSchemaForRecord,
   saveQuestionnaireAnswers,
 } from "@/lib/client-portal/questionnaire-service";
 import { getClientSession } from "@/lib/client-portal/session";
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const question = getPublishedSchema()
+  const question = getSchemaForRecord(record)
     .sections.flatMap((section) => section.questions)
     .find((item) => item.id === questionId);
   if (!question || question.type !== "file") {
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     attachment,
     questionnaire: updated,
-    progress: calculateProgress(updated.answers),
+    progress: calculateProgress(updated.answers, getSchemaForRecord(updated)),
   });
 }
 
@@ -186,6 +186,6 @@ export async function DELETE(request: Request) {
   return NextResponse.json({
     ok: true,
     questionnaire: updated,
-    progress: calculateProgress(updated.answers),
+    progress: calculateProgress(updated.answers, getSchemaForRecord(updated)),
   });
 }

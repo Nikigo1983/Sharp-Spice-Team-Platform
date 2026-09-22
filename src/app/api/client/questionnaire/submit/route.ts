@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getClientSession } from "@/lib/client-portal/session";
 import {
   calculateProgress,
+  getSchemaForRecord,
   submitQuestionnaire,
 } from "@/lib/client-portal/questionnaire-service";
 import type { QuestionnaireAnswers } from "@/lib/client-portal/questionnaire-types";
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({
       questionnaire: record,
-      progress: calculateProgress(record.answers),
+      progress: calculateProgress(record.answers, getSchemaForRecord(record)),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SUBMIT_FAILED";
@@ -48,7 +49,9 @@ export async function POST(request: Request) {
         ? 404
         : message === "REVISION_CONFLICT"
           ? 409
-          : 400;
+          : message === "COUNTRY_REQUIRED"
+            ? 400
+            : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

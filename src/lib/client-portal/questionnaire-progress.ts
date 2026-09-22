@@ -1,6 +1,6 @@
-import { SHARP_SPICE_ONBOARDING_SCHEMA } from "./questionnaire-schema";
 import type {
   QuestionnaireAnswers,
+  QuestionnaireSchema,
   QuestionDefinition,
 } from "./questionnaire-types";
 import {
@@ -8,11 +8,13 @@ import {
   isQuestionVisible,
   pickLabel,
 } from "./questionnaire-types";
+import { CROATIA_TRP_SCHEMA } from "./questionnaire-schema";
+import { VNZH_COUNTRY_ANSWER_KEY } from "./questionnaire-templates";
 
-function allQuestions(): QuestionDefinition[] {
-  return SHARP_SPICE_ONBOARDING_SCHEMA.sections.flatMap(
-    (section) => section.questions,
-  );
+function questionsOf(
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
+): QuestionDefinition[] {
+  return schema.sections.flatMap((section) => section.questions);
 }
 
 function countsTowardProgress(question: QuestionDefinition): boolean {
@@ -20,6 +22,7 @@ function countsTowardProgress(question: QuestionDefinition): boolean {
   if (question.type === "information") return false;
   if (question.derivedFrom) return false;
   if (question.readOnly) return false;
+  if (question.id === VNZH_COUNTRY_ANSWER_KEY) return false;
   return true;
 }
 
@@ -35,11 +38,15 @@ export function isAnswerFilled(
 }
 
 /** True when draft has uploads/flags but no typed answers (leftover after wipe). */
-export function isOrphanedDraftAnswers(answers: QuestionnaireAnswers): boolean {
+export function isOrphanedDraftAnswers(
+  answers: QuestionnaireAnswers,
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
+): boolean {
   let hasTypedAnswer = false;
   let hasOtherProgress = false;
-  for (const question of allQuestions()) {
+  for (const question of questionsOf(schema)) {
     if (question.type === "information" || question.derivedFrom) continue;
+    if (question.id === VNZH_COUNTRY_ANSWER_KEY) continue;
     if (!isAnswerFilled(question, answers[question.id])) continue;
     if (
       question.type === "text" ||
@@ -57,8 +64,11 @@ export function isOrphanedDraftAnswers(answers: QuestionnaireAnswers): boolean {
   return hasOtherProgress && !hasTypedAnswer;
 }
 
-export function calculateProgress(answers: QuestionnaireAnswers): number {
-  const required = allQuestions().filter(
+export function calculateProgress(
+  answers: QuestionnaireAnswers,
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
+): number {
+  const required = questionsOf(schema).filter(
     (question) =>
       countsTowardProgress(question) && isQuestionVisible(question, answers),
   );
@@ -73,9 +83,10 @@ export function calculateProgress(answers: QuestionnaireAnswers): number {
 export function validateRequiredAnswers(
   answers: QuestionnaireAnswers,
   locale: "ru" | "en" = "ru",
+  schema: QuestionnaireSchema = CROATIA_TRP_SCHEMA,
 ): string[] {
   const errors: string[] = [];
-  for (const question of allQuestions()) {
+  for (const question of questionsOf(schema)) {
     if (question.type === "information" || question.type === "file") continue;
     if (!question.required) continue;
     if (!isQuestionVisible(question, answers)) continue;

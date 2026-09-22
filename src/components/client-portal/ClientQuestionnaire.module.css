@@ -382,3 +382,38 @@
     flex: 1;
   }
 }
+
+.countryGrid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.countryBtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  color: #0f172a;
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  font-family: Sora, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.countryBtn:hover:not(:disabled) {
+  border-color: rgba(145, 13, 13, 0.45);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.countryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

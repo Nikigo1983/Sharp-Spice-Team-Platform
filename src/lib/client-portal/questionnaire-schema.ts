@@ -1,12 +1,12 @@
 import type { QuestionnaireSchema } from "./questionnaire-types";
 
-/** Real Croatia digital nomad intake questionnaire for Sharp & Spice client portal. */
-export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
+/** Croatia TRP intake (legacy digital-nomad questionnaire content). */
+export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
   schemaVersion: 1,
-  templateKey: "croatia_digital_nomad_intake",
+  templateKey: "croatia_trp_intake",
   title: {
-    en: "Questionnaire for digital nomads in Croatia",
-    ru: "Анкета для цифровых кочевников в Хорватии",
+    en: "Residence permit questionnaire — Croatia",
+    ru: "Анкета для ВНЖ Хорватии",
   },
   description: {
     en: "Fill all items in Latin letters (as in the passport), unless a field asks for Cyrillic. Address also in Latin.",
@@ -481,6 +481,196 @@ export const SHARP_SPICE_ONBOARDING_SCHEMA: QuestionnaireSchema = {
           },
         },
       ],
+    },
+  ],
+};
+
+/** @deprecated Use CROATIA_TRP_SCHEMA — kept for existing imports. */
+export const SHARP_SPICE_ONBOARDING_SCHEMA = CROATIA_TRP_SCHEMA;
+
+const croatiaPersonal = CROATIA_TRP_SCHEMA.sections.find((s) => s.id === "personal")!;
+const croatiaDocuments = CROATIA_TRP_SCHEMA.sections.find((s) => s.id === "documents")!;
+const croatiaConsent = CROATIA_TRP_SCHEMA.sections.find((s) => s.id === "consent")!;
+
+/** Slovenia TRP — same as Croatia without the Croatia-specific questions section. */
+export const SLOVENIA_TRP_SCHEMA: QuestionnaireSchema = {
+  schemaVersion: 1,
+  templateKey: "slovenia_trp_intake",
+  title: {
+    en: "Residence permit questionnaire — Slovenia",
+    ru: "Анкета для ВНЖ Словении",
+  },
+  description: CROATIA_TRP_SCHEMA.description,
+  sections: [
+    { ...croatiaPersonal, questions: croatiaPersonal.questions.map((q) => ({ ...q })) },
+    {
+      ...croatiaDocuments,
+      questions: croatiaDocuments.questions.map((q) => ({ ...q })),
+    },
+    { ...croatiaConsent, questions: croatiaConsent.questions.map((q) => ({ ...q })) },
+  ],
+};
+
+/** Spain TRP — no Croatia section; tax IDs; passport/all pages; ID; apostilled criminal record. */
+export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
+  schemaVersion: 1,
+  templateKey: "spain_trp_intake",
+  title: {
+    en: "Residence permit questionnaire — Spain",
+    ru: "Анкета для ВНЖ Испании",
+  },
+  description: CROATIA_TRP_SCHEMA.description,
+  sections: [
+    {
+      ...croatiaPersonal,
+      questions: [
+        ...croatiaPersonal.questions.map((q) => ({ ...q })),
+        {
+          id: "inn_number",
+          type: "text",
+          order: 190,
+          label: {
+            en: "Taxpayer identification number (INN)",
+            ru: "Номер ИНН",
+          },
+          placeholder: { en: "1234567890", ru: "1234567890" },
+          required: false,
+          layout: "half",
+        },
+        {
+          id: "snils_number",
+          type: "text",
+          order: 200,
+          label: {
+            en: "SNILS number",
+            ru: "Номер СНИЛС",
+          },
+          placeholder: { en: "123-456-789 00", ru: "123-456-789 00" },
+          required: false,
+          layout: "half",
+        },
+      ],
+    },
+    {
+      id: "documents",
+      order: 30,
+      title: { en: "Documents", ru: "Документы" },
+      description: {
+        en: "Attach documents if you have them (optional)",
+        ru: "Прикрепите документы, если они есть (необязательно)",
+      },
+      questions: [
+        {
+          id: "doc_passport_pdf",
+          type: "file",
+          order: 10,
+          label: {
+            en: "International passport — all pages in one PDF file",
+            ru: "Загранпаспорт: все страницы в одном PDF-файле",
+          },
+          required: false,
+          accept: ".pdf,application/pdf",
+          maxSizeMb: 10,
+        },
+        {
+          id: "doc_internal_id_pdf",
+          type: "file",
+          order: 15,
+          label: {
+            en: "Internal passport spread or national ID card (PDF or image)",
+            ru: "Разворот страницы внутреннего паспорта или ID-карта",
+          },
+          required: false,
+          accept:
+            ".pdf,.jpeg,.jpg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp",
+          maxSizeMb: 10,
+        },
+        {
+          id: "doc_criminal_record_apostille_pdf",
+          type: "file",
+          order: 30,
+          label: {
+            en: "Certificate of no criminal record with apostille (apostille required, PDF)",
+            ru: "Справка о несудимости с апостилем (апостиль обязателен, только PDF)",
+          },
+          required: false,
+          accept: ".pdf,application/pdf",
+          maxSizeMb: 10,
+        },
+        {
+          id: "doc_other_country_trp_pdf",
+          type: "file",
+          order: 40,
+          label: {
+            en: "Residence permit of another country (PDF only)",
+            ru: "ВНЖ другой страны (только PDF)",
+          },
+          accept: ".pdf,application/pdf",
+          maxSizeMb: 10,
+        },
+        {
+          id: "has_bank_statement",
+          type: "yes_no",
+          order: 50,
+          label: {
+            en: "Do you have a bank statement?",
+            ru: "У вас есть банковская выписка?",
+          },
+          required: true,
+        },
+        {
+          id: "doc_bank_statement_pdf",
+          type: "file",
+          order: 60,
+          label: {
+            en: "Bank statement (PDF only)",
+            ru: "Банковская выписка (только PDF)",
+          },
+          required: false,
+          accept: ".pdf,application/pdf",
+          maxSizeMb: 10,
+          visibleWhen: { questionId: "has_bank_statement", equals: "yes" },
+        },
+        {
+          id: "has_contract",
+          type: "yes_no",
+          order: 70,
+          label: {
+            en: "Do you have a contract?",
+            ru: "У вас есть контракт?",
+          },
+          required: true,
+        },
+        {
+          id: "doc_contract_pdf",
+          type: "file",
+          order: 80,
+          label: {
+            en: "Contract (PDF only)",
+            ru: "Контракт (только PDF)",
+          },
+          required: false,
+          accept: ".pdf,application/pdf",
+          maxSizeMb: 10,
+          visibleWhen: { questionId: "has_contract", equals: "yes" },
+        },
+        {
+          id: "doc_signature_sample",
+          type: "file",
+          order: 90,
+          label: {
+            en: "Signature sample",
+            ru: "Образец подписи",
+          },
+          required: false,
+          accept: ".jpeg,.jpg,.png,.webp,image/jpeg,image/png,image/webp",
+          maxSizeMb: 10,
+        },
+      ],
+    },
+    {
+      ...croatiaConsent,
+      questions: croatiaConsent.questions.map((q) => ({ ...q })),
     },
   ],
 };

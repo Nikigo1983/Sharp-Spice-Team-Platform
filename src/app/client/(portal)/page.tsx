@@ -7,9 +7,11 @@ import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import {
   calculateProgress,
   getOrCreateQuestionnaire,
+  getSchemaForRecord,
   readProcessStatus,
 } from "@/lib/client-portal/questionnaire-service";
 import { getClientSession } from "@/lib/client-portal/session";
+import { needsVnzhCountrySelection } from "@/lib/client-portal/questionnaire-templates";
 
 export default async function ClientPortalHomePage() {
   const session = await getClientSession();
@@ -18,7 +20,13 @@ export default async function ClientPortalHomePage() {
   }
 
   const questionnaire = await getOrCreateQuestionnaire(session);
-  const progress = calculateProgress(questionnaire.answers);
+  const needsCountry = needsVnzhCountrySelection(questionnaire);
+  const progress = needsCountry
+    ? 0
+    : calculateProgress(
+        questionnaire.answers,
+        getSchemaForRecord(questionnaire),
+      );
   const submitted = questionnaire.status === "submitted";
   const processStatus = submitted
     ? readProcessStatus(questionnaire.answers, questionnaire.status)
@@ -52,7 +60,9 @@ export default async function ClientPortalHomePage() {
         <p>
           {submitted
             ? "Анкета отправлена. Вы можете просмотреть ответы."
-            : `Заполните анкету онбординга. Прогресс: ${progress}%.`}
+            : needsCountry
+              ? "Выберите страну оформления ВНЖ и заполните анкету."
+              : `Заполните анкету. Прогресс: ${progress}%.`}
         </p>
         <Link
           href="/client/questionnaire"

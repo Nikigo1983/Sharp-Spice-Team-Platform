@@ -22,9 +22,11 @@ import {
 import styles from "./ClientQuestionnaire.module.css";
 
 type LoadPayload = {
-  schema: QuestionnaireSchema;
+  schema: QuestionnaireSchema | null;
   questionnaire: QuestionnaireRecord;
   progress: number;
+  needsCountrySelection?: boolean;
+  countryOptions?: Array<{ value: string; label: string }>;
 };
 
 function scriptError(question: QuestionDefinition, value: unknown): string | null {
@@ -250,6 +252,11 @@ export function ClientQuestionnaireForm({
   const [schema, setSchema] = useState<QuestionnaireSchema | null>(null);
   const [record, setRecord] = useState<QuestionnaireRecord | null>(null);
   const [progress, setProgress] = useState(0);
+  const [needsCountry, setNeedsCountry] = useState(false);
+  const [countryOptions, setCountryOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([]);
+  const [selectingCountry, setSelectingCountry] = useState(false);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -271,6 +278,8 @@ export function ClientQuestionnaireForm({
     }
     const data = (await res.json()) as LoadPayload;
     setSchema(data.schema);
+    setNeedsCountry(Boolean(data.needsCountrySelection));
+    setCountryOptions(data.countryOptions ?? []);
     setRecordSync(data.questionnaire);
     setProgress(data.progress);
   }, [setRecordSync]);
@@ -305,6 +314,40 @@ export function ClientQuestionnaireForm({
       .filter((question) => isQuestionVisible(question, record.answers));
   }, [section, record]);
 
+  async function selectCountry(country: string) {
+    const current = recordRef.current;
+    if (!current || current.status === "submitted") return;
+    setSelectingCountry(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/client/questionnaire", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: current.id,
+          expectedRevision: current.revision,
+          vnzhCountry: country,
+        }),
+      });
+      const data = (await res.json()) as LoadPayload & { error?: string };
+      if (!res.ok || !data.questionnaire) {
+        setError(
+          data.error === "COUNTRY_LOCKED"
+            ? "Страну уже нельзя изменить — анкета начата."
+            : "Не удалось сохранить выбор страны.",
+        );
+        return;
+      }
+      setRecordSync(data.questionnaire);
+      setSchema(data.schema);
+      setNeedsCountry(false);
+      setProgress(data.progress ?? 0);
+      setSectionIndex(0);
+    } finally {
+      setSelectingCountry(false);
+    }
+  }
+
   async function saveDraft(
     nextAnswers?: Record<string, unknown>,
     options?: { silent?: boolean },
@@ -328,6 +371,7 @@ export function ClientQuestionnaireForm({
       });
       const data = (await res.json()) as {
         questionnaire?: QuestionnaireRecord;
+        schema?: QuestionnaireSchema | null;
         progress?: number;
         error?: string;
       };
@@ -340,6 +384,7 @@ export function ClientQuestionnaireForm({
         return false;
       }
       setRecordSync(data.questionnaire);
+      if (data.schema) setSchema(data.schema);
       setProgress(data.progress ?? 0);
       if (!options?.silent) setStatus("Сохранено");
       return true;
@@ -350,21 +395,21 @@ export function ClientQuestionnaireForm({
 
   function updateAnswer(questionId: string, value: unknown) {
     const current = recordRef.current;
-    if (!current || readOnly) return;
+    if (!current || readOnly || !schema) return;
     const answers = { ...current.answers, [questionId]: value };
     const next = { ...current, answers };
     setRecordSync(next);
-    setProgress(calculateProgress(answers));
+    setProgress(calculateProgress(answers, schema));
   }
 
   async function onSubmit() {
     const current = recordRef.current;
-    if (!current || current.status === "submitted") return;
+    if (!current || current.status === "submitted" || !schema) return;
     setSubmitting(true);
     setError(null);
     setStatus(null);
     try {
-      const missing = validateRequiredAnswers(current.answers, "ru");
+      const missing = validateRequiredAnswers(current.answers, "ru", schema);
       if (missing.length > 0) {
         setError(
           `Заполните обязательные поля: ${missing.join(", ")}. Проверьте все вкладки — ответы могли не сохраниться.`,
@@ -408,7 +453,53 @@ export function ClientQuestionnaireForm({
     }
   }
 
-  if (!schema || !record || !section) {
+  if (!record) {
+    return (
+      <div className={styles.wrap}>
+        <p className={styles.muted}>{error ?? "Загрузка анкеты…"}</p>
+      </div>
+    );
+  }
+
+  if (needsCountry) {
+    return (
+      <div className={styles.wrap}>
+        <header className={styles.header}>
+          <div>
+            <h1 className={styles.title}>Анкета для вида на жительство</h1>
+            <p className={styles.lead}>
+              Чтобы подобрать нужную анкету, укажите страну, для которой вы
+              оформляете ВНЖ.
+            </p>
+          </div>
+        </header>
+        <section className={styles.card}>
+          <h2 className={styles.sectionTitle}>
+            Для какой страны вы оформляете вид на жительство?
+          </h2>
+          <p className={styles.muted}>
+            Выберите один вариант — откроется анкета именно для этой страны.
+          </p>
+          <div className={styles.countryGrid}>
+            {countryOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={styles.countryBtn}
+                disabled={selectingCountry}
+                onClick={() => void selectCountry(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {error ? <p className={styles.error}>{error}</p> : null}
+        </section>
+      </div>
+    );
+  }
+
+  if (!schema || !section) {
     return (
       <div className={styles.wrap}>
         <p className={styles.muted}>{error ?? "Загрузка анкеты…"}</p>

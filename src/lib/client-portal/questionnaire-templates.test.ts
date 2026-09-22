@@ -33,6 +33,15 @@ describe("questionnaire-templates", () => {
     assert.equal(needsVnzhCountrySelection(record), true);
   });
 
+  it("asks drafts with only auto-filled email to pick a country", () => {
+    const record = {
+      status: "draft" as const,
+      answers: { contact_email: "maya@example.com" },
+    };
+    assert.equal(resolveVnzhCountry(record), null);
+    assert.equal(needsVnzhCountrySelection(record), true);
+  });
+
   it("resolves Spain and Slovenia schemas from country answer", () => {
     assert.equal(
       resolveSchemaForRecord({

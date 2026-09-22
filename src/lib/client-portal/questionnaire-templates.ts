@@ -51,6 +51,14 @@ export function readVnzhCountry(
   return isVnzhCountry(raw) ? raw : null;
 }
 
+/** Fields auto-filled from the portal session — not real client progress. */
+const AUTO_FILLED_ANSWER_KEYS = new Set(
+  [CROATIA_TRP_SCHEMA, SPAIN_TRP_SCHEMA, SLOVENIA_TRP_SCHEMA]
+    .flatMap((schema) => schema.sections.flatMap((s) => s.questions))
+    .filter((q) => q.derivedFrom)
+    .map((q) => q.id),
+);
+
 /** True when the client has filled something beyond the country picker. */
 export function hasQuestionnaireContentBeyondCountry(
   answers: QuestionnaireAnswers,
@@ -58,6 +66,7 @@ export function hasQuestionnaireContentBeyondCountry(
   for (const [key, value] of Object.entries(answers)) {
     if (key === VNZH_COUNTRY_ANSWER_KEY) continue;
     if (key.startsWith("__")) continue;
+    if (AUTO_FILLED_ANSWER_KEYS.has(key)) continue;
     if (value == null) continue;
     if (typeof value === "string" && value.trim() === "") continue;
     if (typeof value === "boolean") return true;

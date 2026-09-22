@@ -35,6 +35,21 @@ function scriptError(question: QuestionDefinition, value: unknown): string | nul
   return "Пожалуйста, заполните латиницей";
 }
 
+/** Show unique file extensions only (accept also lists MIME types for the input). */
+function formatAcceptHint(accept: string): string {
+  const seen = new Set<string>();
+  const extensions: string[] = [];
+  for (const raw of accept.split(",")) {
+    const token = raw.trim().toLowerCase();
+    if (!token || token.includes("/")) continue;
+    const ext = token.startsWith(".") ? token : `.${token}`;
+    if (seen.has(ext)) continue;
+    seen.add(ext);
+    extensions.push(ext);
+  }
+  return extensions.length > 0 ? extensions.join(", ") : ".pdf";
+}
+
 function LabelWithLink({ question }: { question: QuestionDefinition }) {
   const text = pickLabel(question.label);
   if (!question.linkHref || !question.linkLabel) {
@@ -123,6 +138,7 @@ function FileField({
   const file = isFileAnswer(value) ? value : null;
   const maxMb = question.maxSizeMb ?? 10;
   const accept = question.accept ?? ".pdf";
+  const acceptHint = formatAcceptHint(accept);
 
   async function onPick(fileList: FileList | null) {
     const picked = fileList?.[0];
@@ -234,7 +250,7 @@ function FileField({
           />
           <span>{uploading ? "Загрузка…" : "Выбрать файл"}</span>
           <span className={styles.fileHint}>
-            Допустимые форматы: {accept.replace(/application\/pdf/gi, ".pdf").replace(/image\//gi, ".")}
+            Допустимые форматы: {acceptHint}
           </span>
           <span className={styles.fileHint}>Максимальный размер: {maxMb} МБ</span>
         </label>

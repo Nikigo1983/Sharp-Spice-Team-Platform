@@ -347,8 +347,8 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
       order: 30,
       title: { en: "Documents", ru: "Документы" },
       description: {
-        en: "Attach documents if you have them (optional)",
-        ru: "Прикрепите документы, если они есть (необязательно)",
+        en: "Attach documents if you have them",
+        ru: "Прикрепите документы, если они есть",
       },
       questions: [
         {
@@ -556,8 +556,8 @@ export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
       order: 30,
       title: { en: "Documents", ru: "Документы" },
       description: {
-        en: "Attach documents if you have them (optional)",
-        ru: "Прикрепите документы, если они есть (необязательно)",
+        en: "Attach documents if you have them",
+        ru: "Прикрепите документы, если они есть",
       },
       questions: [
         {

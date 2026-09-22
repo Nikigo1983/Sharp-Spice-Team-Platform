@@ -505,24 +505,30 @@ export async function updateCaseArchiveState(
   });
 }
 
+/** Permanently remove a portal user, their questionnaire, and uploaded files. */
+export async function deletePortalUserAccount(userId: string): Promise<void> {
+  const current = await findQuestionnaireByUserId(userId);
+  if (current) {
+    const staffOwner = staffDocumentsOwnerKey(current.id);
+    for (const doc of readStaffDocuments(current.answers)) {
+      await deleteQuestionnaireAttachmentFile(
+        staffOwner,
+        doc.id,
+        doc.fileName,
+      );
+    }
+    await purgeFileAnswers(current.clientPortalUserId, current.answers);
+    await deleteQuestionnaire(current.id);
+  }
+  await deleteClientPortalUser(userId);
+}
+
 /** Permanently remove a submitted case, its files, and the portal user account. */
 export async function deleteSubmittedCaseForStaff(id: string): Promise<void> {
   const current = await getSubmittedForStaff(id);
   if (!current) throw new Error("NOT_FOUND");
 
-  const staffOwner = staffDocumentsOwnerKey(current.id);
-  for (const doc of readStaffDocuments(current.answers)) {
-    await deleteQuestionnaireAttachmentFile(
-      staffOwner,
-      doc.id,
-      doc.fileName,
-    );
-  }
-  await purgeFileAnswers(current.clientPortalUserId, current.answers);
-
-  const removed = await deleteQuestionnaire(current.id);
-  if (!removed) throw new Error("NOT_FOUND");
-  await deleteClientPortalUser(current.clientPortalUserId);
+  await deletePortalUserAccount(current.clientPortalUserId);
 }
 
 export async function updateLegacyCaseSheetFields(

@@ -2,7 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { createClientInvitationAction } from "@/app/(app)/client-invitations/actions";
+import {
+  createClientInvitationAction,
+  deleteClientInvitationAction,
+} from "@/app/(app)/client-invitations/actions";
 import { CLIENT_PORTAL_BRAND_NAME } from "@/lib/client-portal/brand";
 import styles from "./ClientInvitationsPanel.module.css";
 
@@ -52,6 +55,7 @@ export function ClientInvitationsPanel({
   const [copied, setCopied] = useState<
     "password" | "login" | "message" | null
   >(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const messengerText = useMemo(
@@ -88,6 +92,28 @@ export function ClientInvitationsPanel({
       });
       setEmail("");
       setFirstName("");
+    });
+  }
+
+  function onDelete(item: InvitationRow) {
+    const ok = window.confirm(
+      `Удалить «${item.firstName}» (${item.email}) из списка?\n\nДоступ в клиентский портал будет закрыт. Анкету и загруженные файлы тоже удалим, если они есть.`,
+    );
+    if (!ok) return;
+
+    setError(null);
+    setDeletingId(item.id);
+    startTransition(async () => {
+      const result = await deleteClientInvitationAction({
+        invitationId: item.id,
+      });
+      setDeletingId(null);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setInvitations((prev) => prev.filter((row) => row.id !== item.id));
+      setCreated((prev) => (prev?.invitationId === item.id ? null : prev));
     });
   }
 
@@ -266,16 +292,31 @@ export function ClientInvitationsPanel({
         {invitations.length === 0 ? (
           <li className={styles.empty}>Пока нет приглашений.</li>
         ) : (
-          invitations.map((item) => (
+          invitations.map((item, index) => (
             <li key={item.id} className={styles.item}>
-              <div>
-                <strong>{item.firstName}</strong>
-                <div className={styles.meta}>
-                  {item.email} · {item.status} ·{" "}
-                  {new Date(item.createdAt).toLocaleString("ru-RU")}
+              <div className={styles.itemMain}>
+                <span className={styles.index} aria-hidden="true">
+                  {index + 1}.
+                </span>
+                <div>
+                  <strong>{item.firstName}</strong>
+                  <div className={styles.meta}>
+                    {item.email} · {item.status} ·{" "}
+                    {new Date(item.createdAt).toLocaleString("ru-RU")}
+                  </div>
                 </div>
               </div>
-              <span className={styles.meta}>Аккаунт создан</span>
+              <div className={styles.itemActions}>
+                <span className={styles.meta}>Аккаунт создан</span>
+                <button
+                  type="button"
+                  className={styles.deleteBtn}
+                  disabled={pending || deletingId === item.id}
+                  onClick={() => onDelete(item)}
+                >
+                  {deletingId === item.id ? "Удаление…" : "Удалить"}
+                </button>
+              </div>
             </li>
           ))
         )}

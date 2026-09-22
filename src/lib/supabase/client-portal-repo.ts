@@ -132,6 +132,27 @@ export async function sbFindInvitationByToken(
   return data ? mapInvitation(data as InvitationRow) : null;
 }
 
+export async function sbFindInvitationById(
+  id: string,
+): Promise<ClientPortalInvitation | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("client_portal_invitations")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapInvitation(data as InvitationRow) : null;
+}
+
+export async function sbDeleteInvitation(id: string): Promise<boolean> {
+  const { error, count } = await getSupabaseAdmin()
+    .from("client_portal_invitations")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 export async function sbUpsertInvitation(
   invitation: ClientPortalInvitation,
 ): Promise<ClientPortalInvitation> {

@@ -127,6 +127,51 @@
   background: rgba(26, 26, 26, 0.65);
 }
 
+.itemMain {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.index {
+  flex-shrink: 0;
+  min-width: 1.5rem;
+  margin-top: 0.1rem;
+  color: var(--gray-400);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.deleteBtn {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .meta {
   margin-top: 0.25rem;
   color: var(--gray-400);

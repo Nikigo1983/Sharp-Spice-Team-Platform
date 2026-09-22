@@ -10,10 +10,12 @@ import type {
 } from "./types";
 import {
   findClientPortalUserByEmail,
+  findInvitationById,
   findInvitationByToken,
   upsertClientPortalUser,
   upsertInvitation,
   listClientPortalInvitations,
+  deleteInvitation,
   insertPasswordReset,
   findValidPasswordResetByTokenHash,
   markPasswordResetUsed,
@@ -116,6 +118,30 @@ export async function listInvitationsForStaff(): Promise<
   ClientPortalInvitation[]
 > {
   return listClientPortalInvitations();
+}
+
+/**
+ * Remove an invitation from the staff list and revoke portal access.
+ * Also deletes the portal user, questionnaire draft/submission files when present.
+ */
+export async function deleteClientInvitationForStaff(
+  invitationId: string,
+): Promise<void> {
+  const invitation = await findInvitationById(invitationId);
+  if (!invitation) {
+    throw new Error("NOT_FOUND");
+  }
+
+  const user = await findClientPortalUserByEmail(invitation.email);
+  if (user) {
+    const { deletePortalUserAccount } = await import("./questionnaire-service");
+    await deletePortalUserAccount(user.id);
+  }
+
+  const removed = await deleteInvitation(invitationId);
+  if (!removed) {
+    throw new Error("NOT_FOUND");
+  }
 }
 
 export async function acceptInvitation(input: {

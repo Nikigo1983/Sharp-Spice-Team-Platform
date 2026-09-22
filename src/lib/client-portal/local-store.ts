@@ -126,6 +126,27 @@ export async function findInvitationByToken(
   return invitations.find((item) => item.token === token) ?? null;
 }
 
+export async function findInvitationById(
+  id: string,
+): Promise<ClientPortalInvitation | null> {
+  if (isSupabaseConfigured()) {
+    return sb.sbFindInvitationById(id);
+  }
+  const invitations = await listClientPortalInvitations();
+  return invitations.find((item) => item.id === id) ?? null;
+}
+
+export async function deleteInvitation(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return sb.sbDeleteInvitation(id);
+  }
+  const invitations = await listClientPortalInvitations();
+  const next = invitations.filter((item) => item.id !== id);
+  if (next.length === invitations.length) return false;
+  await saveClientPortalInvitations(next);
+  return true;
+}
+
 export async function upsertInvitation(
   invitation: ClientPortalInvitation,
 ): Promise<ClientPortalInvitation> {

@@ -3,9 +3,12 @@ import { describe, it } from "node:test";
 
 import { isWordDocumentFileName } from "@/lib/client-portal/questionnaire-attachment-formats";
 import {
+  isWordOpenUrlWithinLimit,
   mintCaseFileAccessToken,
+  mintCompactCaseFileToken,
   toMsWordOpenUri,
   verifyCaseFileAccessToken,
+  verifyCompactCaseFileToken,
 } from "@/lib/client-portal/case-file-access-token";
 
 describe("case-file-access-token", () => {
@@ -22,13 +25,35 @@ describe("case-file-access-token", () => {
     });
   });
 
-  it("builds Word protocol URI and detects Word filenames", () => {
+  it("builds compact Word-open tokens under length limit", () => {
+    const fileId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const questionnaireId = "ffffffff-0000-4111-8222-333333333333";
+    const compact = mintCompactCaseFileToken({
+      fileId,
+      questionnaireId,
+      expiresInSec: 600,
+    });
+    assert.equal(
+      verifyCompactCaseFileToken(compact)?.fileId,
+      fileId,
+    );
+    assert.equal(
+      verifyCompactCaseFileToken(compact)?.questionnaireId,
+      questionnaireId,
+    );
+
+    const fileUrl = `https://sharp-spice-team-platform.vercel.app/api/client-cases/w/${compact}`;
+    assert.equal(isWordOpenUrlWithinLimit(fileUrl), true);
+    assert.equal(
+      toMsWordOpenUri(fileUrl),
+      `ms-word:ofe|u|${fileUrl}`,
+    );
+    assert.ok(toMsWordOpenUri(fileUrl).length < 280);
+  });
+
+  it("detects Word filenames", () => {
     assert.equal(isWordDocumentFileName("a.doc"), true);
     assert.equal(isWordDocumentFileName("a.DOCX"), true);
     assert.equal(isWordDocumentFileName("a.pdf"), false);
-    assert.equal(
-      toMsWordOpenUri("https://example.com/file.doc?x=1"),
-      "ms-word:ofe|u|https://example.com/file.doc?x=1",
-    );
   });
 });

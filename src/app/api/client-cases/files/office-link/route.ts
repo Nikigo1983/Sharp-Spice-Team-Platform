@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { isWordDocumentFileName } from "@/lib/client-portal/questionnaire-attachment-formats";
 import {
-  mintCaseFileAccessToken,
+  isWordOpenUrlWithinLimit,
+  mintCompactCaseFileToken,
   toMsWordOpenUri,
 } from "@/lib/client-portal/case-file-access-token";
 import {
@@ -60,21 +61,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "NOT_WORD" }, { status: 400 });
   }
 
-  const accessToken = await mintCaseFileAccessToken({
-    fileId,
-    questionnaireId,
-  });
-  const params = new URLSearchParams({
-    questionnaireId,
-    accessToken,
-    disposition: "inline",
-    forOffice: "1",
-  });
-  const fileUrl = `${requestOrigin(request)}/api/client-cases/files/${encodeURIComponent(fileId)}?${params.toString()}`;
+  let compactToken: string;
+  try {
+    compactToken = mintCompactCaseFileToken({
+      fileId,
+      questionnaireId,
+      expiresInSec: 600,
+    });
+  } catch {
+    return NextResponse.json({ error: "INVALID_IDS" }, { status: 400 });
+  }
+
+  // Short path — Word protocol document URL must stay under ~256 characters.
+  const fileUrl = `${requestOrigin(request)}/api/client-cases/w/${compactToken}`;
+  if (!isWordOpenUrlWithinLimit(fileUrl)) {
+    console.error("[office-link] document URL still too long for Word", {
+      length: fileUrl.length,
+    });
+    return NextResponse.json({ error: "URL_TOO_LONG" }, { status: 500 });
+  }
 
   return NextResponse.json({
     fileName: owned.fileName,
     fileUrl,
     msWordUri: toMsWordOpenUri(fileUrl),
+    urlLength: fileUrl.length,
   });
 }

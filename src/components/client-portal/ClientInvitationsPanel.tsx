@@ -71,6 +71,9 @@ export function ClientInvitationsPanel({
     "password" | "login" | "message" | null
   >(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<InvitationRow | null>(
+    null,
+  );
   const [pending, startTransition] = useTransition();
 
   const messengerText = useMemo(
@@ -117,11 +120,18 @@ export function ClientInvitationsPanel({
   }
 
   function onDelete(item: InvitationRow) {
-    const ok = window.confirm(
-      `Удалить «${item.firstName}» (${item.email}) из списка?\n\nДоступ в клиентский портал будет закрыт. Анкету и загруженные файлы тоже удалим, если они есть.`,
-    );
-    if (!ok) return;
+    setError(null);
+    setPendingDelete(item);
+  }
 
+  function cancelDelete() {
+    if (deletingId) return;
+    setPendingDelete(null);
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const item = pendingDelete;
     setError(null);
     setDeletingId(item.id);
     startTransition(async () => {
@@ -129,6 +139,7 @@ export function ClientInvitationsPanel({
         invitationId: item.id,
       });
       setDeletingId(null);
+      setPendingDelete(null);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -361,6 +372,54 @@ export function ClientInvitationsPanel({
           ))
         )}
       </ul>
+
+      {pendingDelete ? (
+        <div
+          className={styles.confirmOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-delete-title"
+        >
+          <button
+            type="button"
+            className={styles.confirmBackdrop}
+            aria-label="Закрыть"
+            disabled={Boolean(deletingId)}
+            onClick={cancelDelete}
+          />
+          <div className={styles.confirmModal}>
+            <h2 id="invite-delete-title" className={styles.confirmTitle}>
+              Удалить приглашение?
+            </h2>
+            <p className={styles.confirmText}>
+              Удалить «{pendingDelete.firstName}» ({pendingDelete.email}) из
+              списка?
+            </p>
+            <p className={styles.confirmWarning}>
+              Доступ в клиентский портал будет закрыт. Анкету и загруженные
+              файлы тоже удалим, если они есть.
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.confirmCancel}
+                disabled={Boolean(deletingId)}
+                onClick={cancelDelete}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className={styles.confirmDelete}
+                disabled={Boolean(deletingId)}
+                onClick={confirmDelete}
+              >
+                {deletingId === pendingDelete.id ? "Удаление…" : "Удалить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

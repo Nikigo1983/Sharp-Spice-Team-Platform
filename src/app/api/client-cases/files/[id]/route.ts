@@ -86,9 +86,17 @@ export async function GET(request: Request, context: RouteContext) {
       file.contentType.includes("msword")) &&
     (rawHead.startsWith("<!doctype html") || rawHead.startsWith("<html"));
 
+  const lowerName = owned.fileName.toLowerCase();
+  const officeMime = forOffice
+    ? lowerName.endsWith(".docx")
+      ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      : lowerName.endsWith(".doc")
+        ? "application/msword"
+        : file.contentType
+    : file.contentType;
   const contentType = isHtmlWordExport
     ? "text/html; charset=utf-8"
-    : file.contentType;
+    : officeMime;
   const contentDisposition =
     disposition === "attachment"
       ? `attachment; filename*=UTF-8''${encodeURIComponent(owned.fileName)}`

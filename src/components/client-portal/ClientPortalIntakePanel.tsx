@@ -25,7 +25,10 @@ import {
   STAFF_CASE_DOCUMENT_TYPES_LABEL,
 } from "@/lib/client-portal/questionnaire-attachment-formats";
 import { findQuestionnaireWordDocument, isQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
-import { supportsDesktopMsWordProtocol } from "@/lib/client-portal/case-file-access-token";
+import {
+  launchMsWordProtocol,
+  supportsDesktopMsWordProtocol,
+} from "@/lib/client-portal/case-file-access-token";
 import styles from "./ClientPortalIntake.module.css";
 
 type ListItem = {
@@ -1115,8 +1118,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         );
         return;
       }
-      // Desktop Word protocol (requires Microsoft Word installed).
-      window.location.href = data.msWordUri;
+      // Desktop Word: ofe protocol via <a> click (ofv fails on many licensed installs).
+      launchMsWordProtocol(data.msWordUri);
       setStatus("Открываем в Microsoft Word…");
     } catch {
       setError(

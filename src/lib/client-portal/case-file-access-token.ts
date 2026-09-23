@@ -1,7 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 
 const PURPOSE = "case-file-access";
-const DEFAULT_TTL_SEC = 180;
+/** Long enough for Word security prompt + download over slow networks. */
+const DEFAULT_TTL_SEC = 600;
 
 function getAuthSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET?.trim();
@@ -53,9 +54,25 @@ export async function verifyCaseFileAccessToken(
   }
 }
 
-/** Desktop Word protocol — opens installed Microsoft Word with the remote file URL. */
+/**
+ * Desktop Word protocol URI.
+ * Use `ofe` (open for edit) — `ofv` (view) is missing on many licensed Word
+ * installs and shows “Office does not recognize the specified command”.
+ */
 export function toMsWordOpenUri(absoluteFileUrl: string): string {
-  return `ms-word:ofv|u|${absoluteFileUrl}`;
+  return `ms-word:ofe|u|${absoluteFileUrl}`;
+}
+
+/** Launch desktop Word via the custom protocol (preferred over location.href). */
+export function launchMsWordProtocol(msWordUri: string): void {
+  if (typeof document === "undefined") return;
+  const anchor = document.createElement("a");
+  anchor.href = msWordUri;
+  anchor.rel = "noopener";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 /** True when the browser can hand a file URL to desktop Microsoft Word. */

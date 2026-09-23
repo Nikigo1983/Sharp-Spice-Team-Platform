@@ -28,7 +28,7 @@ describe("case-file-access-token", () => {
     assert.equal(isWordDocumentFileName("a.pdf"), false);
     assert.equal(
       toMsWordOpenUri("https://example.com/file.doc?x=1"),
-      "ms-word:ofv|u|https://example.com/file.doc?x=1",
+      "ms-word:ofe|u|https://example.com/file.doc?x=1",
     );
   });
 });

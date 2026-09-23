@@ -3,13 +3,15 @@ import { describe, it } from "node:test";
 
 import { isWordDocumentFileName } from "@/lib/client-portal/questionnaire-attachment-formats";
 import {
-  isWordOpenUrlWithinLimit,
   mintCaseFileAccessToken,
-  mintCompactCaseFileToken,
   toMsWordOpenUri,
   verifyCaseFileAccessToken,
-  verifyCompactCaseFileToken,
 } from "@/lib/client-portal/case-file-access-token";
+import {
+  isWordOpenUrlWithinLimit,
+  mintCompactCaseFileToken,
+  verifyCompactCaseFileToken,
+} from "@/lib/client-portal/case-file-office-token";
 
 describe("case-file-access-token", () => {
   it("mints and verifies short-lived file tokens", async () => {
@@ -33,10 +35,7 @@ describe("case-file-access-token", () => {
       questionnaireId,
       expiresInSec: 600,
     });
-    assert.equal(
-      verifyCompactCaseFileToken(compact)?.fileId,
-      fileId,
-    );
+    assert.equal(verifyCompactCaseFileToken(compact)?.fileId, fileId);
     assert.equal(
       verifyCompactCaseFileToken(compact)?.questionnaireId,
       questionnaireId,
@@ -44,10 +43,7 @@ describe("case-file-access-token", () => {
 
     const fileUrl = `https://sharp-spice-team-platform.vercel.app/api/client-cases/w/${compact}`;
     assert.equal(isWordOpenUrlWithinLimit(fileUrl), true);
-    assert.equal(
-      toMsWordOpenUri(fileUrl),
-      `ms-word:ofe|u|${fileUrl}`,
-    );
+    assert.equal(toMsWordOpenUri(fileUrl), `ms-word:ofe|u|${fileUrl}`);
     assert.ok(toMsWordOpenUri(fileUrl).length < 280);
   });
 

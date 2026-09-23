@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyCompactCaseFileToken } from "@/lib/client-portal/case-file-access-token";
+import { verifyCompactCaseFileToken } from "@/lib/client-portal/case-file-office-token";
 import { readQuestionnaireAttachmentFile } from "@/lib/client-portal/questionnaire-attachment-storage";
 import {
   findFileAnswerInRecord,

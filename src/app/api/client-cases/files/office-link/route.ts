@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { isWordDocumentFileName } from "@/lib/client-portal/questionnaire-attachment-formats";
 import {
-  isWordOpenUrlWithinLimit,
   mintCompactCaseFileToken,
-  toMsWordOpenUri,
-} from "@/lib/client-portal/case-file-access-token";
+  isWordOpenUrlWithinLimit,
+} from "@/lib/client-portal/case-file-office-token";
+import { toMsWordOpenUri } from "@/lib/client-portal/case-file-access-token";
 import {
   findFileAnswerInRecord,
   getSubmittedForStaff,

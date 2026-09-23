@@ -67,7 +67,6 @@ export function PlatformKnowledgeBaseView({
   const [creatingArticle, setCreatingArticle] = useState(false);
   const [newArticleTitle, setNewArticleTitle] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -320,54 +319,6 @@ export function PlatformKnowledgeBaseView({
     }
   }
 
-  async function importFromDrive() {
-    const isCompany = library === "company_knowledge";
-    const confirmText = isCompany
-      ? "Импортировать папки «Демо документы», «СПИОРА» и «ЭМИГРАНТ» из Google Drive (включая PDF и фото)?"
-      : "Импортировать папку Immigration_Knowledge_Base из Google Drive?";
-    if (!window.confirm(confirmText)) return;
-
-    setImporting(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const params = new URLSearchParams({
-        target: isCompany ? "company" : "clients",
-      });
-      const res = await fetch(
-        `/api/knowledge-base/platform/import?${params.toString()}`,
-        { method: "POST" },
-      );
-      const data = (await res.json()) as {
-        folders?: number;
-        articles?: number;
-        updated?: number;
-        filesStored?: number;
-        missingRoots?: string[];
-        error?: string;
-      };
-      if (!res.ok) {
-        setError(
-          data.error === "TARGET_FOLDERS_NOT_FOUND" ||
-            data.error === "TARGET_FOLDER_NOT_FOUND"
-            ? "Нужные папки не найдены в Google Drive."
-            : "Не удалось импортировать из Google Drive.",
-        );
-        return;
-      }
-      const missing =
-        data.missingRoots && data.missingRoots.length > 0
-          ? ` Не найдены: ${data.missingRoots.join(", ")}.`
-          : "";
-      setStatus(
-        `Импорт готов: папок ${data.folders ?? 0}, материалов ${data.articles ?? 0}, файлов ${data.filesStored ?? 0}, обновлено ${data.updated ?? 0}.${missing}`,
-      );
-      await load(folderId);
-    } finally {
-      setImporting(false);
-    }
-  }
-
   const fileUrl = editing?.storagePath
     ? `/api/knowledge-base/platform/file?library=${encodeURIComponent(library)}&id=${encodeURIComponent(editing.id)}`
     : null;
@@ -488,23 +439,13 @@ export function PlatformKnowledgeBaseView({
             </span>
           ))}
         </nav>
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.linkBtn}
-            disabled={importing}
-            onClick={() => void importFromDrive()}
-          >
-            {importing ? "Импорт…" : "Импорт из Drive"}
-          </button>
-        </div>
       </div>
 
       <p className={styles.hint}>
         {library === "company_knowledge"
           ? folderId
             ? `Корпоративная база на платформе (Supabase Storage). Сейчас открыта папка «${listing?.folderName || "…"}» — сюда можно добавить текст или документ. Удалить можно любой файл или папку.`
-            : "Корпоративная база на платформе (Supabase Storage). На главной странице можно создавать папки; материалы обычно приходят импортом из Google Drive. Текст и файлы добавляйте уже внутри папок."
+            : "Корпоративная база на платформе (Supabase Storage). На главной странице можно создавать папки; текст и файлы добавляйте уже внутри папок."
           : "Тексты хранятся на платформе (Supabase). Менеджеры могут добавлять и редактировать материалы."}
         {library !== "company_knowledge"
           ? folderId
@@ -620,7 +561,7 @@ export function PlatformKnowledgeBaseView({
                     {library === "company_knowledge"
                       ? folderId
                         ? "Пока пусто. Создайте папку, добавьте текст или документ."
-                        : "Пока пусто. Создайте папку или запустите импорт из Google Drive."
+                        : "Пока пусто. Создайте папку."
                       : "Пока пусто. Создайте папку, добавьте текст или документ."}
                   </td>
                 </tr>

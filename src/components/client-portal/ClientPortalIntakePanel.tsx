@@ -136,6 +136,32 @@ function formatSubmittedAt(value: string | null): string {
   return new Date(value).toLocaleString("ru-RU");
 }
 
+function isSubmittedToday(value: string | null, now = new Date()): boolean {
+  if (!value) return false;
+  const submitted = new Date(value);
+  if (Number.isNaN(submitted.getTime())) return false;
+  return (
+    submitted.getFullYear() === now.getFullYear() &&
+    submitted.getMonth() === now.getMonth() &&
+    submitted.getDate() === now.getDate()
+  );
+}
+
+function resolveListItemSource(
+  item: ListItem,
+): "legacy" | "formgrid" | "portal" | "manual" {
+  return (
+    item.source ??
+    (item.isLegacy
+      ? "legacy"
+      : item.isFormgrid
+        ? "formgrid"
+        : item.isManual
+          ? "manual"
+          : "portal")
+  );
+}
+
 function clientName(item: ListItem): string {
   return (
     item.displayName ||
@@ -446,16 +472,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
           if (clientSource) {
-            const source =
-              item.source ??
-              (item.isLegacy
-                ? "legacy"
-                : item.isFormgrid
-                  ? "formgrid"
-                  : item.isManual
-                    ? "manual"
-                    : "portal");
-            if (source !== clientSource) return false;
+            if (resolveListItemSource(item) !== clientSource) return false;
           }
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
             return false;
@@ -518,6 +535,27 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     () => bookingAlerts.filter((row) => row.alert.kind === "ended"),
     [bookingAlerts],
   );
+
+  const portalNewTodayCount = useMemo(() => {
+    if (listView === "archive") return 0;
+    return items.filter(
+      (item) =>
+        resolveListItemSource(item) === "portal" &&
+        isSubmittedToday(item.submittedAt),
+    ).length;
+  }, [items, listView]);
+
+  function showPortalNewClientsToday() {
+    setListView("active");
+    setQuery("");
+    setCurator("");
+    setPartner("");
+    setLawyerFilter("");
+    setVnzhCountryFilter("");
+    setSubmittedMonth("");
+    setClientSource("portal");
+    setBookingAlertsOpen(false);
+  }
 
   const reviewSections = useMemo(() => {
     const groups: Array<{ title: string; rows: ReviewRow[] }> = [];
@@ -2047,6 +2085,15 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <option value="assigned">Передан адвокату</option>
             <option value="unassigned">Остальные</option>
           </select>
+          {!loading && listView === "active" && portalNewTodayCount > 0 ? (
+            <button
+              type="button"
+              className={styles.portalNewTodayToggle}
+              onClick={showPortalNewClientsToday}
+            >
+              {`Внимание, новые клиенты сегодня: ${portalNewTodayCount}`}
+            </button>
+          ) : null}
           {!loading &&
           listView === "active" &&
           bookingAlertsSoon.length > 0 ? (

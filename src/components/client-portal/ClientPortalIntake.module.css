@@ -184,7 +184,8 @@
 }
 
 .bookingAlertToggleSoon,
-.bookingAlertToggleEnded {
+.bookingAlertToggleEnded,
+.portalNewTodayToggle {
   border-radius: 8px;
   padding: 0.45rem 0.75rem;
   cursor: pointer;
@@ -193,7 +194,8 @@
   white-space: nowrap;
 }
 
-.bookingAlertToggleSoon {
+.bookingAlertToggleSoon,
+.portalNewTodayToggle {
   border: 1px solid rgba(245, 158, 11, 0.55);
   background: rgba(245, 158, 11, 0.16);
   color: #fde68a;
@@ -206,7 +208,8 @@
 }
 
 .bookingAlertToggleSoon:hover,
-.bookingAlertToggleEnded:hover {
+.bookingAlertToggleEnded:hover,
+.portalNewTodayToggle:hover {
   filter: brightness(1.08);
 }
 
@@ -1456,7 +1459,8 @@
   }
 
   .bookingAlertToggleSoon,
-  .bookingAlertToggleEnded {
+  .bookingAlertToggleEnded,
+  .portalNewTodayToggle {
     width: 100%;
     box-sizing: border-box;
     text-align: left;

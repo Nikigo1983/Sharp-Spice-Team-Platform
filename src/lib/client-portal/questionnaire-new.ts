@@ -1,4 +1,5 @@
 import { isCaseArchived } from "@/lib/client-portal/case-archive";
+import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import {
   FORMGRID_IMPORT_KEY,
   isFormgridImport,
@@ -34,7 +35,7 @@ function timestampsNear(a: string, b: string, toleranceMs: number): boolean {
 
 /**
  * True when staff_opened_at was stamped by a bulk import, not by opening the card.
- * Import scripts used to set staff_opened_at = importedAt, which hid the yellow badge.
+ * Used so a real staff open can overwrite the import stamp.
  */
 export function isImportStaffOpenStamp(record: {
   staffOpenedAt: string | null;
@@ -65,13 +66,17 @@ export function isImportStaffOpenStamp(record: {
   return false;
 }
 
-/** Yellow «Новый клиент» — not archived and not yet opened by staff. */
+/**
+ * Yellow «Новый клиент» — only Emigrant portal submissions that staff
+ * has not opened yet (same set as filter «Новые клиенты из клиентского портала»).
+ * Legacy / Formgrid / manual never get this badge.
+ */
 export function isQuestionnaireNewForStaff(record: {
   staffOpenedAt: string | null;
   createdAt: string;
   answers: Record<string, unknown>;
 }): boolean {
   if (isCaseArchived(record.answers)) return false;
-  if (!record.staffOpenedAt) return true;
-  return isImportStaffOpenStamp(record);
+  if (resolveIntakeClientSource(record.answers) !== "portal") return false;
+  return !record.staffOpenedAt;
 }

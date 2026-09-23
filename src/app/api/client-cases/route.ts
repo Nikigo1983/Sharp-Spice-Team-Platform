@@ -37,6 +37,11 @@ import {
   resolveStaffCaseCountry,
   vnzhCountryLabelRu,
 } from "@/lib/client-portal/questionnaire-templates";
+import {
+  applyFinanceContractAmount,
+  loadFinanceContractAmountLabels,
+  syncStaffContractAmountToFinance,
+} from "@/lib/finance/intake-contract-amount";
 
 function staffFieldsForList(
   answers: Record<string, unknown>,
@@ -149,6 +154,14 @@ export async function GET(request: Request) {
     } catch (error) {
       console.error("[client-cases] ensure questionnaire file docs failed", error);
     }
+    const financeAmounts = await loadFinanceContractAmountLabels();
+    const staffFields = applyFinanceContractAmount(
+      {
+        id: record.id,
+        staffFields: readStaffFields(record.answers),
+      },
+      financeAmounts,
+    ).staffFields;
     return NextResponse.json({
       schemaTitle: isLegacyCrmImport(record.answers) || isFormgridImport(record.answers)
         ? "Анкета клиента"
@@ -156,7 +169,7 @@ export async function GET(request: Request) {
           ? "Клиент добавлен вручную"
           : pickLabel(getSchemaForRecord(record).title, "ru"),
       questionnaire: record,
-      staffFields: readStaffFields(record.answers),
+      staffFields,
       notes: readStaffNotes(record.answers),
       documents: readStaffDocuments(record.answers),
       processStatus: readProcessStatus(record.answers, record.status),
@@ -170,7 +183,11 @@ export async function GET(request: Request) {
     });
   }
 
-  const all = (await listSubmittedForStaff()).map(toListItem);
+  const allRaw = (await listSubmittedForStaff()).map(toListItem);
+  const financeAmounts = await loadFinanceContractAmountLabels();
+  const all = allRaw.map((item) =>
+    applyFinanceContractAmount(item, financeAmounts),
+  );
   const items = sortByName(
     view === "archive"
       ? all.filter((item) => item.isArchived)
@@ -342,9 +359,18 @@ export async function PATCH(request: Request) {
     }
 
     const record = await updateSubmittedStaffFields(body.id, patch);
+    if (typeof patch.contractAmount === "string") {
+      await syncStaffContractAmountToFinance(
+        session,
+        body.id,
+        patch.contractAmount,
+      );
+    }
+    const financeAmounts = await loadFinanceContractAmountLabels();
+    const item = applyFinanceContractAmount(toListItem(record), financeAmounts);
     return NextResponse.json({
-      item: toListItem(record),
-      staffFields: readStaffFields(record.answers),
+      item,
+      staffFields: item.staffFields,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SAVE_FAILED";

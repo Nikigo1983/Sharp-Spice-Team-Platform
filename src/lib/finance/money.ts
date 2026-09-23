@@ -4,9 +4,15 @@ export const FINANCE_CURRENCY_CODE = "EUR" as const;
 
 export type FinanceCurrencyCode = typeof FINANCE_CURRENCY_CODE;
 
-/** Parse user input like "3800", "3 800", "3800.50", "3800,50" into cents. */
+/** Parse user input like "3800", "3 800", "3800.50", "3800,50", "3 800 €" into cents. */
 export function parseEuroToCents(raw: string): number | null {
-  const trimmed = raw.trim().replace(/\s/g, "").replace(",", ".");
+  const trimmed = raw
+    .trim()
+    .replace(/€/g, "")
+    .replace(/\bEUR\b/gi, "")
+    .replace(/\beuro\b/gi, "")
+    .replace(/\s/g, "")
+    .replace(",", ".");
   if (!trimmed) return null;
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
   const [whole, frac = ""] = trimmed.split(".");

@@ -29,24 +29,44 @@ function hexToUuid(hex: string): string {
 }
 
 /**
- * Compact token for ms-word: links (much shorter than JWT).
- * Format: v1.<exp>.<fileHex>.<caseHex>.<sig22>
+ * Compact token for ms-word: links.
+ * - v1: UUID-only (legacy)
+ * - v2: any string ids (legacy-q-*, formgrid, etc.) via base64url payload
  */
 export function mintCompactCaseFileToken(
   input: CaseFileAccessClaims & { expiresInSec?: number },
 ): string {
-  const fileHex = uuidToHex(input.fileId);
-  const caseHex = uuidToHex(input.questionnaireId);
-  if (!fileHex || !caseHex) {
-    throw new Error("INVALID_IDS");
-  }
   const exp =
     Math.floor(Date.now() / 1000) + (input.expiresInSec ?? DEFAULT_TTL_SEC);
-  const body = `v1.${exp}.${fileHex}.${caseHex}`;
+  const fileHex = uuidToHex(input.fileId);
+  const caseHex = uuidToHex(input.questionnaireId);
+
+  if (fileHex && caseHex) {
+    const body = `v1.${exp}.${fileHex}.${caseHex}`;
+    const sig = createHmac("sha256", getAuthSecretKey())
+      .update(body)
+      .digest("base64url")
+      .slice(0, 22);
+    return `${body}.${sig}`;
+  }
+
+  const fileId = input.fileId.trim();
+  const questionnaireId = input.questionnaireId.trim();
+  if (!fileId || !questionnaireId) {
+    throw new Error("INVALID_IDS");
+  }
+  if (fileId.includes("\n") || questionnaireId.includes("\n")) {
+    throw new Error("INVALID_IDS");
+  }
+
+  const payload = Buffer.from(`${fileId}\n${questionnaireId}`, "utf8").toString(
+    "base64url",
+  );
+  const body = `v2.${exp}.${payload}`;
   const sig = createHmac("sha256", getAuthSecretKey())
     .update(body)
     .digest("base64url")
-    .slice(0, 22);
+    .slice(0, 16);
   return `${body}.${sig}`;
 }
 
@@ -54,28 +74,67 @@ export function verifyCompactCaseFileToken(
   token: string,
 ): CaseFileAccessClaims | null {
   const parts = token.trim().split(".");
-  if (parts.length !== 5) return null;
-  const [version, expRaw, fileHex, caseHex, sig] = parts;
-  if (version !== "v1" || !expRaw || !fileHex || !caseHex || !sig) return null;
-  if (!/^[0-9a-f]{32}$/.test(fileHex) || !/^[0-9a-f]{32}$/.test(caseHex)) {
-    return null;
+  if (parts.length < 4) return null;
+  const version = parts[0];
+
+  if (version === "v1") {
+    if (parts.length !== 5) return null;
+    const [, expRaw, fileHex, caseHex, sig] = parts;
+    if (!expRaw || !fileHex || !caseHex || !sig) return null;
+    if (!/^[0-9a-f]{32}$/.test(fileHex) || !/^[0-9a-f]{32}$/.test(caseHex)) {
+      return null;
+    }
+    const exp = Number(expRaw);
+    if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return null;
+
+    const body = `v1.${expRaw}.${fileHex}.${caseHex}`;
+    const expected = createHmac("sha256", getAuthSecretKey())
+      .update(body)
+      .digest("base64url")
+      .slice(0, 22);
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+
+    return {
+      fileId: hexToUuid(fileHex),
+      questionnaireId: hexToUuid(caseHex),
+    };
   }
-  const exp = Number(expRaw);
-  if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return null;
 
-  const body = `v1.${expRaw}.${fileHex}.${caseHex}`;
-  const expected = createHmac("sha256", getAuthSecretKey())
-    .update(body)
-    .digest("base64url")
-    .slice(0, 22);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (version === "v2") {
+    if (parts.length !== 4) return null;
+    const [, expRaw, payload, sig] = parts;
+    if (!expRaw || !payload || !sig) return null;
+    const exp = Number(expRaw);
+    if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return null;
 
-  return {
-    fileId: hexToUuid(fileHex),
-    questionnaireId: hexToUuid(caseHex),
-  };
+    const body = `v2.${expRaw}.${payload}`;
+    const expected = createHmac("sha256", getAuthSecretKey())
+      .update(body)
+      .digest("base64url")
+      .slice(0, 16);
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+
+    let decoded: string;
+    try {
+      decoded = Buffer.from(payload, "base64url").toString("utf8");
+    } catch {
+      return null;
+    }
+    const sep = decoded.indexOf("\n");
+    if (sep <= 0 || sep === decoded.length - 1) return null;
+    const fileId = decoded.slice(0, sep);
+    const questionnaireId = decoded.slice(sep + 1);
+    if (!fileId || !questionnaireId || questionnaireId.includes("\n")) {
+      return null;
+    }
+    return { fileId, questionnaireId };
+  }
+
+  return null;
 }
 
 export function isWordOpenUrlWithinLimit(absoluteFileUrl: string): boolean {

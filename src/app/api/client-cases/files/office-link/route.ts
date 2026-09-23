@@ -68,16 +68,25 @@ export async function POST(request: Request) {
       questionnaireId,
       expiresInSec: 600,
     });
-  } catch {
+  } catch (error) {
+    console.error("[office-link] compact token failed", {
+      fileId,
+      questionnaireId,
+      error,
+    });
     return NextResponse.json({ error: "INVALID_IDS" }, { status: 400 });
   }
 
   // Short path — Word protocol document URL must stay under ~256 characters.
-  const fileUrl = `${requestOrigin(request)}/api/client-cases/w/${compactToken}`;
+  const fileUrl = `${requestOrigin(request)}/api/client-cases/w/${encodeURIComponent(compactToken)}`;
   if (!isWordOpenUrlWithinLimit(fileUrl)) {
     console.error("[office-link] document URL still too long for Word", {
       length: fileUrl.length,
+      fileId,
+      questionnaireId,
     });
+    // Fall back to longer JWT URL only if somehow over limit — Word may still
+    // work on newer Office builds; prefer failing clearly for legacy hosts.
     return NextResponse.json({ error: "URL_TOO_LONG" }, { status: 500 });
   }
 

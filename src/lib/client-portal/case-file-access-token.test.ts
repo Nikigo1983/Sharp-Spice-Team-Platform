@@ -47,6 +47,23 @@ describe("case-file-access-token", () => {
     assert.ok(toMsWordOpenUri(fileUrl).length < 280);
   });
 
+  it("supports legacy non-UUID questionnaire ids", () => {
+    const fileId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const questionnaireId = "legacy-q-a1b2c3d4";
+    const compact = mintCompactCaseFileToken({
+      fileId,
+      questionnaireId,
+      expiresInSec: 600,
+    });
+    assert.match(compact, /^v2\./);
+    assert.deepEqual(verifyCompactCaseFileToken(compact), {
+      fileId,
+      questionnaireId,
+    });
+    const fileUrl = `https://sharp-spice-team-platform.vercel.app/api/client-cases/w/${encodeURIComponent(compact)}`;
+    assert.equal(isWordOpenUrlWithinLimit(fileUrl), true);
+  });
+
   it("detects Word filenames", () => {
     assert.equal(isWordDocumentFileName("a.doc"), true);
     assert.equal(isWordDocumentFileName("a.DOCX"), true);

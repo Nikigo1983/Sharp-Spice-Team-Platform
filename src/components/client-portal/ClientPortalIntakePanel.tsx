@@ -1114,7 +1114,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       };
       if (!res.ok || !data.msWordUri) {
         setError(
-          "Не удалось открыть в Word. Скачайте файл и откройте его на компьютере.",
+          data.error === "URL_TOO_LONG"
+            ? "Не удалось открыть в Word (ссылка слишком длинная для Office). Скачайте файл и откройте его на компьютере."
+            : "Не удалось открыть в Word. Скачайте файл и откройте его на компьютере.",
         );
         return;
       }

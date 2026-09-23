@@ -9,7 +9,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
     ru: "Анкета для ВНЖ Хорватии",
   },
   description: {
-    en: "Fill all items in Latin letters (as in the passport), unless a field asks for Cyrillic. Address also in Latin.",
+    en: "Fill all items as in the passport.",
     ru: "Все пункты анкеты заполняются латиницей (как в загранпаспорте), если не указано иное. Адрес также заполняется латиницей.",
   },
   sections: [
@@ -27,7 +27,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 10,
           label: {
-            en: "1. Surname, given name, patronymic (Cyrillic)",
+            en: "1. Surname, given name, patronymic",
             ru: "1. Фамилия, Имя, Отчество (кириллицей)",
           },
           placeholder: {
@@ -42,7 +42,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 20,
           label: {
-            en: "2. Full name (Latin)",
+            en: "2. Full name",
             ru: "2. ФИО (латинскими)",
           },
           placeholder: { en: "IVANOV IVAN", ru: "IVANOV IVAN" },
@@ -55,7 +55,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 30,
           label: {
-            en: "3. Surname at birth (Latin)",
+            en: "3. Surname at birth",
             ru: "3. Фамилия при рождении (латинскими)",
           },
           layout: "full",
@@ -75,7 +75,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 50,
           label: {
-            en: "5. Place of birth (Latin)",
+            en: "5. Place of birth",
             ru: "5. Место рождения (латинскими)",
           },
           placeholder: { en: "Moscow, Russia", ru: "Moscow, Russia" },
@@ -88,7 +88,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "textarea",
           order: 60,
           label: {
-            en: "6. Place of residence (address in country of citizenship, Latin)",
+            en: "6. Place of residence (address in country of citizenship)",
             ru: "6. Место жительства (адрес в стране гражданства)(латинскими)",
           },
           placeholder: {
@@ -166,7 +166,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 130,
           label: {
-            en: "Education / specialty (Latin)",
+            en: "Education / specialty",
             ru: "Образование/специальность (латинскими)",
           },
           placeholder: {
@@ -181,7 +181,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 140,
           label: {
-            en: "10. Citizenship (Latin)",
+            en: "10. Citizenship",
             ru: "10. Гражданство (латинскими)",
           },
           placeholder: {
@@ -197,7 +197,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 150,
           label: {
-            en: "11. Nationality (Latin)",
+            en: "11. Nationality",
             ru: "11. Национальность (латинскими)",
           },
           placeholder: { en: "Russian", ru: "Russian" },
@@ -210,7 +210,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 160,
           label: {
-            en: "12. Marital status (Latin)",
+            en: "12. Marital status",
             ru: "12. Семейное положение (латинскими)",
           },
           placeholder: {
@@ -226,7 +226,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 170,
           label: {
-            en: "13. Father: full name (Latin)",
+            en: "13. Father: full name",
             ru: "13. Отец: ФИО (латинскими)",
           },
           placeholder: { en: "IVANOV IVAN", ru: "IVANOV IVAN" },
@@ -238,7 +238,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 180,
           label: {
-            en: "14. Mother: full name (Latin)",
+            en: "14. Mother: full name",
             ru: "14. Мать: ФИО (латинскими)",
           },
           placeholder: { en: "IVANOVA MARIA", ru: "IVANOVA MARIA" },
@@ -251,7 +251,7 @@ export const CROATIA_TRP_SCHEMA: QuestionnaireSchema = {
       id: "croatia",
       order: 20,
       title: {
-        en: "Questions about Croatia (Cyrillic)",
+        en: "Questions about Croatia",
         ru: "Вопросы по Хорватии (заполнять кириллицей)",
       },
       questions: [
@@ -530,7 +530,7 @@ export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 190,
           label: {
-            en: "15. Taxpayer identification number (INN)",
+            en: "15. Taxpayer identification number",
             ru: "15. Номер ИНН",
           },
           placeholder: { en: "1234567890", ru: "1234567890" },
@@ -542,7 +542,7 @@ export const SPAIN_TRP_SCHEMA: QuestionnaireSchema = {
           type: "text",
           order: 200,
           label: {
-            en: "16. SNILS number",
+            en: "16. SNILS number (if available)",
             ru: "16. Номер СНИЛС",
           },
           placeholder: { en: "123-456-789 00", ru: "123-456-789 00" },

@@ -259,7 +259,7 @@ const MESSAGES: Record<PortalMsg, { ru: string; en: string }> = {
   },
   fillLatin: {
     ru: "Пожалуйста, заполните латиницей",
-    en: "Please fill this in using Latin characters",
+    en: "Please use the same spelling as in your passport",
   },
   yes: { ru: "Да", en: "Yes" },
   no: { ru: "Нет", en: "No" },

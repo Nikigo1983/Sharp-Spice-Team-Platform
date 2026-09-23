@@ -642,7 +642,7 @@ export function ClientQuestionnaireForm({
                       disabled={readOnly}
                       onClick={() => updateAnswer(question.id, true)}
                     >
-                      Да
+                      {t("yes", locale)}
                     </button>
                   </div>
                 </div>

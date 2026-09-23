@@ -5,37 +5,32 @@ import { FORMGRID_IMPORT_KEY } from "./formgrid-import";
 import { LEGACY_IMPORT_KEY } from "./legacy-crm";
 import {
   isImportStaffOpenStamp,
+  isPortalNewClientBadge,
   isQuestionnaireNewForStaff,
 } from "./questionnaire-new";
 
 describe("questionnaire-new", () => {
-  it("marks unopened portal clients as new", () => {
-    assert.equal(
-      isQuestionnaireNewForStaff({
-        staffOpenedAt: null,
-        createdAt: "2026-09-23T10:00:00.000Z",
-        answers: {},
-      }),
-      true,
-    );
+  it("shows yellow badge for portal clients regardless of staff open", () => {
+    const opened = {
+      staffOpenedAt: "2026-09-23T11:00:00.000Z",
+      createdAt: "2026-09-23T10:00:00.000Z",
+      answers: {},
+    };
+    assert.equal(isPortalNewClientBadge(opened), true);
+    assert.equal(isQuestionnaireNewForStaff(opened), false);
+
+    const unopened = {
+      staffOpenedAt: null,
+      createdAt: "2026-09-23T10:00:00.000Z",
+      answers: {},
+    };
+    assert.equal(isPortalNewClientBadge(unopened), true);
+    assert.equal(isQuestionnaireNewForStaff(unopened), true);
   });
 
-  it("does not mark opened portal clients as new", () => {
+  it("never badges legacy or formgrid", () => {
     assert.equal(
-      isQuestionnaireNewForStaff({
-        staffOpenedAt: "2026-09-23T11:00:00.000Z",
-        createdAt: "2026-09-23T10:00:00.000Z",
-        answers: {},
-      }),
-      false,
-    );
-  });
-
-  it("never marks legacy or formgrid as new even if unopened", () => {
-    assert.equal(
-      isQuestionnaireNewForStaff({
-        staffOpenedAt: null,
-        createdAt: "2026-09-23T10:00:00.000Z",
+      isPortalNewClientBadge({
         answers: {
           [LEGACY_IMPORT_KEY]: {
             source: "croatia_external",
@@ -46,9 +41,7 @@ describe("questionnaire-new", () => {
       false,
     );
     assert.equal(
-      isQuestionnaireNewForStaff({
-        staffOpenedAt: null,
-        createdAt: "2026-09-23T10:00:00.000Z",
+      isPortalNewClientBadge({
         answers: {
           [FORMGRID_IMPORT_KEY]: {
             source: "formgrid",

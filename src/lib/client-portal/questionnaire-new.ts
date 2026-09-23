@@ -67,16 +67,24 @@ export function isImportStaffOpenStamp(record: {
 }
 
 /**
- * Yellow «Новый клиент» — only Emigrant portal submissions that staff
- * has not opened yet (same set as filter «Новые клиенты из клиентского портала»).
- * Legacy / Formgrid / manual never get this badge.
+ * Yellow «Новый клиент» badge — same set as filter
+ * «Новые клиенты из клиентского портала» (Emigrant portal source).
+ */
+export function isPortalNewClientBadge(record: {
+  answers: Record<string, unknown>;
+}): boolean {
+  if (isCaseArchived(record.answers)) return false;
+  return resolveIntakeClientSource(record.answers) === "portal";
+}
+
+/**
+ * Unopened portal cases — used for nav badge counts, not the yellow list plaque.
  */
 export function isQuestionnaireNewForStaff(record: {
   staffOpenedAt: string | null;
   createdAt: string;
   answers: Record<string, unknown>;
 }): boolean {
-  if (isCaseArchived(record.answers)) return false;
-  if (resolveIntakeClientSource(record.answers) !== "portal") return false;
+  if (!isPortalNewClientBadge(record)) return false;
   return !record.staffOpenedAt;
 }

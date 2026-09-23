@@ -700,11 +700,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setSelectedArchived(Boolean(data.isArchived ?? item.isArchived));
     setSelectedIsLegacy(Boolean(data.isLegacy ?? item.isLegacy));
     setSelectedIsFormgrid(Boolean(data.isFormgrid ?? item.isFormgrid));
-    setItems((prev) =>
-      prev.map((row) =>
-        row.id === item.id ? { ...row, isNew: false } : row,
-      ),
-    );
   }
 
   function closeCase() {

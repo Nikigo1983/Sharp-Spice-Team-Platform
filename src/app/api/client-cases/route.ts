@@ -42,7 +42,7 @@ import {
   loadFinanceContractAmountLabels,
   syncStaffContractAmountToFinance,
 } from "@/lib/finance/intake-contract-amount";
-import { isQuestionnaireNewForStaff } from "@/lib/client-portal/questionnaire-new";
+import { isPortalNewClientBadge } from "@/lib/client-portal/questionnaire-new";
 
 function staffFieldsForList(
   answers: Record<string, unknown>,
@@ -108,7 +108,7 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
       identity?.direction || item.answers.citizenship_latin || "",
     ),
     submittedAt: item.submittedAt,
-    isNew: isQuestionnaireNewForStaff(item),
+    isNew: isPortalNewClientBadge(item),
     isLegacy: source === "legacy",
     isFormgrid: source === "formgrid",
     isManual: source === "manual",

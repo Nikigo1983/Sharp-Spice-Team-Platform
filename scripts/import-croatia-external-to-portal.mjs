@@ -253,7 +253,7 @@ async function main() {
         updated_at: now,
         submitted_at: submittedAt,
         // Avoid flooding "Новая" for historical imports
-        staff_opened_at: existingQ?.staff_opened_at || importedAt,
+        staff_opened_at: existingQ?.staff_opened_at ?? null,
       },
       { onConflict: "id" },
     );

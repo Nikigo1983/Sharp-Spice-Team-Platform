@@ -731,6 +731,15 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     const item = items.find((row) => row.id === initialCaseId);
     if (!item) return;
     deepLinkHandled.current = true;
+    // Drop list filters so deep-linked clients aren't hidden behind search/country chips.
+    setQuery("");
+    setCurator("");
+    setPartner("");
+    setClientSource("");
+    setLawyerFilter("");
+    setSubmittedMonth("");
+    setVnzhCountryFilter("");
+    setHighlightedRowId(item.id);
     void openCase(item);
   }, [initialCaseId, items, loading]);
 
@@ -2290,6 +2299,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     >
                       <span className={styles.nameText}>
                         {name}
+                        {item.isNew ? (
+                          <span className={styles.newBadge}>Новый клиент</span>
+                        ) : null}
                         {item.vnzhCountryLabel || item.vnzhCountry ? (
                           <span className={styles.countryBadge}>
                             {item.vnzhCountryLabel ??
@@ -2311,9 +2323,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         ) : null}
                         {item.isManual ? (
                           <span className={styles.manualBadge}>Вручную</span>
-                        ) : null}
-                        {item.isNew ? (
-                          <span className={styles.newBadge}>Новый клиент</span>
                         ) : null}
                       </span>
                       <span className={styles.emailLine}>{item.email}</span>

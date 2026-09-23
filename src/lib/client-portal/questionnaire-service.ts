@@ -72,6 +72,9 @@ import {
   writeCaseArchive,
 } from "./case-archive";
 import {
+  isImportStaffOpenStamp,
+} from "./questionnaire-new";
+import {
   appendStaffDocument,
   appendStaffNote,
   findStaffDocument,
@@ -331,6 +334,8 @@ export async function submitQuestionnaire(
     await notifyNewClient({
       clientName,
       source: "Портал Emigrant",
+      caseId: next.id,
+      destination: "intake",
     });
   } catch (error) {
     console.error("[questionnaire] notifyNewClient failed", error);
@@ -457,7 +462,11 @@ export async function markQuestionnaireOpenedByStaff(
 ): Promise<QuestionnaireRecord | null> {
   const record = await getSubmittedForStaff(id);
   if (!record) return null;
-  if (record.staffOpenedAt) return record;
+  // Import scripts used to stamp staffOpenedAt at import time — overwrite that
+  // with a real open timestamp so the yellow badge can clear.
+  if (record.staffOpenedAt && !isImportStaffOpenStamp(record)) {
+    return record;
+  }
   const now = new Date().toISOString();
   return upsertQuestionnaire({
     ...record,

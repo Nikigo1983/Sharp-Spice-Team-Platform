@@ -149,6 +149,7 @@ export async function processFormgridLeadsForNotifications(
     await notifyNewClient({
       clientName,
       source: "анкета Formgrid",
+      destination: "formgrid",
     });
 
     if (isConsultationLead(table.headers, row)) {

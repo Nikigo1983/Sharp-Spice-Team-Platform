@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { encodeCalendarReminderMessage } from "./calendar-reminder-copy";
+import { encodeClientNewMessage } from "./client-new-copy";
 import {
   getNotificationActionLabel,
   getNotificationDisplayMessage,
@@ -126,5 +127,30 @@ describe("notification navigation", () => {
       getNotificationHref("consultation_assigned"),
       "/new-formgrid-clients",
     );
+  });
+
+  it("deep-links portal new clients and routes Formgrid elsewhere", () => {
+    const intakeMsg = encodeClientNewMessage("Иванов (Портал Emigrant)", {
+      destination: "intake",
+      caseId: "case-42",
+    });
+    assert.equal(
+      getNotificationHref("client_new", intakeMsg),
+      "/clients/intake?id=case-42",
+    );
+    assert.equal(
+      getNotificationDisplayMessage("client_new", intakeMsg),
+      "Иванов (Портал Emigrant)",
+    );
+    assert.equal(getNotificationSection("client_new", intakeMsg), "intake");
+
+    const formgridMsg = encodeClientNewMessage("Петров (анкета Formgrid)", {
+      destination: "formgrid",
+    });
+    assert.equal(
+      getNotificationHref("client_new", formgridMsg),
+      "/new-formgrid-clients",
+    );
+    assert.equal(getNotificationSection("client_new", formgridMsg), "formgrid");
   });
 });

@@ -11,6 +11,7 @@ import {
   buildCalendarReminderNotificationContent,
   buildCalendarEventCreatedNotificationContent,
 } from "./calendar-reminder-copy";
+import { encodeClientNewMessage } from "./client-new-copy";
 import {
   createNotificationForUser,
   createNotificationsForTeam,
@@ -269,14 +270,23 @@ export async function notifyTaskStatusUpdate(params: {
 export async function notifyNewClient(params: {
   clientName: string;
   source?: string;
+  caseId?: string;
+  destination?: "intake" | "formgrid";
 }) {
+  const display = params.source
+    ? `${params.clientName} (${params.source})`
+    : params.clientName;
+  const destination =
+    params.destination ??
+    (params.source && /formgrid/i.test(params.source) ? "formgrid" : "intake");
   await createNotificationsForTeam({
     type: "client_new",
     title: "Новый клиент",
     author_name: null,
-    message: params.source
-      ? `${params.clientName} (${params.source})`
-      : params.clientName,
+    message: encodeClientNewMessage(display, {
+      destination,
+      caseId: params.caseId,
+    }),
   });
 }
 

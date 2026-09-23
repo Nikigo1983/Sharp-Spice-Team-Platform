@@ -1,5 +1,6 @@
 import type { NotificationType } from "@/lib/notifications/types";
 import { decodeCalendarReminderMessage } from "./calendar-reminder-copy";
+import { decodeClientNewMessage } from "./client-new-copy";
 
 export type NotificationSection =
   | "team-chat"
@@ -47,12 +48,15 @@ export function getNotificationDisplayMessage(
   if (isCalendarLinkType(type)) {
     return decodeCalendarReminderMessage(message).display;
   }
+  if (type === "client_new") {
+    return decodeClientNewMessage(message).display;
+  }
   return message;
 }
 
 export function getNotificationSection(
   type: NotificationType,
-  _message?: string,
+  message?: string,
 ): NotificationSection | null {
   switch (type) {
     case "team_chat":
@@ -63,8 +67,10 @@ export function getNotificationSection(
     case "task_pending_approval":
     case "task_revision":
       return "tasks";
-    case "client_new":
-      return "intake";
+    case "client_new": {
+      const { destination } = decodeClientNewMessage(message ?? "");
+      return destination === "formgrid" ? "formgrid" : "intake";
+    }
     case "consultation_assigned":
       return "formgrid";
     case "calendar_reminder":
@@ -95,8 +101,15 @@ export function getNotificationHref(
     case "task_pending_approval":
     case "task_revision":
       return "/tasks";
-    case "client_new":
-      return "/clients/intake";
+    case "client_new": {
+      const { destination, caseId } = decodeClientNewMessage(message ?? "");
+      if (destination === "formgrid") {
+        return "/new-formgrid-clients";
+      }
+      return caseId
+        ? `/clients/intake?id=${encodeURIComponent(caseId)}`
+        : "/clients/intake";
+    }
     case "consultation_assigned":
       return "/new-formgrid-clients";
     case "calendar_reminder":

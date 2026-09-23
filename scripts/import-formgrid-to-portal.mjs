@@ -403,7 +403,7 @@ async function main() {
         created_at: existingQ?.created_at || now,
         updated_at: now,
         submitted_at: submittedAt,
-        staff_opened_at: existingQ?.staff_opened_at || importedAt,
+        staff_opened_at: existingQ?.staff_opened_at ?? null,
       },
       { onConflict: "id" },
     );

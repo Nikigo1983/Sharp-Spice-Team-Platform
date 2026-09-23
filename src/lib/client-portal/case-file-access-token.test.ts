@@ -12,6 +12,12 @@ import {
   mintCompactCaseFileToken,
   verifyCompactCaseFileToken,
 } from "@/lib/client-portal/case-file-office-token";
+import {
+  buildMsWordAbbreviatedUri,
+  buildMsWordEditUri,
+  buildWordDocumentFileUrl,
+  wordOpenPathFileName,
+} from "@/lib/client-portal/case-file-word-open-url";
 
 describe("case-file-access-token", () => {
   it("mints and verifies short-lived file tokens", async () => {
@@ -41,10 +47,17 @@ describe("case-file-access-token", () => {
       questionnaireId,
     );
 
-    const fileUrl = `https://sharp-spice-team-platform.vercel.app/api/client-cases/w/${compact}`;
+    const fileUrl = buildWordDocumentFileUrl(
+      "https://sharp-spice-team-platform.vercel.app",
+      compact,
+      "anketa.doc",
+    );
+    assert.match(fileUrl, /\/document\.doc$/);
     assert.equal(isWordOpenUrlWithinLimit(fileUrl), true);
     assert.equal(toMsWordOpenUri(fileUrl), `ms-word:ofe|u|${fileUrl}`);
-    assert.ok(toMsWordOpenUri(fileUrl).length < 280);
+    assert.equal(buildMsWordEditUri(fileUrl), `ms-word:ofe|u|${fileUrl}`);
+    assert.equal(buildMsWordAbbreviatedUri(fileUrl), `ms-word:${fileUrl}`);
+    assert.ok(toMsWordOpenUri(fileUrl).length < 300);
   });
 
   it("supports legacy non-UUID questionnaire ids", () => {
@@ -60,8 +73,18 @@ describe("case-file-access-token", () => {
       fileId,
       questionnaireId,
     });
-    const fileUrl = `https://sharp-spice-team-platform.vercel.app/api/client-cases/w/${encodeURIComponent(compact)}`;
+    const fileUrl = buildWordDocumentFileUrl(
+      "https://sharp-spice-team-platform.vercel.app",
+      compact,
+      "Anketa.docx",
+    );
+    assert.match(fileUrl, /\/document\.docx$/);
     assert.equal(isWordOpenUrlWithinLimit(fileUrl), true);
+  });
+
+  it("picks Word path extension from original name", () => {
+    assert.equal(wordOpenPathFileName("a.DOCX"), "document.docx");
+    assert.equal(wordOpenPathFileName("a.doc"), "document.doc");
   });
 
   it("detects Word filenames", () => {

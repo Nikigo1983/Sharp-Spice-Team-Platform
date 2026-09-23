@@ -1109,6 +1109,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       });
       const data = (await res.json()) as {
         msWordUri?: string;
+        msWordUriAbbreviated?: string;
+        launchUrl?: string;
         fileUrl?: string;
         error?: string;
       };
@@ -1120,8 +1122,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         );
         return;
       }
-      // Desktop Word: ofe protocol via <a> click (ofv fails on many licensed installs).
-      launchMsWordProtocol(data.msWordUri);
+      // Desktop Word: 302 launch (Chrome-safe) + ofe + abbreviated fallback.
+      launchMsWordProtocol({
+        launchUrl: data.launchUrl,
+        msWordUri: data.msWordUri,
+        abbreviatedUri: data.msWordUriAbbreviated,
+      });
       setStatus("Открываем в Microsoft Word…");
     } catch {
       setError(

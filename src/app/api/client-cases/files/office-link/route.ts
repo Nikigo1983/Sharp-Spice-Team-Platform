@@ -5,7 +5,12 @@ import {
   mintCompactCaseFileToken,
   isWordOpenUrlWithinLimit,
 } from "@/lib/client-portal/case-file-office-token";
-import { toMsWordOpenUri } from "@/lib/client-portal/case-file-access-token";
+import {
+  buildMsWordAbbreviatedUri,
+  buildMsWordEditUri,
+  buildWordDocumentFileUrl,
+  wordOpenPathFileName,
+} from "@/lib/client-portal/case-file-word-open-url";
 import {
   findFileAnswerInRecord,
   getSubmittedForStaff,
@@ -77,23 +82,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_IDS" }, { status: 400 });
   }
 
-  // Short path — Word protocol document URL must stay under ~256 characters.
-  const fileUrl = `${requestOrigin(request)}/api/client-cases/w/${encodeURIComponent(compactToken)}`;
+  const origin = requestOrigin(request);
+  const fileUrl = buildWordDocumentFileUrl(
+    origin,
+    compactToken,
+    owned.fileName,
+  );
   if (!isWordOpenUrlWithinLimit(fileUrl)) {
     console.error("[office-link] document URL still too long for Word", {
       length: fileUrl.length,
       fileId,
       questionnaireId,
     });
-    // Fall back to longer JWT URL only if somehow over limit — Word may still
-    // work on newer Office builds; prefer failing clearly for legacy hosts.
     return NextResponse.json({ error: "URL_TOO_LONG" }, { status: 500 });
   }
+
+  const pathName = wordOpenPathFileName(owned.fileName);
+  const ext = pathName.endsWith(".docx") ? "docx" : "doc";
+  const launchUrl = `${origin}/api/client-cases/files/office-launch?t=${encodeURIComponent(compactToken)}&ext=${ext}`;
 
   return NextResponse.json({
     fileName: owned.fileName,
     fileUrl,
-    msWordUri: toMsWordOpenUri(fileUrl),
+    launchUrl,
+    msWordUri: buildMsWordEditUri(fileUrl),
+    msWordUriAbbreviated: buildMsWordAbbreviatedUri(fileUrl),
     urlLength: fileUrl.length,
   });
 }

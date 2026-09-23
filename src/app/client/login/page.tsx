@@ -1,10 +1,6 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ClientPortalLoginForm } from "@/components/client-portal/ClientPortalLoginForm";
-import {
-  CLIENT_LOCALE_COOKIE,
-  normalizeClientLocale,
-} from "@/lib/client-portal/portal-i18n";
+import { normalizeClientLocale } from "@/lib/client-portal/portal-i18n";
 import { resolveClientPortalLocale } from "@/lib/client-portal/resolve-locale";
 import { getClientSession } from "@/lib/client-portal/session";
 import { isClientPortalLocale } from "@/lib/client-portal/types";
@@ -21,20 +17,12 @@ export default async function ClientLoginPage({
 
   const params = await searchParams;
   const langParam = params.lang?.trim().toLowerCase();
-  if (isClientPortalLocale(langParam ?? "")) {
-    const cookieStore = await cookies();
-    cookieStore.set(CLIENT_LOCALE_COOKIE, langParam!, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
-
-  const locale = isClientPortalLocale(langParam ?? "")
+  const fromInviteLink = isClientPortalLocale(langParam ?? "");
+  const locale = fromInviteLink
     ? normalizeClientLocale(langParam)
     : await resolveClientPortalLocale();
 
-  return <ClientPortalLoginForm locale={locale} />;
+  return (
+    <ClientPortalLoginForm locale={locale} persistLocale={fromInviteLink} />
+  );
 }

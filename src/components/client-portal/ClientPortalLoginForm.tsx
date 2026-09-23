@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import {
   clientSignInAction,
   type ClientAuthState,
@@ -16,13 +16,25 @@ const initialState: ClientAuthState = {};
 
 export function ClientPortalLoginForm({
   locale,
+  persistLocale = false,
 }: {
   locale: ClientPortalLocale;
+  /** Persist guest locale cookie when opened from invite link (?lang=). */
+  persistLocale?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     clientSignInAction,
     initialState,
   );
+
+  useEffect(() => {
+    if (!persistLocale) return;
+    void fetch("/api/client/locale", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale }),
+    });
+  }, [persistLocale, locale]);
 
   return (
     <div className={styles.page}>

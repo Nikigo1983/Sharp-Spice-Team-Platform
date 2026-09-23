@@ -273,43 +273,52 @@ export function NotificationBell() {
                   item.type,
                   item.message,
                 );
+                const href = getNotificationHref(item.type, item.message);
+                const openItem = () =>
+                  void handleOpenItem(
+                    item.id,
+                    item.is_read,
+                    item.type,
+                    item.message,
+                  );
                 return (
                   <div
                     key={item.id}
+                    role={href ? "link" : undefined}
+                    tabIndex={href ? 0 : undefined}
                     className={[
                       styles.item,
+                      href ? "" : styles.itemStatic,
                       item.is_read ? styles.itemRead : styles.itemUnread,
                       isSuccess ? styles.itemSuccess : "",
                       isSuccess && !item.is_read ? styles.itemSuccessUnread : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    onClick={href ? openItem : undefined}
+                    onKeyDown={
+                      href
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openItem();
+                            }
+                          }
+                        : undefined
+                    }
                   >
                     <div className={styles.itemTop}>
-                      <button
-                        type="button"
-                        className={styles.itemTypeBtn}
-                        onClick={() =>
-                          void handleOpenItem(
-                            item.id,
-                            item.is_read,
-                            item.type,
-                            item.message,
-                          )
-                        }
+                      <span
+                        className={[
+                          styles.itemType,
+                          isSuccess ? styles.itemTypeSuccess : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                       >
-                        <span
-                          className={[
-                            styles.itemType,
-                            isSuccess ? styles.itemTypeSuccess : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
-                          {NOTIFICATION_TYPE_LABELS[item.type]}
-                        </span>
-                      </button>
+                        {NOTIFICATION_TYPE_ICONS[item.type]}{" "}
+                        {NOTIFICATION_TYPE_LABELS[item.type]}
+                      </span>
                       <span className={styles.itemTime}>
                         {formatNotificationTime(item.created_at)}
                       </span>
@@ -317,7 +326,10 @@ export function NotificationBell() {
                         type="button"
                         className={styles.closeBtn}
                         aria-label="Закрыть уведомление"
-                        onClick={() => void ctx.removeNotification(item.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void ctx.removeNotification(item.id);
+                        }}
                       >
                         ×
                       </button>
@@ -340,14 +352,10 @@ export function NotificationBell() {
                       <button
                         type="button"
                         className={styles.joinButton}
-                        onClick={() =>
-                          void handleOpenItem(
-                            item.id,
-                            item.is_read,
-                            item.type,
-                            item.message,
-                          )
-                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openItem();
+                        }}
                       >
                         {actionLabel}
                       </button>

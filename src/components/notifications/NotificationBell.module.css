@@ -49,8 +49,8 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  width: min(380px, calc(100vw - 2rem));
-  max-height: 420px;
+  width: min(520px, calc(100vw - 2rem));
+  max-height: 480px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-soft);
@@ -58,7 +58,8 @@
   background: #2d3748;
   background: var(--gray-800);
   box-shadow: var(--shadow-card), 0 0 24px rgba(145, 13, 13, 0.18);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
   animation: panelIn 0.2s ease;
   z-index: 200;
 }
@@ -76,7 +77,8 @@
 
 .panelHeader {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
@@ -240,6 +242,7 @@
 }
 
 .list {
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;
@@ -258,15 +261,23 @@
 
 .item {
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
   border: 1px solid transparent;
   border-radius: 12px;
   background: rgba(15, 20, 28, 0.35);
   padding: 0.75rem 0.875rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
     transform 0.2s ease;
+}
+
+.itemStatic {
+  cursor: default;
 }
 
 .item:hover {
@@ -323,7 +334,6 @@
 
 .itemTypeBtn {
   all: unset;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
 }
@@ -332,16 +342,19 @@
   font-family: Inter, sans-serif;
   font-size: 0.6875rem;
   color: var(--gray-400);
+  flex-shrink: 0;
 }
 
 .closeBtn {
   margin-left: auto;
+  flex-shrink: 0;
   border: none;
   background: transparent;
   color: var(--gray-400);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+  padding: 0.1rem 0.25rem;
 }
 
 .closeBtn:hover {
@@ -398,8 +411,8 @@
     top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
     left: 50%;
     right: auto;
-    width: min(380px, calc(100vw - 1.5rem));
-    max-height: min(70dvh, 420px);
+    width: min(520px, calc(100vw - 1.5rem));
+    max-height: min(75dvh, 480px);
     transform: translateX(-50%);
     z-index: 400;
     animation: panelInMobile 0.2s ease;

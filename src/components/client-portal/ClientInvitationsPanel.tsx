@@ -333,16 +333,21 @@ export function ClientInvitationsPanel({
                 <span className={styles.index} aria-hidden="true">
                   {index + 1}.
                 </span>
-                <div>
-                  <strong>{item.firstName}</strong>
+                <div className={styles.itemBody}>
+                  <strong className={styles.itemName}>{item.firstName}</strong>
                   <div className={styles.meta}>
-                    {item.email} · {item.status} ·{" "}
-                    {new Date(item.createdAt).toLocaleString("ru-RU")}
+                    <span className={styles.email}>{item.email}</span>
+                    <span className={styles.metaSep}>·</span>
+                    <span>{item.status}</span>
+                    <span className={styles.metaSep}>·</span>
+                    <span>
+                      {new Date(item.createdAt).toLocaleString("ru-RU")}
+                    </span>
                   </div>
+                  <span className={styles.accountBadge}>Аккаунт создан</span>
                 </div>
               </div>
               <div className={styles.itemActions}>
-                <span className={styles.meta}>Аккаунт создан</span>
                 <button
                   type="button"
                   className={styles.deleteBtn}

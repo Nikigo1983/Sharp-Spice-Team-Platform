@@ -2051,7 +2051,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             className={styles.filterBtn}
             onClick={clearListFilters}
           >
-            Сбросить
+            Сбросить фильтры
           </button>
           <button
             type="button"

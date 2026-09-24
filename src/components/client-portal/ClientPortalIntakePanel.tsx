@@ -480,12 +480,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
           if (clientSource === "portal") {
-            if (
-              resolveListItemSource(item) !== "portal" ||
-              !item.isNew
-            ) {
-              return false;
-            }
+            // Portal Emigrant + Formgrid duplicates flagged as new
+            if (!item.isNew) return false;
+            const src = resolveListItemSource(item);
+            if (src !== "portal" && src !== "formgrid") return false;
           } else if (clientSource === "formgrid-new") {
             if (
               resolveListItemSource(item) !== "formgrid" ||
@@ -574,21 +572,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setLawyerFilter("");
     setVnzhCountryFilter("");
     setSubmittedMonth("");
-    const hasPortal = items.some(
-      (item) =>
-        Boolean(item.isNew) &&
-        resolveListItemSource(item) === "portal" &&
-        isSubmittedToday(item.submittedAt),
-    );
-    const hasFormgrid = items.some(
-      (item) =>
-        Boolean(item.isNew) &&
-        resolveListItemSource(item) === "formgrid" &&
-        isSubmittedToday(item.submittedAt),
-    );
-    if (hasPortal && !hasFormgrid) setClientSource("portal");
-    else if (hasFormgrid && !hasPortal) setClientSource("formgrid-new");
-    else setClientSource("");
+    // Portal filter includes Formgrid new-queue duplicates
+    setClientSource("portal");
     setBookingAlertsOpen(false);
   }
 

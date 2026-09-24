@@ -40,6 +40,7 @@ import {
 } from "./questionnaire-attachment-storage";
 import { isAllowedAttachment, STAFF_CASE_DOCUMENT_ACCEPT, renameFileNamePreservingExt } from "./questionnaire-attachment-formats";
 import { mirrorQuestionnaireFilesIntoStaffDocuments } from "./questionnaire-file-mirror";
+import { ingestFormgridExternalFiles } from "./formgrid-file-ingest";
 import {
   buildQuestionnaireWordDoc,
   findQuestionnaireWordDocument,
@@ -731,12 +732,27 @@ export async function addStaffCaseDocument(
  */
 export { mirrorQuestionnaireFilesIntoStaffDocuments } from "./questionnaire-file-mirror";
 
-/** Backfill «Документы по клиенту» from questionnaire file fields for older cases. */
+/** Backfill «Документы по клиенту» from questionnaire / Formgrid file fields. */
 export async function ensureQuestionnaireFileDocuments(
   id: string,
 ): Promise<{ record: QuestionnaireRecord; added: number }> {
-  const current = await getSubmittedForStaff(id);
+  let current = await getSubmittedForStaff(id);
   if (!current) throw new Error("NOT_FOUND");
+
+  if (isFormgridImport(current.answers)) {
+    try {
+      const ingested = await ingestFormgridExternalFiles(current);
+      return {
+        record: ingested.record,
+        added: ingested.downloaded + ingested.mirrored,
+      };
+    } catch (error) {
+      console.error(
+        "[questionnaire] formgrid file ingest on ensure failed",
+        error,
+      );
+    }
+  }
 
   const mirrored = mirrorQuestionnaireFilesIntoStaffDocuments(
     current.answers,

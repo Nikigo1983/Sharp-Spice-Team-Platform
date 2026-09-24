@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import {
   extractFormgridClientFields,
+  FORMGRID_FILES_KEY,
   formgridFingerprint,
   formgridQuestionnaireId,
   formgridUserId,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/client-portal/questionnaire-store";
 import type { QuestionnaireRecord } from "@/lib/client-portal/questionnaire-types";
 import { isApplicationSubmitted } from "@/lib/client-portal/application-submitted";
+import { ingestFormgridExternalFiles } from "@/lib/client-portal/formgrid-file-ingest";
 import { buildFormgridRowKey } from "@/lib/leads/formgrid-row-key";
 import { getDismissedFormgridRowKeys } from "@/lib/leads/formgrid-active-leads";
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
@@ -158,7 +160,7 @@ export async function syncFormgridSheetRowToPortal(input: {
   });
 
   if (existing) {
-    // Preserve staff/archive/application-submitted flags; refresh sheet payload.
+    // Preserve staff/archive/files/application-submitted; refresh sheet payload.
     answers = {
       ...answers,
       ...(existing.answers.__archive
@@ -172,10 +174,29 @@ export async function syncFormgridSheetRowToPortal(input: {
       ...(existing.answers.__staff
         ? { __staff: existing.answers.__staff }
         : {}),
+      ...(existing.answers.__staff_documents
+        ? { __staff_documents: existing.answers.__staff_documents }
+        : {}),
+      ...(existing.answers[FORMGRID_FILES_KEY]
+        ? { [FORMGRID_FILES_KEY]: existing.answers[FORMGRID_FILES_KEY] }
+        : {}),
       ...(existing.answers.__crmOpsSheet
         ? { __crmOpsSheet: existing.answers.__crmOpsSheet }
         : {}),
     };
+    // Keep already-ingested portal file fields (passport PDF, etc.).
+    for (const [key, value] of Object.entries(existing.answers)) {
+      if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        typeof (value as { id?: unknown }).id === "string" &&
+        typeof (value as { fileName?: unknown }).fileName === "string" &&
+        (key.startsWith("doc_") || key === "doc_signature_sample")
+      ) {
+        answers[key] = value;
+      }
+    }
     if (
       markAsNew &&
       !isApplicationSubmitted(existing.answers) &&
@@ -211,7 +232,7 @@ export async function syncFormgridSheetRowToPortal(input: {
     updatedAt: now,
   });
 
-  const record = await upsertQuestionnaire({
+  let record = await upsertQuestionnaire({
     id: questionnaireId,
     clientPortalUserId: userId,
     invitationId: null,
@@ -225,6 +246,24 @@ export async function syncFormgridSheetRowToPortal(input: {
     submittedAt: existing?.submittedAt ?? submittedAt,
     staffOpenedAt: existing?.staffOpenedAt ?? null,
   });
+
+  try {
+    const ingested = await ingestFormgridExternalFiles(record);
+    record = ingested.record;
+    if (ingested.downloaded > 0 || ingested.mirrored > 0) {
+      console.info("[formgrid-to-portal] files ingested", {
+        questionnaireId,
+        downloaded: ingested.downloaded,
+        mirrored: ingested.mirrored,
+        failed: ingested.failed,
+      });
+    }
+  } catch (error) {
+    console.error("[formgrid-to-portal] file ingest failed", {
+      questionnaireId,
+      error,
+    });
+  }
 
   return {
     status: existing ? "updated" : "created",

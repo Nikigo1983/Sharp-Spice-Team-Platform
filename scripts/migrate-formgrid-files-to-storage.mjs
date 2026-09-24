@@ -258,6 +258,27 @@ async function main() {
 
     if (!dryRun) {
       answers[mapper.FORMGRID_FILES_KEY] = stored;
+      const docsKey = "__staff_documents";
+      const existingDocs = Array.isArray(answers[docsKey])
+        ? [...answers[docsKey]]
+        : [];
+      const existingIds = new Set(
+        existingDocs.map((d) => d?.id).filter(Boolean),
+      );
+      for (const fileMeta of Object.values(stored)) {
+        if (!fileMeta?.id || existingIds.has(fileMeta.id)) continue;
+        existingDocs.push({
+          id: fileMeta.id,
+          fileName: fileMeta.fileName,
+          mimeType: fileMeta.mimeType,
+          sizeBytes: fileMeta.sizeBytes,
+          uploadedByName: "Из анкеты",
+          uploadedByUserId: "system-questionnaire-file",
+          createdAt: fileMeta.storedAt || new Date().toISOString(),
+        });
+        existingIds.add(fileMeta.id);
+      }
+      answers[docsKey] = existingDocs;
       const { error: updErr } = await sb
         .from("client_portal_questionnaires")
         .update({

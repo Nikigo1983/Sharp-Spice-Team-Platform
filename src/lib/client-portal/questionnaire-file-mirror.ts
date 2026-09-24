@@ -1,3 +1,4 @@
+import { readFormgridStoredFiles } from "@/lib/client-portal/formgrid-import";
 import {
   isFileAnswer,
   type QuestionnaireAnswers,
@@ -12,8 +13,9 @@ import {
 } from "@/lib/client-portal/questionnaire-word-export";
 
 /**
- * Copy client questionnaire file answers into `__staff_documents` (same file ids,
- * storage stays under the portal user). Idempotent by attachment id.
+ * Copy client questionnaire file answers (and Formgrid-stored files) into
+ * `__staff_documents` (same file ids, storage stays under the portal user).
+ * Idempotent by attachment id.
  */
 export function mirrorQuestionnaireFilesIntoStaffDocuments(
   answers: QuestionnaireAnswers,
@@ -37,6 +39,21 @@ export function mirrorQuestionnaireFilesIntoStaffDocuments(
       createdAt,
     });
     existingIds.add(value.id);
+    added += 1;
+  }
+
+  for (const stored of Object.values(readFormgridStoredFiles(answers))) {
+    if (!stored.id || existingIds.has(stored.id)) continue;
+    next = appendStaffDocument(next, {
+      id: stored.id,
+      fileName: stored.fileName,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+      uploadedByName: QUESTIONNAIRE_FILE_UPLOADER_NAME,
+      uploadedByUserId: QUESTIONNAIRE_FILE_UPLOADER_ID,
+      createdAt: stored.storedAt || createdAt,
+    });
+    existingIds.add(stored.id);
     added += 1;
   }
 

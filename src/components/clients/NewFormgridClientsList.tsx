@@ -13,6 +13,11 @@ import {
   type PresenceFilter,
 } from "@/lib/clients/list-filter-utils";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
+import {
+  clientListWordFilename,
+  downloadClientListWord,
+  openClientListWord,
+} from "@/lib/export/client-list-word";
 import { getFormgridSubmissionDate } from "@/lib/google-sheets/formgrid-dates";
 import styles from "./NewFormgridClientsList.module.css";
 
@@ -170,6 +175,37 @@ export function NewFormgridClientsList() {
     );
   };
 
+  const filteredWordSubtitle = () => {
+    const parts: string[] = [];
+    if (submittedFrom || submittedTo) {
+      parts.push(
+        `Подача: ${submittedFrom || "…"} — ${submittedTo || "…"}`,
+      );
+    }
+    if (referent) parts.push(`Референт: ${referent}`);
+    if (partner) parts.push(`Партнёр: ${partner}`);
+    if (contract) parts.push(`Договор: ${contract}`);
+    if (hasAmount === "yes") parts.push("Есть сумма / оплата");
+    if (hasAmount === "no") parts.push("Без суммы");
+    if (approvalStatus === "approved") parts.push("Одобрены");
+    if (approvalStatus === "not_approved") parts.push("Не одобрены");
+    if (search.trim()) parts.push(`Поиск: «${search.trim()}»`);
+    return parts.length > 0 ? parts.join(" · ") : "Без дополнительных фильтров";
+  };
+
+  const exportWord = (mode: "open" | "download") => {
+    const exportHeaders = headers.map((h, i) => h || `Колонка ${i + 1}`);
+    const input = {
+      title: "Новые клиенты (Formgrid)",
+      subtitle: filteredWordSubtitle(),
+      headers: exportHeaders,
+      rows: filtered.map((item) => item.row),
+    };
+    const filename = clientListWordFilename("formgrid-clients");
+    if (mode === "open") openClientListWord(input, filename);
+    else downloadClientListWord(input, filename);
+  };
+
   const dismissLead = async (sheetRow: number, row: string[]) => {
     const label = displayNameFromRow(headers, row);
     const confirmed = window.confirm(
@@ -316,6 +352,22 @@ export function NewFormgridClientsList() {
             onClick={exportCsv}
           >
             Выгрузить CSV
+          </button>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={loading || filtered.length === 0}
+            onClick={() => exportWord("open")}
+          >
+            Открыть в Word
+          </button>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={loading || filtered.length === 0}
+            onClick={() => exportWord("download")}
+          >
+            Скачать Word
           </button>
         </div>
       </div>

@@ -12,6 +12,11 @@ import {
   type BookingEndAlert,
 } from "@/lib/client-portal/booking-end-alert";
 import { matchesSubmittedMonth } from "@/lib/clients/list-filter-utils";
+import {
+  clientListWordFilename,
+  downloadClientListWord,
+  openClientListWord,
+} from "@/lib/export/client-list-word";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
 import { surnameSortKey } from "@/lib/client-portal/person-name-order";
 import {
@@ -637,7 +642,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setSubmittedMonth("");
   };
 
-  const exportFilteredCsv = () => {
+  const buildFilteredExportTable = () => {
     const headers = [
       "Клиент",
       "Email",
@@ -658,11 +663,55 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         ...STAFF_FIELD_COLUMNS.map((col) => draft[col.key]),
       ];
     });
+    return { headers, rows };
+  };
+
+  const filteredExportSubtitle = () => {
+    const parts: string[] = [];
+    if (listView === "archive") parts.push("Архив");
+    if (submittedMonth) {
+      const month = SUBMITTED_MONTH_OPTIONS.find((m) => m.value === submittedMonth);
+      parts.push(
+        month
+          ? `Дата подачи: ${month.label} ${SUBMITTED_MONTH_YEAR}`
+          : `Дата подачи: ${submittedMonth}`,
+      );
+    }
+    if (vnzhCountryFilter) {
+      const country = VNZH_COUNTRY_FILTER_OPTIONS.find(
+        (c) => c.value === vnzhCountryFilter,
+      );
+      parts.push(`Страна ВНЖ: ${country?.label ?? vnzhCountryFilter}`);
+    }
+    if (curator) parts.push(`Куратор: ${curator}`);
+    if (partner) parts.push(`Партнёр: ${partner}`);
+    if (clientSource === "new") parts.push("Источник: новые клиенты");
+    if (lawyerFilter === "assigned") parts.push("Передан адвокату");
+    if (lawyerFilter === "unassigned") parts.push("Без адвоката");
+    if (query.trim()) parts.push(`Поиск: «${query.trim()}»`);
+    return parts.length > 0 ? parts.join(" · ") : "Без дополнительных фильтров";
+  };
+
+  const exportFilteredCsv = () => {
+    const { headers, rows } = buildFilteredExportTable();
     downloadCsv(
       `emigrant-intake-${new Date().toISOString().slice(0, 10)}.csv`,
       headers,
       rows,
     );
+  };
+
+  const exportFilteredWord = (mode: "open" | "download") => {
+    const { headers, rows } = buildFilteredExportTable();
+    const input = {
+      title: "Список клиентов Emigrant",
+      subtitle: filteredExportSubtitle(),
+      headers,
+      rows,
+    };
+    const filename = clientListWordFilename("spisok-klientov-emigrant");
+    if (mode === "open") openClientListWord(input, filename);
+    else downloadClientListWord(input, filename);
   };
 
   function updateDraft(
@@ -2208,6 +2257,22 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             onClick={exportFilteredCsv}
           >
             Выгрузить CSV
+          </button>
+          <button
+            type="button"
+            className={styles.exportBtn}
+            disabled={filteredItems.length === 0}
+            onClick={() => exportFilteredWord("open")}
+          >
+            Открыть в Word
+          </button>
+          <button
+            type="button"
+            className={styles.exportBtn}
+            disabled={filteredItems.length === 0}
+            onClick={() => exportFilteredWord("download")}
+          >
+            Скачать Word
           </button>
         </div>
         <div

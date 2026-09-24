@@ -189,8 +189,8 @@ const AI_FIELD_LABEL_BY_ID: Record<string, string> = {
   citizenship_latin: "Гражданство",
   nationality_latin: "Национальность",
   marital_status_latin: "Семейное положение",
-  father_name_latin: "Отец: ФИО",
-  mother_name_latin: "Мать: ФИО",
+  father_name_latin: "Отец: Имя, Фамилия",
+  mother_name_latin: "Мать: Имя, Фамилия",
 };
 
 function aiLabelForQuestion(questionId: string, fallbackLabel: string): string {
@@ -375,7 +375,7 @@ export const PORTAL_INTAKE_FIELD_PROMPT = `
 - Гражданство — только страна/гражданство (например Russian Federation). Никогда не подставляй Латиницу или адрес.
 - Национальность — национальность (не путать с гражданством и адресом).
 - Семейное положение — marital status.
-- Отец: ФИО / Мать: ФИО — родители.
+- Отец: Имя, Фамилия / Мать: Имя, Фамилия — родители (без отчества).
 
 Вопросы по Хорватии:
 - Почему вы выбрали именно Хорватию…

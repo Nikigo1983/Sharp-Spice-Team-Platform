@@ -16,8 +16,12 @@ import { uniqueSortedValues } from "@/lib/export/download-csv";
 import {
   clientListWordFilename,
   downloadClientListWord,
-  openClientListWord,
+  openClientListWordInDesktopApp,
 } from "@/lib/export/client-list-word";
+import {
+  launchMsWordProtocol,
+  supportsDesktopMsWordProtocol,
+} from "@/lib/client-portal/case-file-access-token";
 import { getFormgridSubmissionDate } from "@/lib/google-sheets/formgrid-dates";
 import styles from "./NewFormgridClientsList.module.css";
 
@@ -49,6 +53,8 @@ export function NewFormgridClientsList() {
     null,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const [openingListWord, setOpeningListWord] = useState(false);
+  const [listWordStatus, setListWordStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [partner, setPartner] = useState("");
   const [referent, setReferent] = useState("");
@@ -185,7 +191,7 @@ export function NewFormgridClientsList() {
     return parts.length > 0 ? parts.join(" · ") : "Без дополнительных фильтров";
   };
 
-  const exportWord = (mode: "open" | "download") => {
+  const exportWord = async (mode: "open" | "download") => {
     const exportHeaders = headers.map((h, i) => h || `Колонка ${i + 1}`);
     const input = {
       title: "Новые клиенты (Formgrid)",
@@ -194,8 +200,25 @@ export function NewFormgridClientsList() {
       rows: filtered.map((item) => item.row),
     };
     const filename = clientListWordFilename("formgrid-clients");
-    if (mode === "open") openClientListWord(input, filename);
-    else downloadClientListWord(input, filename);
+    if (mode === "download") {
+      downloadClientListWord(input, filename);
+      return;
+    }
+    setOpeningListWord(true);
+    setListWordStatus(null);
+    try {
+      const result = await openClientListWordInDesktopApp(input, filename, {
+        supportsDesktopMsWord: supportsDesktopMsWordProtocol(),
+        launchMsWord: launchMsWordProtocol,
+      });
+      setListWordStatus(
+        result === "opened"
+          ? "Открываем список в Microsoft Word…"
+          : "Файл скачивается. Откройте его в Word.",
+      );
+    } finally {
+      setOpeningListWord(false);
+    }
   };
 
   const dismissLead = async (sheetRow: number, row: string[]) => {
@@ -340,16 +363,16 @@ export function NewFormgridClientsList() {
           <button
             type="button"
             className={styles.primaryBtn}
-            disabled={loading || filtered.length === 0}
-            onClick={() => exportWord("open")}
+            disabled={loading || filtered.length === 0 || openingListWord}
+            onClick={() => void exportWord("open")}
           >
-            Открыть CSV в Word
+            {openingListWord ? "Открываем…" : "Открыть CSV в Word"}
           </button>
           <button
             type="button"
             className={styles.primaryBtn}
-            disabled={loading || filtered.length === 0}
-            onClick={() => exportWord("download")}
+            disabled={loading || filtered.length === 0 || openingListWord}
+            onClick={() => void exportWord("download")}
           >
             Скачать CSV в Word
           </button>
@@ -363,6 +386,7 @@ export function NewFormgridClientsList() {
         </span>
       </p>
       {actionError ? <p className={styles.actionError}>{actionError}</p> : null}
+      {listWordStatus ? <p className={styles.meta}>{listWordStatus}</p> : null}
       <p className={styles.hint}>
         Кнопка «Удалить» убирает анкету из этого списка (если человек не будет
         сотрудничать). Строка в Google Sheets не стирается.

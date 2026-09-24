@@ -10,7 +10,7 @@ import {
 } from "./questionnaire-new";
 
 describe("questionnaire-new", () => {
-  it("shows yellow badge for portal clients regardless of staff open", () => {
+  it("shows yellow badge for portal clients until application submitted", () => {
     const opened = {
       staffOpenedAt: "2026-09-23T11:00:00.000Z",
       createdAt: "2026-09-23T10:00:00.000Z",

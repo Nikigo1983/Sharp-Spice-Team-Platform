@@ -71,9 +71,8 @@ import {
   isCaseArchived,
   writeCaseArchive,
 } from "./case-archive";
-import {
-  isImportStaffOpenStamp,
-} from "./questionnaire-new";
+import { writeApplicationSubmitted } from "./application-submitted";
+import { isImportStaffOpenStamp, isPortalNewClientBadge } from "./questionnaire-new";
 import {
   appendStaffDocument,
   appendStaffNote,
@@ -512,6 +511,33 @@ export async function updateCaseArchiveState(
     updatedAt: now,
     revision: current.revision + 1,
   });
+}
+
+/**
+ * Staff «Заявка подана» — only for portal «Новый клиент» cases.
+ * Returns { record, changed }. If not a new portal client, returns unchanged record.
+ */
+export async function markApplicationSubmittedByStaff(
+  id: string,
+  input: { submittedByUserId: string; submittedByName: string },
+): Promise<{ record: QuestionnaireRecord; changed: boolean }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  if (!isPortalNewClientBadge(current)) {
+    return { record: current, changed: false };
+  }
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: writeApplicationSubmitted(current.answers, {
+      submittedAt: now,
+      submittedByUserId: input.submittedByUserId,
+      submittedByName: input.submittedByName,
+    }),
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, changed: true };
 }
 
 /** Permanently remove a portal user, their questionnaire, and uploaded files. */

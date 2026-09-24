@@ -1046,6 +1046,35 @@
   margin-bottom: 1rem;
 }
 
+.reviewToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.applicationSubmittedBtn {
+  border: 1px solid rgba(234, 179, 8, 0.65);
+  background: #eab308;
+  color: #1a1a1a;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.applicationSubmittedBtn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.applicationSubmittedBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .reviewInput {
   width: 100%;
   box-sizing: border-box;
@@ -1578,6 +1607,7 @@
   }
 
   .saveBtn,
+  .applicationSubmittedBtn,
   .archiveBtn,
   .deleteCaseBtn {
     width: 100%;

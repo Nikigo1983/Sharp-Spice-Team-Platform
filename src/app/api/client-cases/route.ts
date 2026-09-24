@@ -9,6 +9,7 @@ import {
   getSubmittedForStaff,
   isCaseArchived,
   listSubmittedForStaff,
+  markApplicationSubmittedByStaff,
   markQuestionnaireOpenedByStaff,
   readProcessStatus,
   readStaffDocuments,
@@ -288,6 +289,7 @@ export async function PATCH(request: Request) {
     id?: string;
     staffFields?: Partial<QuestionnaireStaffFields>;
     archived?: boolean;
+    applicationSubmitted?: boolean;
     legacySheet?: Record<string, string>;
     crmOpsSheet?: Record<string, string>;
     answerFields?: Record<string, string>;
@@ -298,6 +300,21 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    if (body.applicationSubmitted === true) {
+      const { record, changed } = await markApplicationSubmittedByStaff(
+        body.id,
+        {
+          submittedByUserId: session.id,
+          submittedByName: session.name,
+        },
+      );
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        changed,
+      });
+    }
+
     if (typeof body.archived === "boolean") {
       const record = await updateCaseArchiveState(body.id, {
         archived: body.archived,

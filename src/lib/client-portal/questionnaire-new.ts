@@ -1,4 +1,5 @@
 import { isCaseArchived } from "@/lib/client-portal/case-archive";
+import { isApplicationSubmitted } from "@/lib/client-portal/application-submitted";
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import {
   FORMGRID_IMPORT_KEY,
@@ -67,14 +68,16 @@ export function isImportStaffOpenStamp(record: {
 }
 
 /**
- * Yellow «Новый клиент» badge — same set as filter
- * «Новые клиенты из клиентского портала» (Emigrant portal source).
+ * Yellow «Новый клиент» badge + filter «Новые клиенты из клиентского портала».
+ * Cleared after staff clicks «Заявка подана».
  */
 export function isPortalNewClientBadge(record: {
   answers: Record<string, unknown>;
 }): boolean {
   if (isCaseArchived(record.answers)) return false;
-  return resolveIntakeClientSource(record.answers) === "portal";
+  if (resolveIntakeClientSource(record.answers) !== "portal") return false;
+  if (isApplicationSubmitted(record.answers)) return false;
+  return true;
 }
 
 /**

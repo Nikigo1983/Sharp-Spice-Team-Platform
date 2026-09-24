@@ -253,6 +253,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [selectedIsFormgrid, setSelectedIsFormgrid] = useState(false);
   const [reviewDraft, setReviewDraft] = useState<Record<string, string>>({});
   const [savingReview, setSavingReview] = useState(false);
+  const [markingApplicationSubmitted, setMarkingApplicationSubmitted] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -471,7 +473,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!rowMatchesQuery(item, draft, query)) return false;
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
-          if (clientSource) {
+          if (clientSource === "portal") {
+            if (!item.isNew) return false;
+          } else if (clientSource) {
             if (resolveListItemSource(item) !== clientSource) return false;
           }
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
@@ -540,8 +544,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     if (listView === "archive") return 0;
     return items.filter(
       (item) =>
-        resolveListItemSource(item) === "portal" &&
-        isSubmittedToday(item.submittedAt),
+        Boolean(item.isNew) && isSubmittedToday(item.submittedAt),
     ).length;
   }, [items, listView]);
 
@@ -869,6 +872,56 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       setStatus("Изменения карточки сохранены.");
     } finally {
       setSavingReview(false);
+    }
+  }
+
+  async function markApplicationSubmitted() {
+    if (!selectedId) return;
+    const selected = items.find((row) => row.id === selectedId);
+    if (!selected?.isNew) {
+      setStatus(null);
+      return;
+    }
+    setMarkingApplicationSubmitted(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedId,
+          applicationSubmitted: true,
+        }),
+      });
+      const data = (await res.json()) as {
+        item?: ListItem;
+        changed?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.item) {
+        setError("Не удалось отметить заявку как поданную.");
+        return;
+      }
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === data.item!.id
+            ? {
+                ...row,
+                ...data.item,
+                isNew: false,
+                staffFields: data.item!.staffFields ?? row.staffFields,
+              }
+            : row,
+        ),
+      );
+      if (data.changed) {
+        setStatus(
+          "Заявка отмечена как поданная. Клиент больше не в «Новых клиентах».",
+        );
+      }
+    } finally {
+      setMarkingApplicationSubmitted(false);
     }
   }
 
@@ -1412,14 +1465,35 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                 <p className={styles.staffBlockHint}>
                   Можно изменить поля и нажать «Сохранить».
                 </p>
-                <button
-                  type="button"
-                  className={styles.saveBtn}
-                  disabled={savingReview}
-                  onClick={() => void saveReviewEdits()}
-                >
-                  {savingReview ? "Сохранение…" : "Сохранить"}
-                </button>
+                <div className={styles.reviewToolbarActions}>
+                  <button
+                    type="button"
+                    className={styles.applicationSubmittedBtn}
+                    disabled={
+                      markingApplicationSubmitted ||
+                      savingReview ||
+                      !items.find((row) => row.id === selectedId)?.isNew
+                    }
+                    title={
+                      items.find((row) => row.id === selectedId)?.isNew
+                        ? "Убрать статус «Новый клиент»"
+                        : "Доступно только для новых клиентов с портала"
+                    }
+                    onClick={() => void markApplicationSubmitted()}
+                  >
+                    {markingApplicationSubmitted
+                      ? "…"
+                      : "Заявка подана"}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.saveBtn}
+                    disabled={savingReview || markingApplicationSubmitted}
+                    onClick={() => void saveReviewEdits()}
+                  >
+                    {savingReview ? "Сохранение…" : "Сохранить"}
+                  </button>
+                </div>
               </div>
 
               {reviewSections.length === 0 ? (

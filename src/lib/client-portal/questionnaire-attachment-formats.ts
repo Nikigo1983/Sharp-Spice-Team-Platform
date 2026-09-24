@@ -4,6 +4,11 @@
 
 export const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/** Human-readable max size for staff/client upload messages. */
+export const DEFAULT_MAX_ATTACHMENT_MB = Math.round(
+  DEFAULT_MAX_ATTACHMENT_BYTES / (1024 * 1024),
+);
+
 const EXT_TO_MIME: Record<string, string> = {
   pdf: "application/pdf",
   jpg: "image/jpeg",
@@ -21,10 +26,44 @@ export const STAFF_CASE_DOCUMENT_ACCEPT =
   ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export const STAFF_CASE_DOCUMENT_HINT =
-  "Можно выбрать несколько файлов сразу. PDF, Word, Excel или изображение до 10 МБ каждый. Файлы видны только сотрудникам.";
+  `Можно выбрать несколько файлов сразу. PDF, Word, Excel или изображение до ${DEFAULT_MAX_ATTACHMENT_MB} МБ каждый. Файлы видны только сотрудникам.`;
 
 export const STAFF_CASE_DOCUMENT_TYPES_LABEL =
   "PDF, Word, Excel и изображения (JPG, PNG, WEBP)";
+
+/** Clear staff-facing size error (no jargon). */
+export function staffFileTooLargeMessage(fileName: string): string {
+  const label = fileName.trim() || "файл";
+  return `«${label}»: файл слишком большой. Уменьшите его — максимум ${DEFAULT_MAX_ATTACHMENT_MB} МБ.`;
+}
+
+/**
+ * Map upload HTTP failure to a staff-facing message.
+ * Non-JSON / 413 usually means the platform rejected an oversized body
+ * before our route could return FILE_TOO_LARGE.
+ */
+export function staffDocumentUploadFailureMessage(params: {
+  fileName: string;
+  status: number;
+  errorCode?: string | null;
+  responseLooksLikeJson: boolean;
+}): string {
+  const name = params.fileName.trim() || "файл";
+  if (params.errorCode === "UNSUPPORTED_FILE_TYPE") {
+    return `«${name}»: допустимы ${STAFF_CASE_DOCUMENT_TYPES_LABEL}.`;
+  }
+  if (params.errorCode === "NOT_FOUND") {
+    return `«${name}»: заявка не найдена. Обновите страницу и попробуйте снова.`;
+  }
+  if (
+    params.errorCode === "FILE_TOO_LARGE" ||
+    params.status === 413 ||
+    !params.responseLooksLikeJson
+  ) {
+    return staffFileTooLargeMessage(name);
+  }
+  return `Не удалось загрузить «${name}».`;
+}
 
 export function extFromFileName(fileName: string): string {
   const base = fileName.trim().split(/[/\\]/).pop() ?? "";

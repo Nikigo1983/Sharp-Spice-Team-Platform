@@ -25,10 +25,12 @@ import {
   type QuestionnaireStaffFields,
 } from "@/lib/client-portal/staff-fields";
 import {
+  DEFAULT_MAX_ATTACHMENT_BYTES,
   isWordDocumentFileName,
   STAFF_CASE_DOCUMENT_ACCEPT,
   STAFF_CASE_DOCUMENT_HINT,
-  STAFF_CASE_DOCUMENT_TYPES_LABEL,
+  staffDocumentUploadFailureMessage,
+  staffFileTooLargeMessage,
 } from "@/lib/client-portal/questionnaire-attachment-formats";
 import { findQuestionnaireWordDocument, isQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-word-export";
 import {
@@ -1066,9 +1068,13 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setStatus(null);
     let uploaded = 0;
     let latest: StaffDocument[] | null = null;
-    let failMessage: string | null = null;
+    const failMessages: string[] = [];
     try {
       for (const file of files) {
+        if (file.size > DEFAULT_MAX_ATTACHMENT_BYTES) {
+          failMessages.push(staffFileTooLargeMessage(file.name));
+          continue;
+        }
         const form = new FormData();
         form.set("questionnaireId", selectedId);
         form.set("file", file);
@@ -1076,30 +1082,37 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           method: "POST",
           body: form,
         });
+        const rawText = await res.text();
         let data: { documents?: StaffDocument[]; error?: string } = {};
-        try {
-          data = (await res.json()) as {
-            documents?: StaffDocument[];
-            error?: string;
-          };
-        } catch {
-          failMessage = `Не удалось загрузить «${file.name}» (ответ сервера).`;
-          break;
+        let responseLooksLikeJson = false;
+        if (rawText.trim()) {
+          try {
+            data = JSON.parse(rawText) as {
+              documents?: StaffDocument[];
+              error?: string;
+            };
+            responseLooksLikeJson = true;
+          } catch {
+            responseLooksLikeJson = false;
+          }
         }
         if (!res.ok) {
-          failMessage =
-            data.error === "FILE_TOO_LARGE"
-              ? `«${file.name}»: файл слишком большой (макс. 10 МБ).`
-              : data.error === "UNSUPPORTED_FILE_TYPE"
-                ? `«${file.name}»: допустимы ${STAFF_CASE_DOCUMENT_TYPES_LABEL}.`
-                : `Не удалось загрузить «${file.name}».`;
-          break;
+          failMessages.push(
+            staffDocumentUploadFailureMessage({
+              fileName: file.name,
+              status: res.status,
+              errorCode: data.error ?? null,
+              responseLooksLikeJson,
+            }),
+          );
+          continue;
         }
         uploaded += 1;
         latest = data.documents ?? latest;
       }
       if (latest) setDocuments(latest);
-      if (failMessage) {
+      if (failMessages.length > 0) {
+        const failMessage = failMessages.join(" ");
         setError(
           uploaded > 0
             ? `Загружено ${uploaded} из ${files.length}. ${failMessage}`
@@ -1120,7 +1133,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           : `Загружено документов: ${uploaded}`,
       );
     } catch {
-      setError("Не удалось загрузить документы. Проверьте соединение и попробуйте снова.");
+      setError(
+        "Не удалось загрузить документы. Проверьте соединение и попробуйте снова.",
+      );
     } finally {
       setUploadingDoc(false);
     }

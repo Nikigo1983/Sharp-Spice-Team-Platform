@@ -120,8 +120,23 @@ export async function saveKbSnapshot(
     },
   };
 
+  // Production (Vercel): /var/task is read-only. Persist to Supabase app_state
+  // and treat local .data/ as best-effort mirror for local/dev only.
   if (isSupabaseConfigured()) {
-    await setAppState(meta.appStateKey, next);
+    const ok = await setAppState(meta.appStateKey, next);
+    if (!ok) {
+      throw new Error("KB_STATE_SAVE_FAILED");
+    }
+    try {
+      await writeLocal(resolvedSlug, next);
+    } catch (error) {
+      console.warn(
+        "[knowledge-base] local mirror skipped:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+    return;
   }
+
   await writeLocal(resolvedSlug, next);
 }

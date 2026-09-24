@@ -300,7 +300,11 @@ export function PlatformKnowledgeBaseView({
         setError(
           data.error === "FILE_TOO_LARGE"
             ? "Файл слишком большой (лимит 40 МБ)."
-            : "Не удалось загрузить документ.",
+            : data.error === "FOLDER_NOT_FOUND"
+              ? "Папка не найдена. Обновите страницу и попробуйте снова."
+              : data.error === "KB_STATE_SAVE_FAILED"
+                ? "Не удалось сохранить в базу. Проверьте подключение Supabase."
+                : "Не удалось загрузить документ.",
         );
         return;
       }

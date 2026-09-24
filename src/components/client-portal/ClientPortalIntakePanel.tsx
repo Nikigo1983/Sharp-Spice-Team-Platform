@@ -50,7 +50,13 @@ type ListItem = {
   staffFields?: QuestionnaireStaffFields;
 };
 
-type ClientSourceFilter = "" | "legacy" | "formgrid" | "portal" | "manual";
+type ClientSourceFilter =
+  | ""
+  | "legacy"
+  | "formgrid"
+  | "formgrid-new"
+  | "portal"
+  | "manual";
 /** Empty lawyer field vs filled («Передан адвокату» / «Остальные»). */
 type LawyerFilter = "" | "assigned" | "unassigned";
 type VnzhCountryFilter = "" | "croatia" | "spain" | "slovenia";
@@ -474,7 +480,19 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
           if (clientSource === "portal") {
-            if (!item.isNew) return false;
+            if (
+              resolveListItemSource(item) !== "portal" ||
+              !item.isNew
+            ) {
+              return false;
+            }
+          } else if (clientSource === "formgrid-new") {
+            if (
+              resolveListItemSource(item) !== "formgrid" ||
+              !item.isNew
+            ) {
+              return false;
+            }
           } else if (clientSource) {
             if (resolveListItemSource(item) !== clientSource) return false;
           }
@@ -556,7 +574,21 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setLawyerFilter("");
     setVnzhCountryFilter("");
     setSubmittedMonth("");
-    setClientSource("portal");
+    const hasPortal = items.some(
+      (item) =>
+        Boolean(item.isNew) &&
+        resolveListItemSource(item) === "portal" &&
+        isSubmittedToday(item.submittedAt),
+    );
+    const hasFormgrid = items.some(
+      (item) =>
+        Boolean(item.isNew) &&
+        resolveListItemSource(item) === "formgrid" &&
+        isSubmittedToday(item.submittedAt),
+    );
+    if (hasPortal && !hasFormgrid) setClientSource("portal");
+    else if (hasFormgrid && !hasPortal) setClientSource("formgrid-new");
+    else setClientSource("");
     setBookingAlertsOpen(false);
   }
 
@@ -1477,7 +1509,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                     title={
                       items.find((row) => row.id === selectedId)?.isNew
                         ? "Убрать статус «Новый клиент»"
-                        : "Доступно только для новых клиентов с портала"
+                        : "Доступно только для новых клиентов (портал или Formgrid)"
                     }
                     onClick={() => void markApplicationSubmitted()}
                   >
@@ -2141,7 +2173,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           >
             <option value="">Клиенты: все</option>
             <option value="legacy">Из старой базы</option>
-            <option value="formgrid">Из Formgrid</option>
+            <option value="formgrid-new">Новые клиенты из Formgrid</option>
+            <option value="formgrid">Из Formgrid (все)</option>
             <option value="portal">
               Новые клиенты из клиентского портала
             </option>

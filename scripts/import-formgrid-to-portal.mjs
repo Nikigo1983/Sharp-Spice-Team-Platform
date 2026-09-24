@@ -43,6 +43,7 @@ loadEnvLocal();
 
 const dryRun = process.argv.includes("--dry-run");
 const createOnly = process.argv.includes("--create-only");
+const asNew = process.argv.includes("--as-new");
 const nameArg = process.argv.find((a) => a.startsWith("--name="));
 const nameFilter = nameArg
   ? nameArg.slice("--name=".length).trim().toLowerCase().replace(/\s+/g, " ")
@@ -257,6 +258,7 @@ async function main() {
   const mapper = await loadMapper();
   console.log(dryRun ? "Mode: DRY-RUN" : "Mode: WRITE");
   console.log(createOnly ? "Create-only: yes" : "Create-only: no (upsert)");
+  console.log(asNew ? "Mark as new client queue: yes" : "Mark as new client queue: no");
   if (nameFilter) console.log(`Name filter: ${nameFilter}`);
   console.log("Fetching Formgrid sheet CSV…");
 
@@ -349,6 +351,7 @@ async function main() {
       sheetRow: lead.sheetRow,
       fingerprint: lead.fingerprint,
       importedAt,
+      newClientQueue: asNew,
     });
 
     const displayEmail = mapper.syntheticEmailFromFormgrid(
@@ -403,7 +406,9 @@ async function main() {
         created_at: existingQ?.created_at || now,
         updated_at: now,
         submitted_at: submittedAt,
-        staff_opened_at: existingQ?.staff_opened_at ?? null,
+        staff_opened_at: asNew
+          ? null
+          : existingQ?.staff_opened_at ?? null,
       },
       { onConflict: "id" },
     );

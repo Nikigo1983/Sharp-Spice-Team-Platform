@@ -54,6 +54,11 @@ export type FormgridImportMeta = {
   fingerprint: string;
   importedAt: string;
   submittedAt: string | null;
+  /**
+   * When true, case is in the «Новый клиент» queue (yellow badge + Formgrid-new filter)
+   * until staff clicks «Заявка подана». Historical bulk imports omit this.
+   */
+  newClientQueue?: boolean;
 };
 
 export type FormgridImportAnswers = Record<string, unknown> & {
@@ -210,6 +215,36 @@ export function isFormgridImport(
   return (meta as { source?: string }).source === FORMGRID_SOURCE;
 }
 
+/** Formgrid case waiting in the yellow «Новый клиент» queue. */
+export function isFormgridNewClientQueue(
+  answers: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!isFormgridImport(answers)) return false;
+  const meta = answers?.[FORMGRID_IMPORT_KEY];
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+  return (meta as { newClientQueue?: unknown }).newClientQueue === true;
+}
+
+export function setFormgridNewClientQueue(
+  answers: Record<string, unknown>,
+  enabled: boolean,
+): Record<string, unknown> {
+  const raw = answers[FORMGRID_IMPORT_KEY];
+  const meta =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? { ...(raw as Record<string, unknown>) }
+      : { source: FORMGRID_SOURCE };
+  if (enabled) {
+    meta.newClientQueue = true;
+  } else {
+    delete meta.newClientQueue;
+  }
+  return {
+    ...answers,
+    [FORMGRID_IMPORT_KEY]: meta,
+  };
+}
+
 export function mapFormgridRowToAnswers(
   row: FormgridSheetRow,
   opts: {
@@ -217,6 +252,7 @@ export function mapFormgridRowToAnswers(
     sheetRow?: number | null;
     fingerprint: string;
     importedAt?: string;
+    newClientQueue?: boolean;
   },
 ): FormgridImportAnswers {
   const importedAt = opts.importedAt ?? new Date().toISOString();
@@ -317,6 +353,7 @@ export function mapFormgridRowToAnswers(
       fingerprint: opts.fingerprint,
       importedAt,
       submittedAt: f.submittedAt || null,
+      ...(opts.newClientQueue ? { newClientQueue: true as const } : {}),
     },
     [FORMGRID_SHEET_KEY]: { ...row },
     [FORMGRID_CRM_OPS_KEY]: emptyFormgridCrmOpsSheet({

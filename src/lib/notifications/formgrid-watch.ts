@@ -2,7 +2,10 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildFormgridRowKey } from "@/lib/leads/formgrid-row-key";
+import {
+  buildFormgridRowKey,
+  formgridSheetRowFromIndex,
+} from "@/lib/leads/formgrid-row-key";
 import {
   getFormgridLeadsTable,
   type LeadsTableResult,
@@ -10,9 +13,14 @@ import {
 import { notifyConsultationAssigned, notifyNewClient } from "./emit";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAppState, setAppState } from "@/lib/supabase/app-state";
+import { syncFormgridSheetRowToPortal } from "@/lib/client-portal/formgrid-to-portal-sync";
 
 const STORE_PATH = path.join(process.cwd(), ".data", "formgrid-known-leads.json");
-const LAST_RUN_PATH = path.join(process.cwd(), ".data", "formgrid-watch-last-run.json");
+const LAST_RUN_PATH = path.join(
+  process.cwd(),
+  ".data",
+  "formgrid-watch-last-run.json",
+);
 const APP_STATE_KEY = "formgrid_known_leads";
 const LAST_RUN_STATE_KEY = "formgrid_watch_last_run";
 /** Не чаще одного раза в 30 с при опросе /api/notifications. */
@@ -138,18 +146,42 @@ export async function processFormgridLeadsForNotifications(
   }
 
   const known = new Set(store.rowKeys);
-  const newRows = table.rows.filter(
-    (row) => !known.has(buildFormgridRowKey(table.headers, row)),
-  );
+  const newRows = table.rows
+    .map((row, index) => ({ row, index }))
+    .filter(
+      ({ row }) => !known.has(buildFormgridRowKey(table.headers, row)),
+    );
 
   if (!newRows.length) return;
 
-  for (const row of newRows) {
+  for (const { row, index } of newRows) {
     const clientName = getClientName(table.headers, row);
+    let caseId: string | undefined;
+    try {
+      const synced = await syncFormgridSheetRowToPortal({
+        headers: table.headers,
+        row,
+        sheetRow: formgridSheetRowFromIndex(index),
+        markAsNew: true,
+      });
+      caseId = synced.questionnaireId;
+      console.info("[formgrid-watch] portal sync", {
+        clientName,
+        status: synced.status,
+        questionnaireId: synced.questionnaireId,
+      });
+    } catch (error) {
+      console.error("[formgrid-watch] portal sync failed", {
+        clientName,
+        error,
+      });
+    }
+
     await notifyNewClient({
       clientName,
       source: "анкета Formgrid",
-      destination: "formgrid",
+      destination: caseId ? "intake" : "formgrid",
+      caseId,
     });
 
     if (isConsultationLead(table.headers, row)) {

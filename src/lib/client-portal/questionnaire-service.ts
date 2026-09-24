@@ -74,6 +74,10 @@ import {
 import { writeApplicationSubmitted } from "./application-submitted";
 import { isImportStaffOpenStamp, isPortalNewClientBadge } from "./questionnaire-new";
 import {
+  isFormgridImport,
+  setFormgridNewClientQueue,
+} from "./formgrid-import";
+import {
   appendStaffDocument,
   appendStaffNote,
   findStaffDocument,
@@ -527,13 +531,17 @@ export async function markApplicationSubmittedByStaff(
     return { record: current, changed: false };
   }
   const now = new Date().toISOString();
+  let answers = writeApplicationSubmitted(current.answers, {
+    submittedAt: now,
+    submittedByUserId: input.submittedByUserId,
+    submittedByName: input.submittedByName,
+  });
+  if (isFormgridImport(answers)) {
+    answers = setFormgridNewClientQueue(answers, false);
+  }
   const record = await upsertQuestionnaire({
     ...current,
-    answers: writeApplicationSubmitted(current.answers, {
-      submittedAt: now,
-      submittedByUserId: input.submittedByUserId,
-      submittedByName: input.submittedByName,
-    }),
+    answers,
     updatedAt: now,
     revision: current.revision + 1,
   });

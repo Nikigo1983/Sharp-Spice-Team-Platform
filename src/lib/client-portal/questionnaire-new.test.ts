@@ -28,7 +28,7 @@ describe("questionnaire-new", () => {
     assert.equal(isQuestionnaireNewForStaff(unopened), true);
   });
 
-  it("never badges legacy or formgrid", () => {
+  it("never badges legacy; formgrid only with queue flag", () => {
     assert.equal(
       isPortalNewClientBadge({
         answers: {
@@ -50,6 +50,18 @@ describe("questionnaire-new", () => {
         },
       }),
       false,
+    );
+    assert.equal(
+      isPortalNewClientBadge({
+        answers: {
+          [FORMGRID_IMPORT_KEY]: {
+            source: "formgrid",
+            importedAt: "2026-09-23T10:00:00.000Z",
+            newClientQueue: true,
+          },
+        },
+      }),
+      true,
     );
   });
 

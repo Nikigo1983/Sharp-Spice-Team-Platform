@@ -4,6 +4,7 @@ import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import {
   FORMGRID_IMPORT_KEY,
   isFormgridImport,
+  isFormgridNewClientQueue,
 } from "@/lib/client-portal/formgrid-import";
 import {
   LEGACY_IMPORT_KEY,
@@ -68,20 +69,23 @@ export function isImportStaffOpenStamp(record: {
 }
 
 /**
- * Yellow «Новый клиент» badge + filter «Новые клиенты из клиентского портала».
- * Cleared after staff clicks «Заявка подана».
+ * Yellow «Новый клиент» badge:
+ * - portal Emigrant submissions until «Заявка подана»
+ * - Formgrid cases flagged newClientQueue until «Заявка подана»
  */
 export function isPortalNewClientBadge(record: {
   answers: Record<string, unknown>;
 }): boolean {
   if (isCaseArchived(record.answers)) return false;
-  if (resolveIntakeClientSource(record.answers) !== "portal") return false;
   if (isApplicationSubmitted(record.answers)) return false;
-  return true;
+  const source = resolveIntakeClientSource(record.answers);
+  if (source === "portal") return true;
+  if (source === "formgrid") return isFormgridNewClientQueue(record.answers);
+  return false;
 }
 
 /**
- * Unopened portal cases — used for nav badge counts, not the yellow list plaque.
+ * Unopened portal/formgrid-new cases — used for nav badge counts.
  */
 export function isQuestionnaireNewForStaff(record: {
   staffOpenedAt: string | null;

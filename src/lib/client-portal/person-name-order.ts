@@ -178,20 +178,29 @@ export function formatCyrillicNameIof(raw: string): string {
   return name;
 }
 
-/** Latin placeholder-style names: SURNAME GIVEN → GIVEN SURNAME when 2–3 tokens. */
+/** Latin names: SURNAME GIVEN [PATRONYMIC] → GIVEN [PATRONYMIC] SURNAME. */
 export function formatLatinNameIof(raw: string): string {
   const name = cleanSpaces(raw);
   if (!name) return "";
+  if (/[а-яё]/i.test(name)) return name;
   const tokens = name.split(" ");
   if (tokens.length === 2) {
     const [a, b] = tokens as [string, string];
-    if (/^[A-ZÀ-ÖØ-Þ]+$/.test(a) && /^[A-ZÀ-ÖØ-Þ]+$/.test(b)) {
-      return `${b} ${a}`;
-    }
+    if (looksLikeLatinSurname(b) && !looksLikeLatinSurname(a)) return name;
+    if (looksLikeLatinSurname(a) && !looksLikeLatinSurname(b)) return `${b} ${a}`;
+    return name;
   }
   if (tokens.length === 3) {
     const [a, b, c] = tokens as [string, string, string];
+    // Already given + patronymic/middle + surname
+    if (looksLikeLatinSurname(c) && !looksLikeLatinSurname(a)) return name;
     return `${b} ${c} ${a}`;
   }
   return name;
+}
+
+function looksLikeLatinSurname(token: string): boolean {
+  return /(?:ov|ova|ev|eva|in|yn|sky|ski|skaya|ovich|evich|ovna|evna)$/i.test(
+    token,
+  );
 }

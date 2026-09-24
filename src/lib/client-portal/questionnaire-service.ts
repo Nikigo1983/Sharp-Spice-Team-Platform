@@ -68,7 +68,7 @@ import {
   setFormgridNewClientQueue,
 } from "./formgrid-import";
 import { markManualStaffAnswers } from "./client-source";
-import { formatCyrillicNameIof } from "./person-name-order";
+import { formatCyrillicNameIof, formatLatinNameIof } from "./person-name-order";
 import { notifyNewClient } from "@/lib/notifications/emit";
 import {
   isCaseArchived,
@@ -1027,6 +1027,14 @@ export function buildReviewRows(
         value = raw == null ? "" : String(raw);
         if (question.id === "full_name_cyrillic" && value.trim()) {
           value = formatCyrillicNameIof(value);
+        } else if (question.id === "full_name_latin" && value.trim()) {
+          value = formatLatinNameIof(value);
+        } else if (
+          (question.id === "father_name_latin" ||
+            question.id === "mother_name_latin") &&
+          value.trim()
+        ) {
+          value = formatLatinNameIof(value);
         }
       }
       rows.push({

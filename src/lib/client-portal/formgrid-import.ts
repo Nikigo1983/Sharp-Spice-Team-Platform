@@ -4,11 +4,13 @@
  * Pure module — usable from Node scripts (no path aliases / server-only).
  */
 
-import { formatCyrillicNameIof } from "./person-name-order";
+import { formatCyrillicNameIof, formatLatinNameIof } from "./person-name-order";
 
 export const FORMGRID_SOURCE = "formgrid" as const;
 export const FORMGRID_IMPORT_KEY = "__import";
 export const FORMGRID_SHEET_KEY = "__formgridSheet";
+/** Original Formgrid column order (header order) for stable review UI. */
+export const FORMGRID_SHEET_ORDER_KEY = "__formgridSheetOrder";
 export const FORMGRID_FILES_KEY = "__formgridFiles";
 /** Staff CRM process fields (same labels as External sheet / legacy intake). */
 export const FORMGRID_CRM_OPS_KEY = "__crmOpsSheet";
@@ -66,6 +68,7 @@ export type FormgridImportMeta = {
 export type FormgridImportAnswers = Record<string, unknown> & {
   __import: FormgridImportMeta;
   __formgridSheet: FormgridSheetRow;
+  __formgridSheetOrder?: string[];
   __formgridFiles?: Record<string, FormgridStoredFile>;
   __crmOpsSheet?: Partial<FormgridCrmOpsSheet>;
 };
@@ -313,7 +316,9 @@ export function mapFormgridRowToAnswers(
     full_name_cyrillic: f.fullName
       ? formatCyrillicNameIof(f.fullName) || null
       : null,
-    full_name_latin: nameLatin || null,
+    full_name_latin: nameLatin
+      ? formatLatinNameIof(nameLatin) || null
+      : null,
     birth_surname_latin: birthSurname || null,
     date_of_birth: f.dateOfBirth || null,
     place_of_birth_latin: placeOfBirth || null,
@@ -360,6 +365,7 @@ export function mapFormgridRowToAnswers(
       ...(opts.newClientQueue ? { newClientQueue: true as const } : {}),
     },
     [FORMGRID_SHEET_KEY]: { ...row },
+    [FORMGRID_SHEET_ORDER_KEY]: Object.keys(row),
     [FORMGRID_CRM_OPS_KEY]: emptyFormgridCrmOpsSheet({
       "Дата подачи": f.submittedAt || "",
     }),
@@ -569,36 +575,83 @@ export function buildFormgridReviewRows(
       ? (sheet as Record<string, unknown>)
       : {};
   const storedFiles = readFormgridStoredFiles(answers);
-  const formgridRows = Object.entries(sheetObj).map(([key, value]) => {
-    const text = clean(value);
-    const stored = storedFiles[key];
-    if (stored?.id) {
+  const formgridRows = orderedFormgridSheetKeys(sheetObj, answers).map(
+    (key) => {
+      const value = sheetObj[key];
+      const text = clean(value);
+      const stored = storedFiles[key];
+      if (stored?.id) {
+        return {
+          section: "",
+          label: key,
+          value: stored.fileName,
+          questionId: `${FORMGRID_SHEET_KEY}.${key}`,
+          fileId: stored.id,
+        };
+      }
+      const externalUrl = isExternalFileUrl(text) ? text : undefined;
+      const displayText = externalUrl
+        ? fileNameFromExternalUrl(text, key)
+        : formatFormgridPersonNameValue(key, text);
       return {
         section: "",
         label: key,
-        value: stored.fileName,
+        value: displayText,
         questionId: `${FORMGRID_SHEET_KEY}.${key}`,
-        fileId: stored.id,
+        externalUrl,
       };
-    }
-    const externalUrl = isExternalFileUrl(text) ? text : undefined;
-    const displayText =
-      !externalUrl && /фио|имя|name|фамилия/i.test(key) && text
-        ? formatCyrillicNameIof(text)
-        : text;
-    return {
-      section: "",
-      label: key,
-      value: externalUrl ? fileNameFromExternalUrl(text, key) : displayText,
-      questionId: `${FORMGRID_SHEET_KEY}.${key}`,
-      externalUrl,
-    };
-  });
+    },
+  );
 
   const crmOps = readFormgridCrmOpsSheet(answers);
   const crmRows = buildManagerFillReviewRows(crmOps);
 
   return [...formgridRows, ...crmRows];
+}
+
+function sortFormgridSheetKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    const na = a.match(/^(\d+)/);
+    const nb = b.match(/^(\d+)/);
+    if (na && nb) {
+      const diff = Number(na[1]) - Number(nb[1]);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b, "ru");
+    }
+    if (na && !nb) return -1;
+    if (!na && nb) return 1;
+    return a.localeCompare(b, "ru");
+  });
+}
+
+function orderedFormgridSheetKeys(
+  sheetObj: Record<string, unknown>,
+  answers: Record<string, unknown>,
+): string[] {
+  const rawOrder = answers[FORMGRID_SHEET_ORDER_KEY];
+  if (Array.isArray(rawOrder) && rawOrder.length > 0) {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const key of rawOrder) {
+      if (typeof key !== "string" || !key || seen.has(key)) continue;
+      if (!(key in sheetObj)) continue;
+      seen.add(key);
+      ordered.push(key);
+    }
+    const rest = Object.keys(sheetObj).filter((k) => !seen.has(k));
+    return [...ordered, ...sortFormgridSheetKeys(rest)];
+  }
+  return sortFormgridSheetKeys(Object.keys(sheetObj));
+}
+
+function formatFormgridPersonNameValue(column: string, text: string): string {
+  if (!text.trim()) return text;
+  const k = column.toLowerCase();
+  const looksNameCol = /фио|имя|name|фамилия|отец|мать|father|mother/.test(k);
+  if (!looksNameCol) return text;
+  if (/[а-яё]/i.test(text)) return formatCyrillicNameIof(text);
+  if (/[a-z]/i.test(text)) return formatLatinNameIof(text);
+  return text;
 }
 
 /** Staff-editable ops block shared by Formgrid + portal questionnaire cases. */

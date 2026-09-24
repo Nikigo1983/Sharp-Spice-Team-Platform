@@ -43,10 +43,8 @@ describe("formatCyrillicNameIof", () => {
 });
 
 describe("formatLatinNameIof", () => {
-  it("reorders three-token latin FIO", () => {
-    assert.equal(
-      formatLatinNameIof("IVANOV IVAN IVANOVICH"),
-      "IVAN IVANOVICH IVANOV",
-    );
+  it("reorders title-case latin surname-given", () => {
+    assert.equal(formatLatinNameIof("Rybin Oleg"), "Oleg Rybin");
+    assert.equal(formatLatinNameIof("Oleg Rybin"), "Oleg Rybin");
   });
 });

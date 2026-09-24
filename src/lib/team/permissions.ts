@@ -21,6 +21,7 @@ export function canViewTeamMemberActivity(
   target: { id: string; role: string },
 ): boolean {
   if (actor.id === target.id) return false;
-  if (actor.role === "owner") return true;
-  return canDeleteTeamMembers(actor) && target.role !== "owner";
+  // Veronika & Zlata (same privilege set as delete) can open stats/report for anyone.
+  // Do not gate on `role`: Veronika is labeled «Админ» but stored as owner, Zlata as manager.
+  return canDeleteTeamMembers(actor);
 }

@@ -24,6 +24,8 @@ describe("client-list-word", () => {
     assert.match(html, /&lt;script&gt;/);
     assert.doesNotMatch(html, /<script>/);
     assert.match(html, /application\/msword|WordDocument|urn:schemas-microsoft-com:office:word/);
+    assert.match(html, /mso-page-orientation:\s*landscape|size:\s*A4 landscape/);
+    assert.match(html, /WordSection1/);
   });
 
   it("slugifies filenames safely", () => {

@@ -12,7 +12,7 @@ import {
   type ApprovalFilter,
   type PresenceFilter,
 } from "@/lib/clients/list-filter-utils";
-import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
+import { uniqueSortedValues } from "@/lib/export/download-csv";
 import {
   clientListWordFilename,
   downloadClientListWord,
@@ -165,14 +165,6 @@ export function NewFormgridClientsList() {
     setSubmittedTo("");
     setHasAmount("");
     setApprovalStatus("");
-  };
-
-  const exportCsv = () => {
-    downloadCsv(
-      `formgrid-clients-${new Date().toISOString().slice(0, 10)}.csv`,
-      headers.map((h, i) => h || `Колонка ${i + 1}`),
-      filtered.map((item) => item.row),
-    );
   };
 
   const filteredWordSubtitle = () => {
@@ -349,17 +341,9 @@ export function NewFormgridClientsList() {
             type="button"
             className={styles.primaryBtn}
             disabled={loading || filtered.length === 0}
-            onClick={exportCsv}
-          >
-            Выгрузить CSV
-          </button>
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            disabled={loading || filtered.length === 0}
             onClick={() => exportWord("open")}
           >
-            Открыть в Word
+            Открыть CSV в Word
           </button>
           <button
             type="button"
@@ -367,7 +351,7 @@ export function NewFormgridClientsList() {
             disabled={loading || filtered.length === 0}
             onClick={() => exportWord("download")}
           >
-            Скачать Word
+            Скачать CSV в Word
           </button>
         </div>
       </div>

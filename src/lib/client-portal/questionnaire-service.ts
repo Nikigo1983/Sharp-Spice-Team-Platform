@@ -64,6 +64,7 @@ import {
   isFormgridImport,
   readFormgridCrmOpsSheet,
   readFormgridStoredFiles,
+  setFormgridNewClientQueue,
 } from "./formgrid-import";
 import { markManualStaffAnswers } from "./client-source";
 import { notifyNewClient } from "@/lib/notifications/emit";
@@ -73,10 +74,6 @@ import {
 } from "./case-archive";
 import { writeApplicationSubmitted } from "./application-submitted";
 import { isImportStaffOpenStamp, isPortalNewClientBadge } from "./questionnaire-new";
-import {
-  isFormgridImport,
-  setFormgridNewClientQueue,
-} from "./formgrid-import";
 import {
   appendStaffDocument,
   appendStaffNote,

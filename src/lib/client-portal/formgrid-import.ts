@@ -230,7 +230,7 @@ export function setFormgridNewClientQueue(
   enabled: boolean,
 ): Record<string, unknown> {
   const raw = answers[FORMGRID_IMPORT_KEY];
-  const meta =
+  const meta: Record<string, unknown> =
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? { ...(raw as Record<string, unknown>) }
       : { source: FORMGRID_SOURCE };

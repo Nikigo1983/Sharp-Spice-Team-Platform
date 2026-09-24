@@ -149,7 +149,7 @@ export async function syncFormgridSheetRowToPortal(input: {
   }
 
   const importedAt = new Date().toISOString();
-  let answers = mapFormgridRowToAnswers(sheetColumns, {
+  let answers: Record<string, unknown> = mapFormgridRowToAnswers(sheetColumns, {
     leadId,
     sheetRow: input.sheetRow,
     fingerprint,

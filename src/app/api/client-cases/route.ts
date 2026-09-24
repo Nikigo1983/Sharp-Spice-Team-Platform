@@ -4,6 +4,7 @@ import {
   buildReviewRows,
   createManualCaseForStaff,
   ensureQuestionnaireFileDocuments,
+  ensureQuestionnaireWordDocument,
   getPublishedSchema,
   getSchemaForRecord,
   getSubmittedForStaff,
@@ -155,6 +156,12 @@ export async function GET(request: Request) {
       record = ensured.record;
     } catch (error) {
       console.error("[client-cases] ensure questionnaire file docs failed", error);
+    }
+    try {
+      const word = await ensureQuestionnaireWordDocument(record.id);
+      record = word.record;
+    } catch (error) {
+      console.error("[client-cases] ensure questionnaire Word failed", error);
     }
     const financeAmounts = await loadFinanceContractAmountLabels();
     const staffFields = applyFinanceContractAmount(

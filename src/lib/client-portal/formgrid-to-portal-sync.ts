@@ -27,6 +27,7 @@ import { ingestFormgridExternalFiles } from "@/lib/client-portal/formgrid-file-i
 import { buildFormgridRowKey } from "@/lib/leads/formgrid-row-key";
 import { getDismissedFormgridRowKeys } from "@/lib/leads/formgrid-active-leads";
 import { getFormgridLeadsTable } from "@/lib/google-sheets/formgrid-leads";
+import { ensureQuestionnaireWordDocument } from "@/lib/client-portal/questionnaire-service";
 
 const EXCLUDED_FULL_NAMES = ["белоусова вероника николаевна"];
 
@@ -260,6 +261,22 @@ export async function syncFormgridSheetRowToPortal(input: {
     }
   } catch (error) {
     console.error("[formgrid-to-portal] file ingest failed", {
+      questionnaireId,
+      error,
+    });
+  }
+
+  try {
+    const word = await ensureQuestionnaireWordDocument(record.id);
+    record = word.record;
+    if (word.created) {
+      console.info("[formgrid-to-portal] Word questionnaire created", {
+        questionnaireId,
+        fileName: word.document.fileName,
+      });
+    }
+  } catch (error) {
+    console.error("[formgrid-to-portal] Word export failed", {
       questionnaireId,
       error,
     });

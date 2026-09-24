@@ -18,6 +18,7 @@ import {
   displayNameFromFormgridAnswers,
   isFormgridImport,
 } from "@/lib/client-portal/formgrid-import";
+import { formatCyrillicNameIof } from "@/lib/client-portal/person-name-order";
 import {
   isLegacyCrmImport,
   readLegacyIdentity,
@@ -49,20 +50,22 @@ function clean(value: unknown): string {
 
 export function portalIntakeDisplayName(record: QuestionnaireRecord): string {
   const identity = readLegacyIdentity(record.answers);
-  if (identity?.fullNameCyrillic) return identity.fullNameCyrillic;
+  if (identity?.fullNameCyrillic) {
+    return formatCyrillicNameIof(identity.fullNameCyrillic);
+  }
   if (identity?.fullNameLatin) return identity.fullNameLatin;
   if (isFormgridImport(record.answers)) {
     const fromFormgrid = displayNameFromFormgridAnswers(record.answers);
     if (fromFormgrid && fromFormgrid !== "Formgrid lead") return fromFormgrid;
   }
   const cyrillic = clean(record.answers.full_name_cyrillic);
-  if (cyrillic) return cyrillic;
+  if (cyrillic) return formatCyrillicNameIof(cyrillic);
   const latin = clean(record.answers.full_name_latin);
   if (latin) return latin;
   const sheet = record.answers.__legacySheet;
   if (sheet && typeof sheet === "object" && !Array.isArray(sheet)) {
     const fio = clean((sheet as Record<string, unknown>)["ФИО"]);
-    if (fio) return fio;
+    if (fio) return formatCyrillicNameIof(fio);
   }
   const composed = [record.firstName, clean(record.answers.last_name)]
     .filter(Boolean)

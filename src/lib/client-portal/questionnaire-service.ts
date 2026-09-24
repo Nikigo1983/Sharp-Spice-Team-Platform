@@ -68,6 +68,7 @@ import {
   setFormgridNewClientQueue,
 } from "./formgrid-import";
 import { markManualStaffAnswers } from "./client-source";
+import { formatCyrillicNameIof } from "./person-name-order";
 import { notifyNewClient } from "@/lib/notifications/emit";
 import {
   isCaseArchived,
@@ -328,7 +329,9 @@ export async function submitQuestionnaire(
   await upsertQuestionnaire(next);
   try {
     const clientName =
-      String(next.answers.full_name_cyrillic ?? "").trim() ||
+      formatCyrillicNameIof(
+        String(next.answers.full_name_cyrillic ?? "").trim(),
+      ) ||
       String(next.answers.full_name_latin ?? "").trim() ||
       next.firstName ||
       next.email;
@@ -791,7 +794,9 @@ export async function ensureQuestionnaireWordDocument(
   }
 
   const clientName =
-    String(current.answers.full_name_cyrillic ?? "").trim() ||
+    formatCyrillicNameIof(
+      String(current.answers.full_name_cyrillic ?? "").trim(),
+    ) ||
     String(current.answers.full_name_latin ?? "").trim() ||
     current.firstName ||
     current.email;
@@ -1020,6 +1025,9 @@ export function buildReviewRows(
         value = option ? pickLabel(option.label, locale) : String(raw ?? "");
       } else {
         value = raw == null ? "" : String(raw);
+        if (question.id === "full_name_cyrillic" && value.trim()) {
+          value = formatCyrillicNameIof(value);
+        }
       }
       rows.push({
         section: pickLabel(section.title, locale),

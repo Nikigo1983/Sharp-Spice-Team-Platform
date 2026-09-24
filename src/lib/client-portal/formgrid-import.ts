@@ -4,6 +4,8 @@
  * Pure module — usable from Node scripts (no path aliases / server-only).
  */
 
+import { formatCyrillicNameIof } from "./person-name-order";
+
 export const FORMGRID_SOURCE = "formgrid" as const;
 export const FORMGRID_IMPORT_KEY = "__import";
 export const FORMGRID_SHEET_KEY = "__formgridSheet";
@@ -308,7 +310,9 @@ export function mapFormgridRowToAnswers(
   ]);
 
   return {
-    full_name_cyrillic: f.fullName || null,
+    full_name_cyrillic: f.fullName
+      ? formatCyrillicNameIof(f.fullName) || null
+      : null,
     full_name_latin: nameLatin || null,
     birth_surname_latin: birthSurname || null,
     date_of_birth: f.dateOfBirth || null,
@@ -423,8 +427,9 @@ export function applyFormgridCrmOpsEdits(
 }
 
 export function displayNameFromFormgridAnswers(answers: Record<string, unknown>): string {
+  const cyrillic = clean(answers.full_name_cyrillic);
   return (
-    clean(answers.full_name_cyrillic) ||
+    (cyrillic ? formatCyrillicNameIof(cyrillic) : "") ||
     clean(answers.full_name_latin) ||
     clean(answers.contact_email) ||
     "Formgrid lead"
@@ -577,10 +582,14 @@ export function buildFormgridReviewRows(
       };
     }
     const externalUrl = isExternalFileUrl(text) ? text : undefined;
+    const displayText =
+      !externalUrl && /фио|имя|name|фамилия/i.test(key) && text
+        ? formatCyrillicNameIof(text)
+        : text;
     return {
       section: "",
       label: key,
-      value: externalUrl ? fileNameFromExternalUrl(text, key) : text,
+      value: externalUrl ? fileNameFromExternalUrl(text, key) : displayText,
       questionId: `${FORMGRID_SHEET_KEY}.${key}`,
       externalUrl,
     };

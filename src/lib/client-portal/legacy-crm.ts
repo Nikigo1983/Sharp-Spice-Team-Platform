@@ -3,6 +3,8 @@
  * Pure module — no server-only / path aliases (usable from Node scripts).
  */
 
+import { formatCyrillicNameIof } from "./person-name-order";
+
 export const LEGACY_CRM_SOURCE = "croatia_external" as const;
 
 export const LEGACY_IMPORT_KEY = "__import";
@@ -330,7 +332,9 @@ export function buildLegacyReviewRows(
   for (const key of orderedKeys) {
     if (seen.has(key) || isPasswordSheetHeader(key)) continue;
     seen.add(key);
-    const value = clean(sheetObj[key]);
+    const raw = clean(sheetObj[key]);
+    const value =
+      key === "Фамилия" && raw ? formatCyrillicNameIof(raw) : raw;
     rows.push({
       section: "",
       label: key,

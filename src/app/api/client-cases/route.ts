@@ -32,6 +32,7 @@ import {
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
 import { isFormgridImport, readFormgridCrmOpsSheet } from "@/lib/client-portal/formgrid-import";
+import { formatCyrillicNameIof } from "@/lib/client-portal/person-name-order";
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
@@ -84,10 +85,12 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
   const identity = readLegacyIdentity(item.answers);
   const source = resolveIntakeClientSource(item.answers);
   const vnzhCountry = resolveStaffCaseCountry(item);
-  const displayName =
+  const rawCyrillic =
     identity?.fullNameCyrillic ||
+    String(item.answers.full_name_cyrillic ?? "").trim();
+  const displayName =
+    (rawCyrillic ? formatCyrillicNameIof(rawCyrillic) : "") ||
     identity?.fullNameLatin ||
-    String(item.answers.full_name_cyrillic ?? "").trim() ||
     String(item.answers.full_name_latin ?? "").trim() ||
     [item.firstName, String(item.answers.last_name ?? "")]
       .filter(Boolean)

@@ -2008,12 +2008,12 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
               />
             </label>
             <label className={styles.addClientLabel}>
-              ФИО (кириллица)
+              Имя, Отчество, Фамилия (кириллица)
               <input
                 className={styles.addClientInput}
                 value={addFullName}
                 onChange={(event) => setAddFullName(event.target.value)}
-                placeholder="Необязательно"
+                placeholder="Иван Иванович Иванов"
                 disabled={addingClient}
                 autoComplete="off"
               />

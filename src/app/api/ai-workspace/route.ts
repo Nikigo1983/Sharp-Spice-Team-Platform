@@ -20,7 +20,7 @@ import {
   encodeWorkspaceAiSseEvent,
   encodeWorkspaceAiSseMetaPayload,
 } from "@/lib/ai/workspace-ai-browser-contract";
-import { logClientRefLifecycleTrace } from "@/lib/ai/workspace-ai-clientref-trace";
+import { logClientRefLifecycleTrace, logClientRefPathDiag } from "@/lib/ai/workspace-ai-clientref-trace";
 import {
   sanitizeClientContextsForTransport,
 } from "@/lib/ai/context-redaction";
@@ -174,6 +174,19 @@ async function handlePost(request: Request) {
                 hasClientRef: Boolean(emittedRef),
                 clientId: emittedRef?.clientId ?? null,
                 sseEvent: "meta",
+              });
+              logClientRefPathDiag({
+                requestId,
+                pathName: "sse_meta_emit",
+                resolverName: "api/ai-workspace",
+                linkedClientIdState: emittedRef ? "PRESENT" : "ABSENT",
+                sseLinkedClientIdState: emittedRef ? "PRESENT" : "ABSENT",
+                note:
+                  chunk.caseMemory === null
+                    ? "caseMemory_null"
+                    : emittedRef
+                      ? "caseMemory_with_lock"
+                      : "caseMemory_without_lock",
               });
             }
             controller.enqueue(

@@ -177,7 +177,11 @@ import {
   type WorkspaceWebSearchResult,
 } from "@/lib/ai/workspace-web-search";
 import { maybeRefreshWorkspaceConversationMemory } from "@/lib/ai/workspace-conversation-summary";
-import { logClientRefLifecycleTrace } from "@/lib/ai/workspace-ai-clientref-trace";
+import {
+  classifyClientRefIdType,
+  logClientRefLifecycleTrace,
+  logClientRefPathDiag,
+} from "@/lib/ai/workspace-ai-clientref-trace";
 import { getWorkspaceChatMemory } from "@/lib/ai/workspace-chat-memory-store";
 import {
   buildClientSearchQuery,
@@ -1295,6 +1299,18 @@ async function prepareWorkspaceRequest(
     query: trimmed,
   });
 
+  logClientRefPathDiag({
+    requestId,
+    pathName: "prepare_gate",
+    resolverName: "shouldAttemptClientResolve",
+    uniqueResolution: null,
+    commitUniqueCalled: false,
+    linkedClientIdState: clientRefFromCaseMemory(caseMemory)
+      ? "PRESENT"
+      : "ABSENT",
+    note: `needsClientResolve=${needsClientResolve};taskClass=${currentTask.taskClass};taskRequiresClientRef=${taskRequiresClientRef(currentTask)};agentEligible_pending`,
+  });
+
   const volatileRefetch = queryRequiresVolatileRefetch(trimmed);
   if (volatileRefetch) {
     trace.volatileRefetch = true;
@@ -1338,6 +1354,20 @@ async function prepareWorkspaceRequest(
           trace.notes.push("client_ref_locked_from_resolve");
         }
         trace.clientRefPresent = true;
+        logClientRefPathDiag({
+          requestId,
+          pathName: "prepare_resolveClient",
+          resolverName: "resolveClient",
+          uniqueResolution: true,
+          candidateIdField: "clientRef.clientId",
+          candidateIdType: classifyClientRefIdType(resolved.clientRef.clientId),
+          commitUniqueCalled: true,
+          commitAccepted: true,
+          linkedClientIdState: clientRefFromCaseMemory(caseMemory)
+            ? "PRESENT"
+            : "ABSENT",
+          note: resolved.reusedLock ? "reused_lock" : "fresh_resolve",
+        });
         if (resolved.client) {
           clientContext = resolved.client;
         } else {
@@ -1352,8 +1382,42 @@ async function prepareWorkspaceRequest(
         clientCandidates = [];
         // Fall through to structured search for candidate UI below.
         trace.notes.push("resolve_client_ambiguous");
+        logClientRefPathDiag({
+          requestId,
+          pathName: "prepare_resolveClient",
+          resolverName: "resolveClient",
+          uniqueResolution: false,
+          commitUniqueCalled: false,
+          linkedClientIdState: clientRefFromCaseMemory(caseMemory)
+            ? "PRESENT"
+            : "ABSENT",
+          note: "AMBIGUOUS",
+        });
       } else if (resolved.outcome === "NOT_FOUND") {
         trace.notes.push("resolve_client_not_found");
+        logClientRefPathDiag({
+          requestId,
+          pathName: "prepare_resolveClient",
+          resolverName: "resolveClient",
+          uniqueResolution: false,
+          commitUniqueCalled: false,
+          linkedClientIdState: clientRefFromCaseMemory(caseMemory)
+            ? "PRESENT"
+            : "ABSENT",
+          note: "NOT_FOUND",
+        });
+      } else {
+        logClientRefPathDiag({
+          requestId,
+          pathName: "prepare_resolveClient",
+          resolverName: "resolveClient",
+          uniqueResolution: false,
+          commitUniqueCalled: false,
+          linkedClientIdState: clientRefFromCaseMemory(caseMemory)
+            ? "PRESENT"
+            : "ABSENT",
+          note: `outcome:${resolved.outcome}_no_clientRef`,
+        });
       }
     } catch (error) {
       console.error(
@@ -1649,6 +1713,27 @@ async function prepareWorkspaceRequest(
           uiTransition: lockedAtAgentEntry
             ? "prepare_agent_exit_locked"
             : "prepare_agent_exit_no_client",
+        });
+        logClientRefPathDiag({
+          requestId,
+          pathName: "prepare_agent_exit",
+          resolverName: "prepareWorkspaceRequest",
+          uniqueResolution: Boolean(clientContext),
+          candidateIdField: clientContext
+            ? "clientContext.debugRow.id"
+            : null,
+          candidateIdType: clientContext
+            ? classifyClientRefIdType(
+                !isMergedClientContext(clientContext)
+                  ? clientContext.debugRow?.id
+                  : clientContext.parts[0]?.debugRow?.id,
+              )
+            : "absent",
+          commitUniqueCalled: Boolean(lockedAtAgentEntry),
+          linkedClientIdState: lockedAtAgentEntry ? "PRESENT" : "ABSENT",
+          note: lockedAtAgentEntry
+            ? "agent_exit_with_lock"
+            : "agent_exit_without_lock",
         });
       }
       return {
@@ -2220,13 +2305,42 @@ async function executeAgentPrepared(params: {
 
   let lockedCaseMemory = prepared.caseMemory;
   const applyUniqueToolLock = (clientId: string, displayLabel?: string | null) => {
+    const idType = classifyClientRefIdType(clientId);
     const ref = createClientRef({
       clientId,
       displayLabel,
       resolutionOutcome: "RESOLVED",
     });
-    if (!ref) return;
+    if (!ref) {
+      logClientRefPathDiag({
+        requestId: prepared.requestId,
+        pathName: "agent_onUniqueClientResolved",
+        resolverName: "applyUniqueToolLock",
+        uniqueResolution: true,
+        candidateIdField: "tool.clientId",
+        candidateIdType: idType,
+        commitUniqueCalled: false,
+        commitAccepted: false,
+        linkedClientIdState: clientRefFromCaseMemory(lockedCaseMemory)
+          ? "PRESENT"
+          : "ABSENT",
+        note: "createClientRef_rejected_non_uuid",
+      });
+      return;
+    }
     if (clientRefFromCaseMemory(lockedCaseMemory)?.clientId === ref.clientId) {
+      logClientRefPathDiag({
+        requestId: prepared.requestId,
+        pathName: "agent_onUniqueClientResolved",
+        resolverName: "applyUniqueToolLock",
+        uniqueResolution: true,
+        candidateIdField: "tool.clientId",
+        candidateIdType: idType,
+        commitUniqueCalled: false,
+        commitAccepted: true,
+        linkedClientIdState: "PRESENT",
+        note: "already_locked_same_id",
+      });
       return;
     }
     const previous = clientRefFromCaseMemory(lockedCaseMemory);
@@ -2241,6 +2355,20 @@ async function executeAgentPrepared(params: {
     prepared.caseMemory = lockedCaseMemory;
     prepared.trace.clientRefPresent = true;
     prepared.trace.notes.push("client_ref_locked_from_agent_tool");
+    logClientRefPathDiag({
+      requestId: prepared.requestId,
+      pathName: "agent_onUniqueClientResolved",
+      resolverName: "applyUniqueToolLock",
+      uniqueResolution: true,
+      candidateIdField: "tool.clientId",
+      candidateIdType: idType,
+      commitUniqueCalled: true,
+      commitAccepted: true,
+      linkedClientIdState: clientRefFromCaseMemory(lockedCaseMemory)
+        ? "PRESENT"
+        : "ABSENT",
+      note: committed.switched ? "switched" : "locked",
+    });
     void params.onClientRefLocked?.(lockedCaseMemory);
   };
 
@@ -2339,6 +2467,31 @@ async function executeAgentPrepared(params: {
           )
         : ["Агент"];
 
+    const finalCaseMemory = selectAuthoritativeCaseMemory({
+      prepared: lockedCaseMemory,
+      refreshed: memory.caseMemory,
+    });
+    logClientRefPathDiag({
+      requestId: prepared.requestId,
+      pathName: "agent_final_caseMemory",
+      resolverName: "executeAgentPrepared",
+      uniqueResolution: Boolean(clientRefFromCaseMemory(lockedCaseMemory)),
+      candidateIdField: "lockedCaseMemory.linkedClientId",
+      candidateIdType: classifyClientRefIdType(
+        clientRefFromCaseMemory(lockedCaseMemory)?.clientId,
+      ),
+      commitUniqueCalled: Boolean(clientRefFromCaseMemory(lockedCaseMemory)),
+      linkedClientIdState: clientRefFromCaseMemory(lockedCaseMemory)
+        ? "PRESENT"
+        : "ABSENT",
+      sseLinkedClientIdState: clientRefFromCaseMemory(finalCaseMemory)
+        ? "PRESENT"
+        : "ABSENT",
+      note: prepared.clientContext
+        ? "had_prepare_clientContext"
+        : "no_prepare_clientContext",
+    });
+
     return {
       result: {
         reply: guarded.answer,
@@ -2349,10 +2502,7 @@ async function executeAgentPrepared(params: {
         needsClientSelection: prepared.needsClientSelection,
         conversationSummary: memory.conversationSummary,
         summaryThroughMessageCount: memory.summaryThroughMessageCount,
-        caseMemory: selectAuthoritativeCaseMemory({
-          prepared: lockedCaseMemory,
-          refreshed: memory.caseMemory,
-        }),
+        caseMemory: finalCaseMemory,
       },
       statusEvents: loop.statusEvents,
     };

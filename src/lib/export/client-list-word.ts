@@ -134,24 +134,65 @@ export function downloadClientListWord(
 }
 
 /**
- * Open the list in a new browser tab (HTML preview of the Word table).
- * Falls back to .doc download if the pop-up is blocked.
+ * Fallback when desktop Word cannot be launched: save a real .doc file.
+ * Prefer {@link openClientListWordInDesktopApp} on staff desktops.
  */
 export function openClientListWord(
   input: ClientListWordExportInput,
   filename: string,
 ): void {
-  const html = buildClientListWordDoc(input);
-  // text/html opens in the tab; application/msword usually forces a download.
-  const previewBlob = new Blob(["\ufeff", html], {
-    type: "text/html;charset=utf-8",
-  });
-  const url = URL.createObjectURL(previewBlob);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    URL.revokeObjectURL(url);
+  downloadClientListWord(input, filename);
+}
+
+export type OpenClientListWordResult = "opened" | "downloaded";
+
+type OfficeLinkResponse = {
+  launchUrl?: string;
+  msWordUri?: string;
+  msWordUriAbbreviated?: string;
+  error?: string;
+};
+
+/**
+ * Open the filtered list in desktop Microsoft Word (same protocol path as
+ * case-file Word open). Falls back to downloading a .doc on phones / errors.
+ */
+export async function openClientListWordInDesktopApp(
+  input: ClientListWordExportInput,
+  filename: string,
+  options: {
+    supportsDesktopMsWord: boolean;
+    launchMsWord: (input: {
+      launchUrl?: string;
+      msWordUri: string;
+      abbreviatedUri?: string;
+    }) => void;
+  },
+): Promise<OpenClientListWordResult> {
+  if (!options.supportsDesktopMsWord) {
     downloadClientListWord(input, filename);
-    return;
+    return "downloaded";
   }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+  try {
+    const res = await fetch("/api/exports/list-word", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...input, filename }),
+    });
+    const data = (await res.json().catch(() => ({}))) as OfficeLinkResponse;
+    if (!res.ok || !data.msWordUri) {
+      downloadClientListWord(input, filename);
+      return "downloaded";
+    }
+    options.launchMsWord({
+      launchUrl: data.launchUrl,
+      msWordUri: data.msWordUri,
+      abbreviatedUri: data.msWordUriAbbreviated,
+    });
+    return "opened";
+  } catch {
+    downloadClientListWord(input, filename);
+    return "downloaded";
+  }
 }

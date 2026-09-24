@@ -15,7 +15,7 @@ import { matchesSubmittedMonth } from "@/lib/clients/list-filter-utils";
 import {
   clientListWordFilename,
   downloadClientListWord,
-  openClientListWord,
+  openClientListWordInDesktopApp,
 } from "@/lib/export/client-list-word";
 import { uniqueSortedValues } from "@/lib/export/download-csv";
 import { surnameSortKey } from "@/lib/client-portal/person-name-order";
@@ -261,6 +261,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingSaving, setRenamingSaving] = useState(false);
   const [openingWordId, setOpeningWordId] = useState<string | null>(null);
+  const [openingListWord, setOpeningListWord] = useState(false);
   const [schemaTitle, setSchemaTitle] = useState("");
   const [clientLabel, setClientLabel] = useState("");
   const [selectedArchived, setSelectedArchived] = useState(false);
@@ -694,7 +695,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     return parts.length > 0 ? parts.join(" · ") : "Без дополнительных фильтров";
   };
 
-  const exportFilteredWord = (mode: "open" | "download") => {
+  const exportFilteredWord = async (mode: "open" | "download") => {
     const { headers, rows } = buildFilteredExportTable();
     const input = {
       title: "Список клиентов Emigrant",
@@ -703,8 +704,25 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       rows,
     };
     const filename = clientListWordFilename("spisok-klientov-emigrant");
-    if (mode === "open") openClientListWord(input, filename);
-    else downloadClientListWord(input, filename);
+    if (mode === "download") {
+      downloadClientListWord(input, filename);
+      return;
+    }
+    setOpeningListWord(true);
+    setError(null);
+    try {
+      const result = await openClientListWordInDesktopApp(input, filename, {
+        supportsDesktopMsWord: supportsDesktopMsWordProtocol(),
+        launchMsWord: launchMsWordProtocol,
+      });
+      setStatus(
+        result === "opened"
+          ? "Открываем список в Microsoft Word…"
+          : "Файл скачивается. Откройте его в Word.",
+      );
+    } finally {
+      setOpeningListWord(false);
+    }
   };
 
   function updateDraft(
@@ -2259,16 +2277,16 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           <button
             type="button"
             className={styles.exportBtn}
-            disabled={filteredItems.length === 0}
-            onClick={() => exportFilteredWord("open")}
+            disabled={filteredItems.length === 0 || openingListWord}
+            onClick={() => void exportFilteredWord("open")}
           >
-            Открыть CSV в Word
+            {openingListWord ? "Открываем…" : "Открыть CSV в Word"}
           </button>
           <button
             type="button"
             className={styles.exportBtn}
-            disabled={filteredItems.length === 0}
-            onClick={() => exportFilteredWord("download")}
+            disabled={filteredItems.length === 0 || openingListWord}
+            onClick={() => void exportFilteredWord("download")}
           >
             Скачать CSV в Word
           </button>

@@ -173,8 +173,8 @@ function shortRuLabel(label: string): string {
 
 /** Stable AI-facing labels — avoid confusing parentheticals like «в стране гражданства». */
 const AI_FIELD_LABEL_BY_ID: Record<string, string> = {
-  full_name_cyrillic: "ФИО (кириллицей)",
-  full_name_latin: "ФИО (латиницей)",
+  full_name_cyrillic: "Имя, Отчество, Фамилия (кириллицей)",
+  full_name_latin: "Имя, Отчество, Фамилия (латиницей)",
   birth_surname_latin: "Фамилия при рождении",
   date_of_birth: "Дата рождения",
   place_of_birth_latin: "Место рождения",
@@ -189,8 +189,8 @@ const AI_FIELD_LABEL_BY_ID: Record<string, string> = {
   citizenship_latin: "Гражданство",
   nationality_latin: "Национальность",
   marital_status_latin: "Семейное положение",
-  father_name_latin: "Отец: Имя, Фамилия",
-  mother_name_latin: "Мать: Имя, Фамилия",
+  father_name_latin: "Отец: Имя, Отчество, Фамилия",
+  mother_name_latin: "Мать: Имя, Отчество, Фамилия",
 };
 
 function aiLabelForQuestion(questionId: string, fallbackLabel: string): string {

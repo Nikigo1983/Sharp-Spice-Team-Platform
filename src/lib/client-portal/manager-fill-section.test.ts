@@ -37,6 +37,36 @@ describe("manager fill section", () => {
     );
   });
 
+  it("remaps Formgrid FIO column labels to IOF wording", () => {
+    const rows = buildFormgridReviewRows({
+      __import: { source: "formgrid" },
+      __formgridSheet: {
+        "1. Фамилия, Имя, Отчество (кириллицей)": "Олег Михайлович Рыбин",
+        "2. ФИО (латинскими)": "Oleg Rybin",
+        "13. Отец: ФИО (латинскими)": "Mixail Vasilevich Rybin",
+        "14. Мать: ФИО (латинскими)": "Rybina Natalia Vasilevna",
+      },
+    });
+    assert.equal(
+      rows.find((r) => r.questionId.endsWith("кириллицей)"))?.label,
+      "1. Имя, Отчество, Фамилия (кириллицей)",
+    );
+    assert.equal(
+      rows.find((r) => r.questionId.includes("2. ФИО"))?.label,
+      "2. Имя, Отчество, Фамилия (латинскими)",
+    );
+    assert.equal(
+      rows.find((r) => r.questionId.includes("Отец"))?.label,
+      "13. Отец: Имя, Отчество, Фамилия (латинскими)",
+    );
+    const mother = rows.find((r) => r.questionId.includes("Мать"));
+    assert.equal(
+      mother?.label,
+      "14. Мать: Имя, Отчество, Фамилия (латинскими)",
+    );
+    assert.equal(mother?.value, "Natalia Vasilevna Rybina");
+  });
+
   it("appends manager fill block for portal questionnaire answers", () => {
     const rows = buildReviewRows(
       {

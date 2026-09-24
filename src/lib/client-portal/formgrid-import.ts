@@ -333,8 +333,8 @@ export function mapFormgridRowToAnswers(
     citizenship_latin: f.citizenship || null,
     nationality_latin: nationality || null,
     marital_status_latin: marital || null,
-    father_name_latin: father || null,
-    mother_name_latin: mother || null,
+    father_name_latin: father ? formatLatinNameIof(father) || null : null,
+    mother_name_latin: mother ? formatLatinNameIof(mother) || null : null,
     why_croatia: f.purpose || null,
     how_learned_program: howLearned || null,
     had_croatia_trp: /^(да|yes|true|1)$/i.test(hadCroatiaTrp)
@@ -364,7 +364,7 @@ export function mapFormgridRowToAnswers(
       submittedAt: f.submittedAt || null,
       ...(opts.newClientQueue ? { newClientQueue: true as const } : {}),
     },
-    [FORMGRID_SHEET_KEY]: { ...row },
+    [FORMGRID_SHEET_KEY]: normalizeFormgridSheetPersonNames({ ...row }),
     [FORMGRID_SHEET_ORDER_KEY]: Object.keys(row),
     [FORMGRID_CRM_OPS_KEY]: emptyFormgridCrmOpsSheet({
       "Дата подачи": f.submittedAt || "",
@@ -558,6 +558,38 @@ export function listFormgridExternalFileEntries(
   return out;
 }
 
+/**
+ * Remap Formgrid sheet headers to portal wording (IOF) without renaming
+ * stored keys — questionId still uses the original column name.
+ */
+export function displayFormgridColumnLabel(column: string): string {
+  const t = column.trim();
+  const num = t.match(/^(\d+\.)\s*/)?.[1];
+  const prefix = num ? `${num} ` : "";
+
+  if (
+    /^(\d+\.\s*)?фамилия\s*,\s*имя\s*,\s*отчество/i.test(t) ||
+    /^(\d+\.\s*)?фамилия\s+имя\s+отчество/i.test(t)
+  ) {
+    const script = /\(кириллиц/i.test(t)
+      ? " (кириллицей)"
+      : /\(латин/i.test(t)
+        ? " (латинскими)"
+        : "";
+    return `${prefix}Имя, Отчество, Фамилия${script}`;
+  }
+  if (/^(\d+\.\s*)?фио\s*\(латин/i.test(t)) {
+    return `${prefix}Имя, Отчество, Фамилия (латинскими)`;
+  }
+  if (/отец\s*:/i.test(t) && /(фио|имя|латин)/i.test(t)) {
+    return `${prefix}Отец: Имя, Отчество, Фамилия (латинскими)`;
+  }
+  if (/мать\s*:/i.test(t) && /(фио|имя|латин)/i.test(t)) {
+    return `${prefix}Мать: Имя, Отчество, Фамилия (латинскими)`;
+  }
+  return column;
+}
+
 export function buildFormgridReviewRows(
   answers: Record<string, unknown>,
   _locale: "ru" | "en" = "ru",
@@ -579,11 +611,12 @@ export function buildFormgridReviewRows(
     (key) => {
       const value = sheetObj[key];
       const text = clean(value);
+      const label = displayFormgridColumnLabel(key);
       const stored = storedFiles[key];
       if (stored?.id) {
         return {
           section: "",
-          label: key,
+          label,
           value: stored.fileName,
           questionId: `${FORMGRID_SHEET_KEY}.${key}`,
           fileId: stored.id,
@@ -595,7 +628,7 @@ export function buildFormgridReviewRows(
         : formatFormgridPersonNameValue(key, text);
       return {
         section: "",
-        label: key,
+        label,
         value: displayText,
         questionId: `${FORMGRID_SHEET_KEY}.${key}`,
         externalUrl,
@@ -652,6 +685,19 @@ function formatFormgridPersonNameValue(column: string, text: string): string {
   if (/[а-яё]/i.test(text)) return formatCyrillicNameIof(text);
   if (/[a-z]/i.test(text)) return formatLatinNameIof(text);
   return text;
+}
+
+function normalizeFormgridSheetPersonNames(
+  row: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key] =
+      typeof value === "string"
+        ? formatFormgridPersonNameValue(key, value)
+        : value;
+  }
+  return out;
 }
 
 /** Staff-editable ops block shared by Formgrid + portal questionnaire cases. */

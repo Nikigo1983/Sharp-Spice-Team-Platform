@@ -47,4 +47,15 @@ describe("formatLatinNameIof", () => {
     assert.equal(formatLatinNameIof("Rybin Oleg"), "Oleg Rybin");
     assert.equal(formatLatinNameIof("Oleg Rybin"), "Oleg Rybin");
   });
+
+  it("reorders three-part latin FIO including feminine surname -ina", () => {
+    assert.equal(
+      formatLatinNameIof("Rybina Natalia Vasilevna"),
+      "Natalia Vasilevna Rybina",
+    );
+    assert.equal(
+      formatLatinNameIof("Mixail Vasilevich Rybin"),
+      "Mixail Vasilevich Rybin",
+    );
+  });
 });

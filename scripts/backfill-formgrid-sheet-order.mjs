@@ -37,7 +37,7 @@ const dryRun = process.argv.includes("--dry-run");
 const mapper = await import(
   pathToFileURL(resolve("src/lib/client-portal/formgrid-import.ts")).href
 );
-const { formatLatinNameIof } = await import(
+const { formatLatinNameIof, formatCyrillicNameIof } = await import(
   pathToFileURL(resolve("src/lib/client-portal/person-name-order.ts")).href
 );
 
@@ -111,12 +111,32 @@ for (const q of qs || []) {
     }
   }
 
+  for (const field of ["father_name_latin", "mother_name_latin"]) {
+    const cur = answers[field];
+    if (typeof cur !== "string" || !cur.trim()) continue;
+    const next = formatLatinNameIof(cur);
+    if (next !== cur.trim().replace(/\s+/g, " ")) {
+      answers[field] = next;
+      dirty = true;
+    }
+  }
+
   for (const [key, value] of Object.entries(sheetObj)) {
     if (typeof value !== "string" || !value.trim()) continue;
-    if (!/фио.*латин|латин.*фио|latin|отец|мать|father|mother/i.test(key)) {
+    if (
+      !/фио|латин|имя|фамилия|отец|мать|father|mother|name/i.test(key)
+    ) {
       continue;
     }
-    if (/[а-яё]/i.test(value)) continue;
+    if (/[а-яё]/i.test(value)) {
+      const next = formatCyrillicNameIof(value);
+      if (next !== value.trim().replace(/\s+/g, " ")) {
+        sheetObj[key] = next;
+        dirty = true;
+      }
+      continue;
+    }
+    if (!/[a-z]/i.test(value)) continue;
     const next = formatLatinNameIof(value);
     if (next !== value.trim().replace(/\s+/g, " ")) {
       sheetObj[key] = next;

@@ -192,15 +192,29 @@ export function formatLatinNameIof(raw: string): string {
   }
   if (tokens.length === 3) {
     const [a, b, c] = tokens as [string, string, string];
-    // Already given + patronymic/middle + surname
+    // Already «Given Patronymic Surname»
+    if (
+      looksLikeLatinPatronymic(b) &&
+      looksLikeLatinSurname(c) &&
+      !looksLikeLatinSurname(a)
+    ) {
+      return name;
+    }
+    // «Surname Given Patronymic» → «Given Patronymic Surname»
+    if (looksLikeLatinPatronymic(c) || looksLikeLatinSurname(a)) {
+      return `${b} ${c} ${a}`;
+    }
     if (looksLikeLatinSurname(c) && !looksLikeLatinSurname(a)) return name;
     return `${b} ${c} ${a}`;
   }
   return name;
 }
 
+function looksLikeLatinPatronymic(token: string): boolean {
+  return /(?:ovich|evich|ovna|evna)$/i.test(token);
+}
+
 function looksLikeLatinSurname(token: string): boolean {
-  return /(?:ov|ova|ev|eva|in|yn|sky|ski|skaya|ovich|evich|ovna|evna)$/i.test(
-    token,
-  );
+  if (looksLikeLatinPatronymic(token)) return false;
+  return /(?:ov|ova|ev|eva|in|ina|yn|yna|sky|ski|skaya)$/i.test(token);
 }

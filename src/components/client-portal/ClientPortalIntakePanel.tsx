@@ -17,7 +17,7 @@ import {
   downloadClientListWord,
   openClientListWord,
 } from "@/lib/export/client-list-word";
-import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
+import { uniqueSortedValues } from "@/lib/export/download-csv";
 import { surnameSortKey } from "@/lib/client-portal/person-name-order";
 import {
   EMPTY_STAFF_FIELDS,
@@ -692,15 +692,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     if (lawyerFilter === "unassigned") parts.push("Без адвоката");
     if (query.trim()) parts.push(`Поиск: «${query.trim()}»`);
     return parts.length > 0 ? parts.join(" · ") : "Без дополнительных фильтров";
-  };
-
-  const exportFilteredCsv = () => {
-    const { headers, rows } = buildFilteredExportTable();
-    downloadCsv(
-      `emigrant-intake-${new Date().toISOString().slice(0, 10)}.csv`,
-      headers,
-      rows,
-    );
   };
 
   const exportFilteredWord = (mode: "open" | "download") => {
@@ -2269,17 +2260,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             type="button"
             className={styles.exportBtn}
             disabled={filteredItems.length === 0}
-            onClick={exportFilteredCsv}
-          >
-            Выгрузить CSV
-          </button>
-          <button
-            type="button"
-            className={styles.exportBtn}
-            disabled={filteredItems.length === 0}
             onClick={() => exportFilteredWord("open")}
           >
-            Открыть в Word
+            Открыть CSV в Word
           </button>
           <button
             type="button"
@@ -2287,7 +2270,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             disabled={filteredItems.length === 0}
             onClick={() => exportFilteredWord("download")}
           >
-            Скачать Word
+            Скачать CSV в Word
           </button>
         </div>
         <div

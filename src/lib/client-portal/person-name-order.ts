@@ -218,3 +218,58 @@ function looksLikeLatinSurname(token: string): boolean {
   if (looksLikeLatinPatronymic(token)) return false;
   return /(?:ov|ova|ev|eva|in|ina|yn|yna|sky|ski|skaya)$/i.test(token);
 }
+
+/**
+ * Sort key by surname for staff client lists (IOF display: surname is usually last).
+ * Falls back to the stronger surname-like token when order is ambiguous.
+ */
+export function surnameSortKey(raw: string): string {
+  const cleaned = cleanSpaces(raw);
+  if (!cleaned) return "";
+
+  const normalized = /[а-яё]/i.test(cleaned)
+    ? formatCyrillicNameIof(cleaned)
+    : /[a-z]/i.test(cleaned)
+      ? formatLatinNameIof(cleaned)
+      : cleaned;
+  const tokens = cleanSpaces(normalized).split(" ").filter(Boolean);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) return tokens[0]!.toLocaleLowerCase("ru");
+
+  const first = tokens[0]!;
+  const last = tokens[tokens.length - 1]!;
+  const isCyr = /[а-яё]/i.test(normalized);
+
+  if (tokens.length >= 3) {
+    // IOF / FIO with patronymic: family name is almost always last after normalize
+    return last.toLocaleLowerCase("ru");
+  }
+
+  // Two tokens: pick the stronger surname-like side (handles leftover FIO).
+  const wFirst = isCyr ? cyrSurnameWeight(first) : latinSurnameWeight(first);
+  const wLast = isCyr ? cyrSurnameWeight(last) : latinSurnameWeight(last);
+  if (wFirst > wLast) return first.toLocaleLowerCase("ru");
+  if (wLast > wFirst) return last.toLocaleLowerCase("ru");
+  return last.toLocaleLowerCase("ru");
+}
+
+function cyrSurnameWeight(token: string): number {
+  const t = token.toLowerCase();
+  if (looksLikePatronymic(t)) return -1;
+  if (/(?:ова|ева|ёва|ская|цкая)$/i.test(t)) return 4;
+  if (/(?:ов|ев|ёв|ский|цкий|енко|ук|юк)$/i.test(t)) return 4;
+  if (/(?:ина|ына)$/i.test(t)) return 3;
+  if (/(?:ин|ын)$/i.test(t)) return 1; // ambiguous (Нурдин vs Путин)
+  if (looksLikeSurname(t)) return 2;
+  return 0;
+}
+
+function latinSurnameWeight(token: string): number {
+  if (looksLikeLatinPatronymic(token)) return -1;
+  if (/(?:ova|eva|skaya)$/i.test(token)) return 4;
+  if (/(?:ov|ev|sky|ski)$/i.test(token)) return 4;
+  if (/(?:ina|yna)$/i.test(token)) return 3;
+  if (/(?:in|yn)$/i.test(token)) return 1;
+  if (looksLikeLatinSurname(token)) return 2;
+  return 0;
+}

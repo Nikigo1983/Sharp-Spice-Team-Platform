@@ -32,7 +32,7 @@ import {
   readLegacyIdentity,
 } from "@/lib/client-portal/legacy-crm";
 import { isFormgridImport, readFormgridCrmOpsSheet } from "@/lib/client-portal/formgrid-import";
-import { formatCyrillicNameIof } from "@/lib/client-portal/person-name-order";
+import { formatCyrillicNameIof, surnameSortKey } from "@/lib/client-portal/person-name-order";
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
@@ -129,13 +129,20 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
 function sortByName<T extends { displayName?: string; firstName: string; email: string }>(
   items: T[],
 ): T[] {
-  return [...items].sort((a, b) =>
-    (a.displayName || a.firstName || a.email).localeCompare(
-      b.displayName || b.firstName || b.email,
+  return [...items].sort((a, b) => {
+    const nameA = a.displayName || a.firstName || a.email;
+    const nameB = b.displayName || b.firstName || b.email;
+    const bySurname = surnameSortKey(nameA).localeCompare(
+      surnameSortKey(nameB),
       "ru",
       { sensitivity: "base", numeric: true },
-    ),
-  );
+    );
+    if (bySurname !== 0) return bySurname;
+    return nameA.localeCompare(nameB, "ru", {
+      sensitivity: "base",
+      numeric: true,
+    });
+  });
 }
 
 export async function GET(request: Request) {

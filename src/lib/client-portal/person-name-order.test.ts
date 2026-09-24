@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   formatCyrillicNameIof,
   formatLatinNameIof,
+  surnameSortKey,
 } from "./person-name-order";
 
 describe("formatCyrillicNameIof", () => {
@@ -57,5 +58,18 @@ describe("formatLatinNameIof", () => {
       formatLatinNameIof("Mixail Vasilevich Rybin"),
       "Mixail Vasilevich Rybin",
     );
+  });
+});
+
+describe("surnameSortKey", () => {
+  it("uses surname for IOF and FIO cyrillic names", () => {
+    assert.equal(surnameSortKey("Анна Валерьевна Гоголева"), "гоголева");
+    assert.equal(surnameSortKey("Алымкулов Нурдин"), "алымкулов");
+    assert.equal(surnameSortKey("Анна СЕРГЕЕВА"), "сергеева");
+  });
+
+  it("uses surname for latin names", () => {
+    assert.equal(surnameSortKey("Oleg Rybin"), "rybin");
+    assert.equal(surnameSortKey("Rybina Natalia Vasilevna"), "rybina");
   });
 });

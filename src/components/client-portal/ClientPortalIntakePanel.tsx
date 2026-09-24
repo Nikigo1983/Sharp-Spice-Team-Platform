@@ -13,6 +13,7 @@ import {
 } from "@/lib/client-portal/booking-end-alert";
 import { matchesSubmittedMonth } from "@/lib/clients/list-filter-utils";
 import { downloadCsv, uniqueSortedValues } from "@/lib/export/download-csv";
+import { surnameSortKey } from "@/lib/client-portal/person-name-order";
 import {
   EMPTY_STAFF_FIELDS,
   STAFF_FIELD_COLUMNS,
@@ -502,12 +503,20 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           }
           return true;
         })
-        .sort((a, b) =>
-          clientName(a).localeCompare(clientName(b), "ru", {
+        .sort((a, b) => {
+          const nameA = clientName(a);
+          const nameB = clientName(b);
+          const bySurname = surnameSortKey(nameA).localeCompare(
+            surnameSortKey(nameB),
+            "ru",
+            { sensitivity: "base", numeric: true },
+          );
+          if (bySurname !== 0) return bySurname;
+          return nameA.localeCompare(nameB, "ru", {
             sensitivity: "base",
             numeric: true,
-          }),
-        ),
+          });
+        }),
     [
       items,
       drafts,

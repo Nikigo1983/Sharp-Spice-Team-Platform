@@ -50,13 +50,7 @@ type ListItem = {
   staffFields?: QuestionnaireStaffFields;
 };
 
-type ClientSourceFilter =
-  | ""
-  | "legacy"
-  | "formgrid"
-  | "formgrid-new"
-  | "portal"
-  | "manual";
+type ClientSourceFilter = "" | "new";
 /** Empty lawyer field vs filled («Передан адвокату» / «Остальные»). */
 type LawyerFilter = "" | "assigned" | "unassigned";
 type VnzhCountryFilter = "" | "croatia" | "spain" | "slovenia";
@@ -166,6 +160,13 @@ function resolveListItemSource(
           ? "manual"
           : "portal")
   );
+}
+
+/** Yellow-badge new queue + manually added clients. */
+function isNewClientsFilterMatch(item: ListItem): boolean {
+  if (item.isNew) return true;
+  if (item.isManual || resolveListItemSource(item) === "manual") return true;
+  return false;
 }
 
 function clientName(item: ListItem): string {
@@ -479,20 +480,10 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
           if (!rowMatchesQuery(item, draft, query)) return false;
           if (curator && draft.curator.trim() !== curator) return false;
           if (partner && draft.partner.trim() !== partner) return false;
-          if (clientSource === "portal") {
-            // Portal Emigrant + Formgrid duplicates flagged as new
-            if (!item.isNew) return false;
-            const src = resolveListItemSource(item);
-            if (src !== "portal" && src !== "formgrid") return false;
-          } else if (clientSource === "formgrid-new") {
-            if (
-              resolveListItemSource(item) !== "formgrid" ||
-              !item.isNew
-            ) {
-              return false;
-            }
+          if (clientSource === "new") {
+            if (!isNewClientsFilterMatch(item)) return false;
           } else if (clientSource) {
-            if (resolveListItemSource(item) !== clientSource) return false;
+            return false;
           }
           if (lawyerFilter === "assigned" && !draft.lawyer.trim()) {
             return false;
@@ -572,8 +563,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setLawyerFilter("");
     setVnzhCountryFilter("");
     setSubmittedMonth("");
-    // Portal filter includes Formgrid new-queue duplicates
-    setClientSource("portal");
+    // Unified «Новые клиенты» filter
+    setClientSource("new");
     setBookingAlertsOpen(false);
   }
 
@@ -2157,13 +2148,7 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             aria-label="Клиенты"
           >
             <option value="">Клиенты: все</option>
-            <option value="legacy">Из старой базы</option>
-            <option value="formgrid-new">Новые клиенты из Formgrid</option>
-            <option value="formgrid">Из Formgrid (все)</option>
-            <option value="portal">
-              Новые клиенты из клиентского портала
-            </option>
-            <option value="manual">Добавленные вручную</option>
+            <option value="new">Новые клиенты</option>
           </select>
           <select
             className={styles.select}
@@ -2444,19 +2429,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                               )?.label ??
                               "Хорватия"}
                           </span>
-                        ) : null}
-                        {item.isLegacy ? (
-                          <span className={styles.legacyBadge}>
-                            Из старой базы
-                          </span>
-                        ) : null}
-                        {item.isFormgrid ? (
-                          <span className={styles.formgridBadge}>
-                            Formgrid
-                          </span>
-                        ) : null}
-                        {item.isManual ? (
-                          <span className={styles.manualBadge}>Вручную</span>
                         ) : null}
                       </span>
                       <span className={styles.emailLine}>{item.email}</span>

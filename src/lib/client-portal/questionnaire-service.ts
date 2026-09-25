@@ -74,7 +74,10 @@ import {
   isCaseArchived,
   writeCaseArchive,
 } from "./case-archive";
-import { writeApplicationSubmitted } from "./application-submitted";
+import {
+  writeApplicationSubmitted,
+  writeStaffNewClientQueue,
+} from "./application-submitted";
 import { isImportStaffOpenStamp, isPortalNewClientBadge } from "./questionnaire-new";
 import {
   appendStaffDocument,
@@ -519,8 +522,8 @@ export async function updateCaseArchiveState(
 }
 
 /**
- * Staff «Заявка подана» — only for portal «Новый клиент» cases.
- * Returns { record, changed }. If not a new portal client, returns unchanged record.
+ * Staff «Заявка подана» — only for cases currently in the «Новый клиент» queue.
+ * Returns { record, changed }. If not a new client, returns unchanged record.
  */
 export async function markApplicationSubmittedByStaff(
   id: string,
@@ -539,6 +542,40 @@ export async function markApplicationSubmittedByStaff(
   });
   if (isFormgridImport(answers)) {
     answers = setFormgridNewClientQueue(answers, false);
+  }
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, changed: true };
+}
+
+/**
+ * Place any intake case into «Новые клиенты» until staff clicks «Заявка подана».
+ * Used for legacy CRM rows (and others) that should re-enter the new-client filter.
+ */
+export async function enqueueStaffNewClientByStaff(
+  id: string,
+  input: { queuedByUserId: string; queuedByName: string },
+): Promise<{ record: QuestionnaireRecord; changed: boolean }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  if (isCaseArchived(current.answers)) {
+    return { record: current, changed: false };
+  }
+  if (isPortalNewClientBadge(current)) {
+    return { record: current, changed: false };
+  }
+  const now = new Date().toISOString();
+  let answers = writeStaffNewClientQueue(current.answers, {
+    queuedAt: now,
+    queuedByUserId: input.queuedByUserId,
+    queuedByName: input.queuedByName,
+  });
+  if (isFormgridImport(answers)) {
+    answers = setFormgridNewClientQueue(answers, true);
   }
   const record = await upsertQuestionnaire({
     ...current,

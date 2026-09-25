@@ -1075,6 +1075,28 @@
   cursor: not-allowed;
 }
 
+.enqueueNewClientBtn {
+  border: 1px solid rgba(234, 179, 8, 0.55);
+  background: transparent;
+  color: #eab308;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.enqueueNewClientBtn:hover:not(:disabled) {
+  background: rgba(234, 179, 8, 0.12);
+}
+
+.enqueueNewClientBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .reviewInput {
   width: 100%;
   box-sizing: border-box;
@@ -1608,6 +1630,7 @@
 
   .saveBtn,
   .applicationSubmittedBtn,
+  .enqueueNewClientBtn,
   .archiveBtn,
   .deleteCaseBtn {
     width: 100%;

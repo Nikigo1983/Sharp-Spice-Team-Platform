@@ -11,6 +11,7 @@ import {
   isCaseArchived,
   listSubmittedForStaff,
   markApplicationSubmittedByStaff,
+  enqueueStaffNewClientByStaff,
   markQuestionnaireOpenedByStaff,
   readProcessStatus,
   readStaffDocuments,
@@ -307,6 +308,7 @@ export async function PATCH(request: Request) {
     staffFields?: Partial<QuestionnaireStaffFields>;
     archived?: boolean;
     applicationSubmitted?: boolean;
+    newClientQueue?: boolean;
     legacySheet?: Record<string, string>;
     crmOpsSheet?: Record<string, string>;
     answerFields?: Record<string, string>;
@@ -325,6 +327,18 @@ export async function PATCH(request: Request) {
           submittedByName: session.name,
         },
       );
+      return NextResponse.json({
+        item: toListItem(record),
+        staffFields: readStaffFields(record.answers),
+        changed,
+      });
+    }
+
+    if (body.newClientQueue === true) {
+      const { record, changed } = await enqueueStaffNewClientByStaff(body.id, {
+        queuedByUserId: session.id,
+        queuedByName: session.name,
+      });
       return NextResponse.json({
         item: toListItem(record),
         staffFields: readStaffFields(record.answers),

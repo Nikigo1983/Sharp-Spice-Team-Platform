@@ -1,5 +1,8 @@
 import { isCaseArchived } from "@/lib/client-portal/case-archive";
-import { isApplicationSubmitted } from "@/lib/client-portal/application-submitted";
+import {
+  isApplicationSubmitted,
+  isStaffNewClientQueue,
+} from "@/lib/client-portal/application-submitted";
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import {
   FORMGRID_IMPORT_KEY,
@@ -69,15 +72,18 @@ export function isImportStaffOpenStamp(record: {
 }
 
 /**
- * Yellow «Новый клиент» badge:
+ * Yellow «Новый клиент» badge / «Новые клиенты» filter:
  * - portal Emigrant submissions until «Заявка подана»
  * - Formgrid cases flagged newClientQueue until «Заявка подана»
+ * - any case staff explicitly placed into the new-client queue
+ *   (e.g. legacy CRM) until «Заявка подана»
  */
 export function isPortalNewClientBadge(record: {
   answers: Record<string, unknown>;
 }): boolean {
   if (isCaseArchived(record.answers)) return false;
   if (isApplicationSubmitted(record.answers)) return false;
+  if (isStaffNewClientQueue(record.answers)) return true;
   const source = resolveIntakeClientSource(record.answers);
   if (source === "portal") return true;
   if (source === "formgrid") return isFormgridNewClientQueue(record.answers);

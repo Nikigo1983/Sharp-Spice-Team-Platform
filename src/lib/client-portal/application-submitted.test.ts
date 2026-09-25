@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import {
   isApplicationSubmitted,
+  isStaffNewClientQueue,
   writeApplicationSubmitted,
+  writeStaffNewClientQueue,
 } from "./application-submitted";
 import {
   FORMGRID_IMPORT_KEY,
@@ -65,7 +67,7 @@ describe("application submitted / portal new badge", () => {
     assert.equal(isPortalNewClientBadge(submitted), false);
   });
 
-  it("does not treat legacy as portal new", () => {
+  it("does not treat bare legacy as portal new", () => {
     assert.equal(
       isPortalNewClientBadge({
         answers: {
@@ -77,5 +79,53 @@ describe("application submitted / portal new badge", () => {
       }),
       false,
     );
+  });
+
+  it("badges legacy after staff places into new-client queue", () => {
+    const legacy = {
+      [LEGACY_IMPORT_KEY]: {
+        source: "croatia_external",
+        importedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    assert.equal(isPortalNewClientBadge({ answers: legacy }), false);
+
+    const queued = writeStaffNewClientQueue(legacy, {
+      queuedAt: "2026-09-25T12:00:00.000Z",
+      queuedByUserId: "u1",
+      queuedByName: "Manager",
+    });
+    assert.equal(isStaffNewClientQueue(queued), true);
+    assert.equal(isPortalNewClientBadge({ answers: queued }), true);
+
+    const submitted = writeApplicationSubmitted(queued, {
+      submittedAt: "2026-09-25T13:00:00.000Z",
+      submittedByUserId: "u1",
+      submittedByName: "Manager",
+    });
+    assert.equal(isStaffNewClientQueue(submitted), false);
+    assert.equal(isApplicationSubmitted(submitted), true);
+    assert.equal(isPortalNewClientBadge({ answers: submitted }), false);
+  });
+
+  it("re-queue clears prior application submitted stamp", () => {
+    const submitted = writeApplicationSubmitted(
+      { full_name_cyrillic: "Иванова" },
+      {
+        submittedAt: "2026-09-24T10:00:00.000Z",
+        submittedByUserId: "u1",
+        submittedByName: "Manager",
+      },
+    );
+    assert.equal(isApplicationSubmitted(submitted), true);
+
+    const requeued = writeStaffNewClientQueue(submitted, {
+      queuedAt: "2026-09-25T12:00:00.000Z",
+      queuedByUserId: "u1",
+      queuedByName: "Manager",
+    });
+    assert.equal(isApplicationSubmitted(requeued), false);
+    assert.equal(isStaffNewClientQueue(requeued), true);
+    assert.equal(isPortalNewClientBadge({ answers: requeued }), true);
   });
 });

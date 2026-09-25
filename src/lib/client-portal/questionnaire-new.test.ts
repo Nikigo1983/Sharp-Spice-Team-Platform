@@ -28,7 +28,7 @@ describe("questionnaire-new", () => {
     assert.equal(isQuestionnaireNewForStaff(unopened), true);
   });
 
-  it("never badges legacy; formgrid only with queue flag", () => {
+  it("never badges bare legacy; formgrid only with queue flag", () => {
     assert.equal(
       isPortalNewClientBadge({
         answers: {
@@ -58,6 +58,26 @@ describe("questionnaire-new", () => {
             source: "formgrid",
             importedAt: "2026-09-23T10:00:00.000Z",
             newClientQueue: true,
+          },
+        },
+      }),
+      true,
+    );
+  });
+
+  it("badges staff-queued legacy like Ivanova", () => {
+    assert.equal(
+      isPortalNewClientBadge({
+        answers: {
+          [LEGACY_IMPORT_KEY]: {
+            source: "croatia_external",
+            importedAt: "2026-01-01T00:00:00.000Z",
+          },
+          __staffNewClientQueue: {
+            queued: true,
+            queuedAt: "2026-09-25T12:00:00.000Z",
+            queuedByUserId: "u1",
+            queuedByName: "Manager",
           },
         },
       }),

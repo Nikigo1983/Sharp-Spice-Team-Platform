@@ -5,7 +5,7 @@
 
 import {
   createClientRef,
-  isQuestionnaireUuid,
+  isCanonicalQuestionnaireId,
   type ClientRef,
   type ClientResolutionOutcome,
 } from "@/lib/ai/client-ref";
@@ -66,12 +66,12 @@ function clientIdFromResolved(
   if (isMergedClientContext(client)) {
     for (const part of client.parts) {
       const id = part.debugRow?.id?.trim();
-      if (id && isQuestionnaireUuid(id)) return id;
+      if (id && isCanonicalQuestionnaireId(id)) return id;
     }
     return null;
   }
   const id = client.debugRow?.id?.trim() || null;
-  return id && isQuestionnaireUuid(id) ? id : null;
+  return id && isCanonicalQuestionnaireId(id) ? id : null;
 }
 
 export function clientRefFromResolved(

@@ -1,7 +1,7 @@
 /**
  * Canonical AI ClientRef (Phase 1).
- * Identity = questionnaire UUID from client_portal_questionnaires.
- * Names are search input only — never canonical identity.
+ * Identity = client_portal_questionnaires.id (invite UUID or stable portal
+ * import PK). Names are search input only - never canonical identity.
  */
 
 export type ClientResolutionOutcome =
@@ -13,7 +13,7 @@ export type ClientResolutionOutcome =
   | "UNAUTHORIZED";
 
 export type ClientRef = {
-  /** Canonical questionnaire UUID. */
+  /** Canonical questionnaire id (portal PK). */
   clientId: string;
   /** Safe UI / prompt label (display name). Not identity. */
   displayLabel?: string | null;
@@ -21,11 +21,28 @@ export type ClientRef = {
   source: "client_portal";
 };
 
+/** RFC 4122 UUID (invite / native portal questionnaires). */
 export function isQuestionnaireUuid(value: string | null | undefined): boolean {
   const id = value?.trim() ?? "";
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     id,
   );
+}
+
+/**
+ * Stable client_portal_questionnaires.id values that may be locked as ClientRef.
+ * Includes invite UUIDs and Formgrid/legacy CRM import PKs (the actual row id
+ * Finance uses as clientExternalId). Rejects sheet row ids, passports, names.
+ */
+export function isCanonicalQuestionnaireId(
+  value: string | null | undefined,
+): boolean {
+  const id = value?.trim() ?? "";
+  if (!id) return false;
+  if (isQuestionnaireUuid(id)) return true;
+  if (/^formgrid-q-[a-f0-9]+$/i.test(id)) return true;
+  if (/^legacy-q-[a-f0-9]+$/i.test(id)) return true;
+  return false;
 }
 
 export function createClientRef(params: {
@@ -34,7 +51,7 @@ export function createClientRef(params: {
   resolutionOutcome?: ClientResolutionOutcome;
 }): ClientRef | null {
   const clientId = params.clientId.trim();
-  if (!isQuestionnaireUuid(clientId)) return null;
+  if (!isCanonicalQuestionnaireId(clientId)) return null;
   return {
     clientId,
     displayLabel: params.displayLabel?.trim() || null,

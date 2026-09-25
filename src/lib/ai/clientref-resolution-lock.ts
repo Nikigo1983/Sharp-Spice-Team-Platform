@@ -6,7 +6,7 @@ import "server-only";
 
 import {
   createClientRef,
-  isQuestionnaireUuid,
+  isCanonicalQuestionnaireId,
   type ClientRef,
 } from "@/lib/ai/client-ref";
 import {
@@ -42,8 +42,10 @@ export function commitUniqueClientResolution(params: {
     ...params.ref,
     resolutionOutcome: "RESOLVED_LOCKED",
   };
-  if (!isQuestionnaireUuid(next.clientId)) {
-    throw new Error("commitUniqueClientResolution requires questionnaire UUID");
+  if (!isCanonicalQuestionnaireId(next.clientId)) {
+    throw new Error(
+      "commitUniqueClientResolution requires canonical questionnaire id",
+    );
   }
 
   const previous = clientRefFromCaseMemory(params.memory);
@@ -92,7 +94,7 @@ export function lockCaseMemoryFromUniqueResolvedClient(params: {
   switched: boolean;
 } {
   const ref = params.ref ?? null;
-  if (!ref || !isQuestionnaireUuid(ref.clientId)) {
+  if (!ref || !isCanonicalQuestionnaireId(ref.clientId)) {
     return {
       memory: params.memory ?? null,
       clientRef: null,
@@ -130,7 +132,7 @@ export async function persistDurableClientRefIdentity(params: {
   const userId = params.userId?.trim();
   const chatId = params.chatId?.trim();
   if (!userId || !chatId) return false;
-  if (!isQuestionnaireUuid(params.ref.clientId)) return false;
+  if (!isCanonicalQuestionnaireId(params.ref.clientId)) return false;
 
   const current = await getWorkspaceChatMemory(userId, chatId);
   const locked = lockClientRefIntoCaseMemory(current.caseMemory, {
@@ -202,7 +204,7 @@ export function clientRefFromAgentToolResults(
             : typeof row.id === "string"
               ? row.id.trim()
               : "";
-        if (isQuestionnaireUuid(id)) {
+        if (isCanonicalQuestionnaireId(id)) {
           getClientIds.push(id);
           const label =
             typeof row.displayName === "string"
@@ -225,7 +227,7 @@ export function clientRefFromAgentToolResults(
         .map((m) => {
           if (!m || typeof m !== "object") return null;
           const id = (m as { clientId?: string }).clientId?.trim() ?? "";
-          return isQuestionnaireUuid(id) ? id : null;
+          return isCanonicalQuestionnaireId(id) ? id : null;
         })
         .filter((id): id is string => Boolean(id));
       if (uuids.length === 1) {

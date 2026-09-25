@@ -271,7 +271,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [savingReview, setSavingReview] = useState(false);
   const [markingApplicationSubmitted, setMarkingApplicationSubmitted] =
     useState(false);
-  const [enqueueingNewClient, setEnqueueingNewClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1014,68 +1013,6 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
   }
 
-  async function enqueueNewClient() {
-    if (!selectedId) return;
-    const selected = items.find((row) => row.id === selectedId);
-    if (!selected || selected.isNew) {
-      setStatus(null);
-      return;
-    }
-    const name = clientName(selected);
-    const confirmed = window.confirm(
-      [
-        "Поместить клиента в «Новые клиенты»?",
-        "",
-        `«${name}» появится в фильтре «Новые клиенты» и получит статус «Новый клиент», пока вы не отметите «Заявка подана».`,
-        "",
-        "Продолжить?",
-      ].join("\n"),
-    );
-    if (!confirmed) return;
-    setEnqueueingNewClient(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const res = await fetch("/api/client-cases", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: selectedId,
-          newClientQueue: true,
-        }),
-      });
-      const data = (await res.json()) as {
-        item?: ListItem;
-        changed?: boolean;
-        error?: string;
-      };
-      if (!res.ok || !data.item) {
-        setError("Не удалось поместить клиента в «Новые клиенты».");
-        return;
-      }
-      setItems((prev) =>
-        prev.map((row) =>
-          row.id === data.item!.id
-            ? {
-                ...row,
-                ...data.item,
-                isNew: true,
-                staffFields: data.item!.staffFields ?? row.staffFields,
-              }
-            : row,
-        ),
-      );
-      if (data.changed) {
-        setStatus("Клиент помещён в фильтр «Новые клиенты».");
-        setClientSource("new");
-      } else {
-        setStatus("Клиент уже в «Новых клиентах».");
-      }
-    } finally {
-      setEnqueueingNewClient(false);
-    }
-  }
-
   async function saveProcessStatus() {
     if (!selectedId || !processStatusDraft.trim()) return;
     setSavingProcessStatus(true);
@@ -1630,45 +1567,29 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                   Можно изменить поля и нажать «Сохранить».
                 </p>
                 <div className={styles.reviewToolbarActions}>
-                  {items.find((row) => row.id === selectedId)?.isNew ? (
-                    <button
-                      type="button"
-                      className={styles.applicationSubmittedBtn}
-                      disabled={
-                        markingApplicationSubmitted ||
-                        enqueueingNewClient ||
-                        savingReview
-                      }
-                      title="Убрать статус «Новый клиент»"
-                      onClick={() => void markApplicationSubmitted()}
-                    >
-                      {markingApplicationSubmitted
-                        ? "…"
-                        : "Заявка подана"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.enqueueNewClientBtn}
-                      disabled={
-                        enqueueingNewClient ||
-                        markingApplicationSubmitted ||
-                        savingReview
-                      }
-                      title="Поместить в фильтр «Новые клиенты»"
-                      onClick={() => void enqueueNewClient()}
-                    >
-                      {enqueueingNewClient ? "…" : "В новые клиенты"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={styles.applicationSubmittedBtn}
+                    disabled={
+                      markingApplicationSubmitted ||
+                      savingReview ||
+                      !items.find((row) => row.id === selectedId)?.isNew
+                    }
+                    title={
+                      items.find((row) => row.id === selectedId)?.isNew
+                        ? "Убрать статус «Новый клиент»"
+                        : "Доступно только для новых клиентов"
+                    }
+                    onClick={() => void markApplicationSubmitted()}
+                  >
+                    {markingApplicationSubmitted
+                      ? "…"
+                      : "Заявка подана"}
+                  </button>
                   <button
                     type="button"
                     className={styles.saveBtn}
-                    disabled={
-                      savingReview ||
-                      markingApplicationSubmitted ||
-                      enqueueingNewClient
-                    }
+                    disabled={savingReview || markingApplicationSubmitted}
                     onClick={() => void saveReviewEdits()}
                   >
                     {savingReview ? "Сохранение…" : "Сохранить"}

@@ -780,6 +780,27 @@ export async function prepareWorkspaceRequest(
 
   // Phase 1: CurrentTask + ClientRef lock + follow-up transform short-circuit.
   const lockedClientRef = clientRefFromCaseMemory(caseMemory);
+  {
+    const isFollowUpTurn = Math.floor(history.length / 2) + 1 > 1;
+    logClientRefLifecycleTrace({
+      checkpoint: "SERVER_PREPARE_INPUT_CLIENTREF",
+      requestId,
+      turn: Math.floor(history.length / 2) + 1,
+      hasClientRef: Boolean(lockedClientRef),
+      clientId: lockedClientRef?.clientId ?? null,
+      uiTransition: "prepare_entry",
+    });
+    if (isFollowUpTurn) {
+      logClientRefLifecycleTrace({
+        checkpoint: "TURN2_PREPARE_LOCKED_CLIENTREF",
+        requestId,
+        turn: Math.floor(history.length / 2) + 1,
+        hasClientRef: Boolean(lockedClientRef),
+        clientId: lockedClientRef?.clientId ?? null,
+        uiTransition: "prepare_entry",
+      });
+    }
+  }
   const transformPlan = planFollowUpTransform({
     query: trimmed,
     history: recentHistory,
@@ -913,6 +934,14 @@ export async function prepareWorkspaceRequest(
   if (pronounDebtFollowUp && !lockedClientRef && !financeDebtNameHint) {
     const reply =
       "Не выбран клиент для уточнения долга. Укажите ФИО или сначала найдите клиента, затем спросите про долг.";
+    logClientRefLifecycleTrace({
+      checkpoint: "TURN2_PRONOUN_DEBT_GATE_CLIENTREF",
+      requestId,
+      turn: Math.floor(history.length / 2) + 1,
+      hasClientRef: false,
+      clientId: null,
+      uiTransition: "finance_client_debt_missing_lock",
+    });
     trace.selectedRoutes = ["finance_client_debt_missing_lock"];
     markTraceDirect(trace, "NOT_FOUND");
     trace.responseOk = true;
@@ -929,6 +958,16 @@ export async function prepareWorkspaceRequest(
   }
 
   if (financeDebtNameHint || lockedDebtStatusAsk) {
+    if (pronounDebtFollowUp) {
+      logClientRefLifecycleTrace({
+        checkpoint: "TURN2_PRONOUN_DEBT_GATE_CLIENTREF",
+        requestId,
+        turn: Math.floor(history.length / 2) + 1,
+        hasClientRef: Boolean(lockedClientRef),
+        clientId: lockedClientRef?.clientId ?? null,
+        uiTransition: "finance_pronoun_debt_gate_pass",
+      });
+    }
     try {
       const hint = financeDebtNameHint;
       const resolvedDebt = await resolveClientFn({
@@ -1669,7 +1708,7 @@ export async function prepareWorkspaceRequest(
         }
         const lockedAtAgentEntry = clientRefFromCaseMemory(caseMemory);
         logClientRefLifecycleTrace({
-          checkpoint: "SERVER_RESOLVED_CLIENTREF",
+          checkpoint: "SERVER_AFTER_UNIQUE_RESOLUTION",
           requestId,
           hasClientRef: Boolean(lockedAtAgentEntry),
           clientId: lockedAtAgentEntry?.clientId ?? null,
@@ -1851,7 +1890,7 @@ export async function prepareWorkspaceRequest(
   {
     const lockedNow = clientRefFromCaseMemory(caseMemory);
     logClientRefLifecycleTrace({
-      checkpoint: "SERVER_RESOLVED_CLIENTREF",
+      checkpoint: "SERVER_AFTER_UNIQUE_RESOLUTION",
       requestId,
       hasClientRef: Boolean(lockedNow),
       clientId: lockedNow?.clientId ?? null,

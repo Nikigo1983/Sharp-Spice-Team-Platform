@@ -608,6 +608,15 @@ export function AiWorkspaceView() {
             streamSummaryThrough = meta.summaryThroughMessageCount;
           }
           if (meta.caseMemory !== undefined) {
+            logClientRefLifecycleBrowserTrace({
+              checkpoint: "UI_SSE_META_RECEIVED_CLIENTREF",
+              requestId: meta.requestId ?? null,
+              hasClientRef: Boolean(
+                clientRefFromCaseMemory(meta.caseMemory ?? null),
+              ),
+              sseEvent: "meta",
+              uiTransition: "sse_meta_case_memory_key_present",
+            });
             streamCaseMemory = reduceWorkspaceAiSseCaseMemory(
               streamCaseMemory,
               event,
@@ -616,16 +625,25 @@ export function AiWorkspaceView() {
             // Live ClientRef: available to next send() before persistChat.
             if (streamCaseMemory !== undefined) {
               commitCaseMemory(streamCaseMemory);
+              logClientRefLifecycleBrowserTrace({
+                checkpoint: "UI_AFTER_COMMIT_CASEMEMORY",
+                requestId: meta.requestId ?? null,
+                hasClientRef: Boolean(
+                  clientRefFromCaseMemory(streamCaseMemory ?? null),
+                ),
+                sseEvent: "meta",
+                uiTransition: "commit_case_memory",
+              });
+              logClientRefLifecycleBrowserTrace({
+                checkpoint: "UI_LIVE_REF_AFTER_META",
+                requestId: meta.requestId ?? null,
+                hasClientRef: Boolean(
+                  clientRefFromCaseMemory(caseMemoryLiveRef.current.get()),
+                ),
+                sseEvent: "meta",
+                uiTransition: "live_ref_after_commit",
+              });
             }
-            logClientRefLifecycleBrowserTrace({
-              checkpoint: "UI_CLIENTREF_AFTER_META",
-              requestId: meta.requestId ?? null,
-              hasClientRef: Boolean(
-                clientRefFromCaseMemory(streamCaseMemory ?? null),
-              ),
-              sseEvent: "meta",
-              uiTransition: "live_case_memory_before_persist",
-            });
           }
 
           if (meta.needsClientSelection && meta.pendingClientCandidates) {
@@ -689,7 +707,7 @@ export function AiWorkspaceView() {
     if (streamCaseMemory !== undefined) {
       commitCaseMemory(streamCaseMemory);
       logClientRefLifecycleBrowserTrace({
-        checkpoint: "UI_CLIENTREF_AFTER_STREAM_COMPLETE",
+        checkpoint: "UI_AFTER_STREAM_COMPLETE_CLIENTREF",
         hasClientRef: Boolean(
           clientRefFromCaseMemory(streamCaseMemory ?? null),
         ),
@@ -745,6 +763,13 @@ export function AiWorkspaceView() {
       void persistChat(chatId, nextHistory);
       const listContinuation = resolveClientListContinuationFromHistory(history, trimmed);
       const liveCaseMemory = caseMemoryLiveRef.current.get();
+      const turn = Math.floor(history.length / 2) + 1;
+      logClientRefLifecycleBrowserTrace({
+        checkpoint: "UI_BEFORE_TURN2_SERIALIZE_CLIENTREF",
+        turn,
+        hasClientRef: Boolean(clientRefFromCaseMemory(liveCaseMemory)),
+        uiTransition: "read_live_case_memory_ref",
+      });
       const requestBody = buildWorkspaceAiTurnRequestBody({
         message: trimmed,
         history: clipHistoryTurnsForModel(
@@ -760,8 +785,8 @@ export function AiWorkspaceView() {
         clientListContinuation: listContinuation ?? undefined,
       });
       logClientRefLifecycleBrowserTrace({
-        checkpoint: "TURN2_POST_CLIENTREF",
-        turn: Math.floor(history.length / 2) + 1,
+        checkpoint: "UI_TURN2_BODY_CLIENTREF",
+        turn,
         hasClientRef: Boolean(clientRefFromCaseMemory(liveCaseMemory)),
         uiTransition: "build_from_live_case_memory_ref",
       });

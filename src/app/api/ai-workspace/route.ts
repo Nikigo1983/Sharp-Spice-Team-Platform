@@ -72,6 +72,30 @@ async function handlePost(request: Request) {
       ? body.chatId.trim()
       : null;
   const requestCaseMemory = sanitizeCaseMemory(body.caseMemory ?? null);
+  const bodyRef = clientRefFromCaseMemory(requestCaseMemory);
+  const historyTurnCount = Array.isArray(history) ? history.length : 0;
+  const turnNumber = Math.floor(historyTurnCount / 2) + 1;
+  const isFollowUpTurn = turnNumber > 1;
+
+  logClientRefLifecycleTrace({
+    checkpoint: "SERVER_REQUEST_BODY_CLIENTREF",
+    requestId,
+    turn: turnNumber,
+    hasClientRef: Boolean(bodyRef),
+    clientId: bodyRef?.clientId ?? null,
+    uiTransition: "request_body_case_memory",
+  });
+  if (isFollowUpTurn) {
+    logClientRefLifecycleTrace({
+      checkpoint: "TURN2_SERVER_REQUEST_CLIENTREF",
+      requestId,
+      turn: turnNumber,
+      hasClientRef: Boolean(bodyRef),
+      clientId: bodyRef?.clientId ?? null,
+      uiTransition: "request_body_case_memory",
+    });
+  }
+
   const resolvedMemory = await resolveCaseMemoryForWorkspaceRequest({
     userId: session.id,
     chatId,
@@ -79,10 +103,9 @@ async function handlePost(request: Request) {
   });
   const caseMemory = resolvedMemory.caseMemory;
   const inboundRef = clientRefFromCaseMemory(caseMemory);
-  const historyTurnCount = Array.isArray(history) ? history.length : 0;
-  const turnNumber = Math.floor(historyTurnCount / 2) + 1;
+
   logClientRefLifecycleTrace({
-    checkpoint: "SERVER_TURN_RECEIVED_CLIENTREF",
+    checkpoint: "SERVER_AFTER_CASEMEMORY_RECOVERY",
     requestId,
     turn: turnNumber,
     hasClientRef: Boolean(inboundRef),
@@ -91,6 +114,18 @@ async function handlePost(request: Request) {
       ? "durable_chat_recovery"
       : "request_body_case_memory",
   });
+  if (isFollowUpTurn) {
+    logClientRefLifecycleTrace({
+      checkpoint: "TURN2_AFTER_RECOVERY_CLIENTREF",
+      requestId,
+      turn: turnNumber,
+      hasClientRef: Boolean(inboundRef),
+      clientId: inboundRef?.clientId ?? null,
+      uiTransition: resolvedMemory.recoveredFromDurable
+        ? "durable_chat_recovery"
+        : "request_body_case_memory",
+    });
+  }
   // Always pass session identity so internal agent eligibility can be evaluated
   // even when conversation memory (chatId) is not attached yet.
   const memoryContext = {
@@ -106,6 +141,7 @@ async function handlePost(request: Request) {
     const disconnect = new AbortController();
     const deadline = createAiDeadline(AbortSignal.any([request.signal, disconnect.signal]));
     let cancelled = false;
+    let sseCaseMemoryMetaCount = 0;
     const readable = new ReadableStream({
       async start(controller) {
         return withAiRequestScope(deadline.signal, async () => {
@@ -167,13 +203,18 @@ async function handlePost(request: Request) {
               chunk.caseMemory !== undefined ? chunk.caseMemory : null,
             );
             if (chunk.caseMemory !== undefined) {
+              sseCaseMemoryMetaCount += 1;
+              const isFirst = sseCaseMemoryMetaCount === 1;
               logClientRefLifecycleTrace({
-                checkpoint: "SSE_CLIENTREF_EMITTED",
+                checkpoint: isFirst
+                  ? "SERVER_BEFORE_FIRST_SSE_CLIENTREF"
+                  : "SERVER_FINAL_SSE_CLIENTREF",
                 requestId,
                 turn: turnNumber,
                 hasClientRef: Boolean(emittedRef),
                 clientId: emittedRef?.clientId ?? null,
                 sseEvent: "meta",
+                uiTransition: isFirst ? "first_case_memory_meta" : "later_case_memory_meta",
               });
             }
             controller.enqueue(

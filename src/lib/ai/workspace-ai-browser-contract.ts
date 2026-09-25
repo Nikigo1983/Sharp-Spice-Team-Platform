@@ -245,6 +245,23 @@ export function caseMemoryHasClientRef(
 }
 
 export type ClientRefLifecycleCheckpoint =
+  | "SERVER_REQUEST_BODY_CLIENTREF"
+  | "SERVER_AFTER_CASEMEMORY_RECOVERY"
+  | "SERVER_PREPARE_INPUT_CLIENTREF"
+  | "SERVER_AFTER_UNIQUE_RESOLUTION"
+  | "SERVER_BEFORE_FIRST_SSE_CLIENTREF"
+  | "SERVER_FINAL_SSE_CLIENTREF"
+  | "UI_SSE_META_RECEIVED_CLIENTREF"
+  | "UI_AFTER_COMMIT_CASEMEMORY"
+  | "UI_LIVE_REF_AFTER_META"
+  | "UI_AFTER_STREAM_COMPLETE_CLIENTREF"
+  | "UI_BEFORE_TURN2_SERIALIZE_CLIENTREF"
+  | "UI_TURN2_BODY_CLIENTREF"
+  | "TURN2_SERVER_REQUEST_CLIENTREF"
+  | "TURN2_AFTER_RECOVERY_CLIENTREF"
+  | "TURN2_PREPARE_LOCKED_CLIENTREF"
+  | "TURN2_PRONOUN_DEBT_GATE_CLIENTREF"
+  // Legacy aliases (still logged by older call sites during migration)
   | "SERVER_RESOLVED_CLIENTREF"
   | "SSE_CLIENTREF_EMITTED"
   | "SERVER_TURN_RECEIVED_CLIENTREF"
@@ -252,9 +269,22 @@ export type ClientRefLifecycleCheckpoint =
   | "UI_CLIENTREF_AFTER_STREAM_COMPLETE"
   | "TURN2_POST_CLIENTREF";
 
-/** Browser console traces — hard-disabled after diagnostic pass. */
+/**
+ * Preview-only browser ClientRef lifecycle tracing.
+ * Requires non-production deploy context AND explicit public flag.
+ * NEXT_PUBLIC_VERCEL_ENV=production can never enable.
+ */
 export function isClientRefLifecycleBrowserTraceEnabled(): boolean {
-  return false;
+  if (process.env.NEXT_PUBLIC_VERCEL_ENV === "production") return false;
+  const nonProdDeploy =
+    process.env.NEXT_PUBLIC_VERCEL_ENV === "preview" ||
+    process.env.NEXT_PUBLIC_VERCEL_ENV === "development" ||
+    (!process.env.NEXT_PUBLIC_VERCEL_ENV &&
+      process.env.NODE_ENV !== "production");
+  return (
+    nonProdDeploy &&
+    process.env.NEXT_PUBLIC_AI_CLIENTREF_LIFECYCLE_TRACE === "1"
+  );
 }
 
 export function logClientRefLifecycleBrowserTrace(params: {
@@ -272,6 +302,7 @@ export function logClientRefLifecycleBrowserTrace(params: {
     requestId: params.requestId ?? null,
     turn: params.turn ?? null,
     hasClientRef: params.hasClientRef,
+    clientRefPresence: params.hasClientRef ? "PRESENT" : "ABSENT",
     sseEvent: params.sseEvent ?? null,
     uiTransition: params.uiTransition ?? null,
   });

@@ -644,6 +644,10 @@
 }
 
 .caseMenuTitle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 1.08rem;
   font-weight: 650;
   color: #fff;
@@ -1400,6 +1404,13 @@
   margin: 0;
   white-space: pre-wrap;
   color: rgba(255, 255, 255, 0.88);
+}
+
+.noteActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
 }
 
 .docDelete {

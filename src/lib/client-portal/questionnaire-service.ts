@@ -86,8 +86,10 @@ import {
   readStaffDocuments,
   readStaffNotes,
   removeStaffDocument,
+  removeStaffNote,
   renameStaffDocument,
   staffDocumentsOwnerKey,
+  updateStaffNote,
   type StaffCaseDocument,
   type StaffCaseNote,
 } from "./staff-case-meta";
@@ -709,6 +711,47 @@ export async function addStaffCaseNote(
     revision: current.revision + 1,
   });
   return { record, note };
+}
+
+export async function updateStaffCaseNote(
+  id: string,
+  noteId: string,
+  text: string,
+): Promise<{ record: QuestionnaireRecord; notes: StaffCaseNote[] }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const nextAnswers = updateStaffNote(current.answers, noteId, text);
+  if (!nextAnswers) {
+    const trimmed = text.trim();
+    if (!trimmed) throw new Error("EMPTY_NOTE");
+    throw new Error("NOT_FOUND");
+  }
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: nextAnswers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, notes: readStaffNotes(record.answers) };
+}
+
+export async function deleteStaffCaseNote(
+  id: string,
+  noteId: string,
+): Promise<{ record: QuestionnaireRecord; notes: StaffCaseNote[] }> {
+  const current = await getSubmittedForStaff(id);
+  if (!current) throw new Error("NOT_FOUND");
+  const nextAnswers = removeStaffNote(current.answers, noteId);
+  if (!nextAnswers) throw new Error("NOT_FOUND");
+  const now = new Date().toISOString();
+  const record = await upsertQuestionnaire({
+    ...current,
+    answers: nextAnswers,
+    updatedAt: now,
+    revision: current.revision + 1,
+  });
+  return { record, notes: readStaffNotes(record.answers) };
 }
 
 export async function addStaffCaseDocument(

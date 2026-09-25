@@ -56,6 +56,8 @@ type ListItem = {
   vnzhCountryLabel?: string;
   isArchived?: boolean;
   staffFields?: QuestionnaireStaffFields;
+  notesCount?: number;
+  newNotesCount?: number;
 };
 
 type ClientSourceFilter = "" | "new";
@@ -254,6 +256,11 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
   const [savingProcessStatus, setSavingProcessStatus] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteDraft, setEditNoteDraft] = useState("");
+  const [savingNoteEdit, setSavingNoteEdit] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [selectedNewNotesCount, setSelectedNewNotesCount] = useState(0);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [ensuringWord, setEnsuringWord] = useState(false);
@@ -793,6 +800,8 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
       schemaTitle: string;
       review: ReviewRow[];
       notes?: StaffNote[];
+      notesCount?: number;
+      newNotesCount?: number;
       documents?: StaffDocument[];
       processStatus?: ProcessStatusState | null;
       processStatusOptions?: string[];
@@ -811,6 +820,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     }
     setReviewDraft(draft);
     setNotes(data.notes ?? []);
+    setSelectedNewNotesCount(Number(data.newNotesCount ?? 0));
+    setEditingNoteId(null);
+    setEditNoteDraft("");
     setDocuments(data.documents ?? []);
     setProcessStatus(data.processStatus ?? null);
     setProcessStatusDraft(data.processStatus?.value ?? "");
@@ -826,6 +838,9 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
     setReview([]);
     setReviewDraft({});
     setNotes([]);
+    setSelectedNewNotesCount(0);
+    setEditingNoteId(null);
+    setEditNoteDraft("");
     setDocuments([]);
     setProcessStatus(null);
     setProcessStatusDraft("");
@@ -1073,11 +1088,154 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
         setError("Не удалось сохранить комментарий.");
         return;
       }
-      setNotes(data.notes ?? []);
+      const nextNotes = data.notes ?? [];
+      setNotes(nextNotes);
       setNoteDraft("");
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === selectedId
+            ? { ...row, notesCount: nextNotes.length, newNotesCount: 0 }
+            : row,
+        ),
+      );
+      setSelectedNewNotesCount(0);
       setStatus("Комментарий добавлен");
+      void markNotesSeen(selectedId);
     } finally {
       setSavingNote(false);
+    }
+  }
+
+  function clearNewNotesBadge(id: string) {
+    setSelectedNewNotesCount(0);
+    setItems((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, newNotesCount: 0 } : row,
+      ),
+    );
+  }
+
+  async function markNotesSeen(questionnaireId: string) {
+    try {
+      await fetch("/api/client-cases/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId,
+          markSeen: true,
+        }),
+      });
+      clearNewNotesBadge(questionnaireId);
+    } catch {
+      // best-effort; badge can clear on next reload
+    }
+  }
+
+  function openNotesView() {
+    setCaseView("notes");
+    if (selectedId) {
+      void markNotesSeen(selectedId);
+    }
+  }
+
+  function startEditNote(note: StaffNote) {
+    setEditingNoteId(note.id);
+    setEditNoteDraft(note.text);
+    setError(null);
+    setStatus(null);
+  }
+
+  function cancelEditNote() {
+    setEditingNoteId(null);
+    setEditNoteDraft("");
+  }
+
+  async function saveEditNote() {
+    if (!selectedId || !editingNoteId) return;
+    const nextText = editNoteDraft.trim();
+    if (!nextText) {
+      setError("Введите текст комментария.");
+      return;
+    }
+    setSavingNoteEdit(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/client-cases/notes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionnaireId: selectedId,
+          noteId: editingNoteId,
+          text: nextText,
+        }),
+      });
+      const data = (await res.json()) as {
+        notes?: StaffNote[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(
+          data.error === "EMPTY_NOTE"
+            ? "Введите текст комментария."
+            : "Не удалось изменить комментарий.",
+        );
+        return;
+      }
+      setNotes(data.notes ?? []);
+      setEditingNoteId(null);
+      setEditNoteDraft("");
+      setStatus("Комментарий обновлён");
+    } finally {
+      setSavingNoteEdit(false);
+    }
+  }
+
+  async function removeNote(noteId: string) {
+    if (!selectedId) return;
+    const confirmed = window.confirm(
+      "Вы действительно хотите удалить этот комментарий?",
+    );
+    if (!confirmed) return;
+    setDeletingNoteId(noteId);
+    setError(null);
+    setStatus(null);
+    try {
+      const res = await fetch(
+        `/api/client-cases/notes?questionnaireId=${encodeURIComponent(selectedId)}&id=${encodeURIComponent(noteId)}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json()) as {
+        notes?: StaffNote[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError("Не удалось удалить комментарий.");
+        return;
+      }
+      const nextNotes = data.notes ?? [];
+      setNotes(nextNotes);
+      if (editingNoteId === noteId) {
+        setEditingNoteId(null);
+        setEditNoteDraft("");
+      }
+      setItems((prev) =>
+        prev.map((row) =>
+          row.id === selectedId
+            ? {
+                ...row,
+                notesCount: nextNotes.length,
+                newNotesCount: Math.min(
+                  row.newNotesCount ?? 0,
+                  nextNotes.length,
+                ),
+              }
+            : row,
+        ),
+      );
+      setStatus("Комментарий удалён");
+    } finally {
+      setDeletingNoteId(null);
     }
   }
 
@@ -1492,10 +1650,17 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
             <button
               type="button"
               className={styles.caseMenuCard}
-              onClick={() => setCaseView("notes")}
+              onClick={() => openNotesView()}
             >
               <span className={styles.caseMenuEyebrow}>Заметки</span>
-              <span className={styles.caseMenuTitle}>Комментарии</span>
+              <span className={styles.caseMenuTitle}>
+                Комментарии
+                {selectedNewNotesCount > 0 ? (
+                  <span className={styles.newBadge}>
+                    Новый · {selectedNewNotesCount}
+                  </span>
+                ) : null}
+              </span>
               <span className={styles.caseMenuHint}>
                 Внутренние комментарии сотрудников по клиенту
               </span>
@@ -1985,7 +2150,59 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                       <strong>{note.authorName}</strong>
                       <span>{formatSubmittedAt(note.createdAt)}</span>
                     </div>
-                    <p className={styles.noteText}>{note.text}</p>
+                    {editingNoteId === note.id ? (
+                      <>
+                        <textarea
+                          className={styles.noteInput}
+                          value={editNoteDraft}
+                          onChange={(event) =>
+                            setEditNoteDraft(event.target.value)
+                          }
+                          rows={3}
+                          aria-label="Редактировать комментарий"
+                          autoFocus
+                        />
+                        <div className={styles.noteActions}>
+                          <button
+                            type="button"
+                            className={styles.fileBtn}
+                            disabled={savingNoteEdit || !editNoteDraft.trim()}
+                            onClick={() => void saveEditNote()}
+                          >
+                            {savingNoteEdit ? "…" : "Сохранить"}
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            disabled={savingNoteEdit}
+                            onClick={cancelEditNote}
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className={styles.noteText}>{note.text}</p>
+                        <div className={styles.noteActions}>
+                          <button
+                            type="button"
+                            className={`${styles.fileBtn} ${styles.fileBtnSecondary}`}
+                            onClick={() => startEditNote(note)}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.docDelete}
+                            disabled={deletingNoteId === note.id}
+                            onClick={() => void removeNote(note.id)}
+                          >
+                            {deletingNoteId === note.id ? "…" : "Удалить"}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -2521,6 +2738,14 @@ export function ClientPortalIntakePanel({ initialCaseId = null }: Props) {
                         {name}
                         {item.isNew ? (
                           <span className={styles.newBadge}>Новый клиент</span>
+                        ) : null}
+                        {(item.newNotesCount ?? 0) > 0 ? (
+                          <span
+                            className={styles.newBadge}
+                            title="Новые комментарии"
+                          >
+                            {item.newNotesCount}
+                          </span>
                         ) : null}
                         {item.vnzhCountryLabel || item.vnzhCountry ? (
                           <span className={styles.countryBadge}>

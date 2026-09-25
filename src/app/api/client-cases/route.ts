@@ -37,6 +37,11 @@ import { formatCyrillicNameIof, surnameSortKey } from "@/lib/client-portal/perso
 import { resolveIntakeClientSource } from "@/lib/client-portal/client-source";
 import { pickLabel } from "@/lib/client-portal/questionnaire-types";
 import { PROCESS_STATUS_OPTIONS } from "@/lib/client-portal/process-status";
+import { countNewStaffNotes } from "@/lib/client-portal/staff-case-meta";
+import {
+  getStaffCaseNotesLastSeen,
+  getStaffCaseNotesLastSeenMap,
+} from "@/lib/client-portal/staff-notes-last-seen";
 import {
   resolveStaffCaseCountry,
   vnzhCountryLabelRu,
@@ -82,10 +87,15 @@ function staffFieldsForList(
   return staff;
 }
 
-function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number]) {
+function toListItem(
+  item: Awaited<ReturnType<typeof listSubmittedForStaff>>[number],
+  notesLastSeenAt?: string | null,
+  includeNewNotesCount = false,
+) {
   const identity = readLegacyIdentity(item.answers);
   const source = resolveIntakeClientSource(item.answers);
   const vnzhCountry = resolveStaffCaseCountry(item);
+  const notes = readStaffNotes(item.answers);
   const rawCyrillic =
     identity?.fullNameCyrillic ||
     String(item.answers.full_name_cyrillic ?? "").trim();
@@ -124,6 +134,12 @@ function toListItem(item: Awaited<ReturnType<typeof listSubmittedForStaff>>[numb
     isArchived: isCaseArchived(item.answers),
     staffFields: staffFieldsForList(item.answers),
     processStatus: readProcessStatus(item.answers, item.status),
+    notesCount: notes.length,
+    // Only when last-seen is provided (list/detail). Mutations omit it so
+    // the client keeps the existing per-user newNotesCount on merge.
+    ...(includeNewNotesCount
+      ? { newNotesCount: countNewStaffNotes(notes, notesLastSeenAt) }
+      : {}),
   };
 }
 
@@ -182,6 +198,11 @@ export async function GET(request: Request) {
       },
       financeAmounts,
     ).staffFields;
+    const notes = readStaffNotes(record.answers);
+    const notesLastSeenAt = await getStaffCaseNotesLastSeen(
+      session.id,
+      record.id,
+    );
     return NextResponse.json({
       schemaTitle: isLegacyCrmImport(record.answers) || isFormgridImport(record.answers)
         ? "Анкета клиента"
@@ -190,7 +211,9 @@ export async function GET(request: Request) {
           : pickLabel(getSchemaForRecord(record).title, "ru"),
       questionnaire: record,
       staffFields,
-      notes: readStaffNotes(record.answers),
+      notes,
+      notesCount: notes.length,
+      newNotesCount: countNewStaffNotes(notes, notesLastSeenAt),
       documents: readStaffDocuments(record.answers),
       processStatus: readProcessStatus(record.answers, record.status),
       processStatusOptions: PROCESS_STATUS_OPTIONS,
@@ -203,7 +226,10 @@ export async function GET(request: Request) {
     });
   }
 
-  const allRaw = (await listSubmittedForStaff()).map(toListItem);
+  const notesLastSeenMap = await getStaffCaseNotesLastSeenMap(session.id);
+  const allRaw = (await listSubmittedForStaff()).map((item) =>
+    toListItem(item, notesLastSeenMap[item.id] ?? null, true),
+  );
   const financeAmounts = await loadFinanceContractAmountLabels();
   const all = allRaw.map((item) =>
     applyFinanceContractAmount(item, financeAmounts),

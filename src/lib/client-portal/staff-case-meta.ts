@@ -93,6 +93,51 @@ export function appendStaffNote(
   };
 }
 
+export function updateStaffNote(
+  answers: Record<string, unknown>,
+  noteId: string,
+  text: string,
+): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const notes = readStaffNotes(answers);
+  const index = notes.findIndex((item) => item.id === noteId);
+  if (index < 0) return null;
+  const next = [...notes];
+  next[index] = { ...next[index]!, text: trimmed };
+  return {
+    ...answers,
+    [NOTES_KEY]: next,
+  };
+}
+
+export function removeStaffNote(
+  answers: Record<string, unknown>,
+  noteId: string,
+): Record<string, unknown> | null {
+  const notes = readStaffNotes(answers);
+  if (!notes.some((item) => item.id === noteId)) return null;
+  return {
+    ...answers,
+    [NOTES_KEY]: notes.filter((item) => item.id !== noteId),
+  };
+}
+
+/** Notes with createdAt strictly after lastSeenAt (or all if never seen). */
+export function countNewStaffNotes(
+  notes: StaffCaseNote[],
+  lastSeenAt: string | null | undefined,
+): number {
+  if (notes.length === 0) return 0;
+  if (!lastSeenAt?.trim()) return notes.length;
+  const seenMs = Date.parse(lastSeenAt);
+  if (!Number.isFinite(seenMs)) return notes.length;
+  return notes.filter((note) => {
+    const createdMs = Date.parse(note.createdAt);
+    return Number.isFinite(createdMs) && createdMs > seenMs;
+  }).length;
+}
+
 export function appendStaffDocument(
   answers: Record<string, unknown>,
   doc: StaffCaseDocument,

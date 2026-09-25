@@ -75,6 +75,50 @@ export function commitUniqueClientResolution(params: {
 }
 
 /**
+ * UNIQUE resolved portal client → lock questionnaire UUID into caseMemory.
+ * Call at every unique-resolution boundary and again immediately before
+ * returning kind:"ai" so ClientRef cannot stay unset while evidence is attached.
+ * AMBIGUOUS / NOT_FOUND / non-UUID contexts must not call this (ref is null).
+ */
+export function lockCaseMemoryFromUniqueResolvedClient(params: {
+  memory: WorkspaceCaseMemory | null | undefined;
+  ref: ClientRef | null | undefined;
+  /** Prior lock from this conversation (for explicit switch detection). */
+  previousRef?: ClientRef | null;
+}): {
+  memory: WorkspaceCaseMemory | null;
+  clientRef: ClientRef | null;
+  locked: boolean;
+  switched: boolean;
+} {
+  const ref = params.ref ?? null;
+  if (!ref || !isQuestionnaireUuid(ref.clientId)) {
+    return {
+      memory: params.memory ?? null,
+      clientRef: null,
+      locked: false,
+      switched: false,
+    };
+  }
+  const previous =
+    params.previousRef ?? clientRefFromCaseMemory(params.memory);
+  const committed = commitUniqueClientResolution({
+    memory: params.memory,
+    ref,
+    switchExplicit: Boolean(
+      previous && previous.clientId !== ref.clientId,
+    ),
+  });
+  return {
+    memory: committed.memory,
+    clientRef: committed.clientRef,
+    locked: committed.locked,
+    switched: committed.switched,
+  };
+}
+
+
+/**
  * Persist minimal identity only (linkedClientId + display label) into the
  * same store durable recovery reads (`getWorkspaceChatMemory`).
  */

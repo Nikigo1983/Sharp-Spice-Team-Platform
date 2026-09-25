@@ -41,6 +41,7 @@ import {
 import { createClientRef, type ClientRef } from "@/lib/ai/client-ref";
 import {
   commitUniqueClientResolution,
+  lockCaseMemoryFromUniqueResolvedClient,
   persistDurableClientRefIdentity,
   clientRefFromAgentToolMessages,
 } from "@/lib/ai/clientref-resolution-lock";
@@ -691,7 +692,16 @@ function buildDirectStructuredListResult(params: {
   };
 }
 
-async function prepareWorkspaceRequest(
+/** Test-only overrides for prepare-path ClientRef regressions. */
+export type PrepareWorkspaceRequestHooks = {
+  resolveClient?: typeof resolveClient;
+  lookupClientsWithAiSearch?: typeof lookupClientsWithAiSearch;
+  buildWorkspaceContext?: typeof buildWorkspaceContext;
+  assembleEvidencePack?: typeof assembleEvidencePack;
+};
+
+/** Exported for ClientRef prepare-path regressions (no production callers). */
+export async function prepareWorkspaceRequest(
   userMessage: string,
   history: WorkspaceChatTurn[],
   mode: WorkspaceResponseMode,
@@ -702,6 +712,7 @@ async function prepareWorkspaceRequest(
   caseMemory: WorkspaceCaseMemory | null = null,
   forceLegacy = false,
   actor: WorkspaceAgentActor | null = null,
+  hooks: PrepareWorkspaceRequestHooks = {},
 ): Promise<
   | { kind: "empty"; requestId: string; trace: WorkspaceAiTrace }
   | {
@@ -749,6 +760,11 @@ async function prepareWorkspaceRequest(
     }
 > {
   const started = Date.now();
+  const resolveClientFn = hooks.resolveClient ?? resolveClient;
+  const lookupClientsFn =
+    hooks.lookupClientsWithAiSearch ?? lookupClientsWithAiSearch;
+  const buildContextFn = hooks.buildWorkspaceContext ?? buildWorkspaceContext;
+  const assemblePackFn = hooks.assembleEvidencePack ?? assembleEvidencePack;
   const trace = createEmptyWorkspaceAiTrace(requestId);
   const recentHistory = selectRecentHistoryTurns(history);
   trace.historyTurnCount = history.length;
@@ -915,7 +931,7 @@ async function prepareWorkspaceRequest(
   if (financeDebtNameHint || lockedDebtStatusAsk) {
     try {
       const hint = financeDebtNameHint;
-      const resolvedDebt = await resolveClient({
+      const resolvedDebt = await resolveClientFn({
         query: trimmed,
         lockedClientRef,
         pendingCandidates: safePendingCandidates,
@@ -1081,7 +1097,7 @@ async function prepareWorkspaceRequest(
       const hint =
         extractClientNameFromLetterQuery(trimmed) ||
         resolveFinanceDebtNameHint(trimmed, history);
-      const resolvedLetter = await resolveClient({
+      const resolvedLetter = await resolveClientFn({
         query: trimmed,
         lockedClientRef,
         pendingCandidates: safePendingCandidates,
@@ -1267,18 +1283,21 @@ async function prepareWorkspaceRequest(
   if (followUp) {
     clientContext = followUpToClientContext(followUp);
     const selectedRef = clientRefFromResolved(clientContext);
-    if (
-      selectedRef &&
-      lockedClientRef &&
-      selectedRef.clientId !== lockedClientRef.clientId
-    ) {
-      const switched = commitUniqueClientResolution({
+    if (selectedRef) {
+      const locked = lockCaseMemoryFromUniqueResolvedClient({
         memory: caseMemory,
         ref: selectedRef,
-        switchExplicit: true,
+        previousRef: lockedClientRef,
       });
-      caseMemory = switched.memory;
-      trace.notes.push("client_ref_switched_via_selection");
+      caseMemory = locked.memory;
+      if (locked.locked) {
+        trace.clientRefPresent = true;
+        trace.notes.push(
+          locked.switched
+            ? "client_ref_switched_via_selection"
+            : "client_ref_locked_via_selection",
+        );
+      }
     }
   }
 
@@ -1302,7 +1321,7 @@ async function prepareWorkspaceRequest(
 
   if (needsClientResolve && !clientContext) {
     try {
-      const resolved = await resolveClient({
+      const resolved = await resolveClientFn({
         query: trimmed,
         lockedClientRef,
         pendingCandidates: safePendingCandidates,
@@ -1366,17 +1385,20 @@ async function prepareWorkspaceRequest(
 
   // List / structured search still uses lookup when no locked single client,
   // or when list intent / ambiguity needs candidate presentation.
+  // Include needsClientResolve so CLIENT_SUMMARY / taskRequiresClientRef still
+  // falls through to unique search after resolveClient NOT_FOUND/AMBIGUOUS.
   if (
     !clientContext &&
     !followUp &&
-    (intent.needsClients ||
+    (needsClientResolve ||
+      intent.needsClients ||
       intent.needsFormgrid ||
       intent.needsEmigrantDrive ||
       intent.fastClientLookup ||
       isDocFillIntent(trimmed))
   ) {
     try {
-      const aiSearch = await lookupClientsWithAiSearch(trimmed);
+      const aiSearch = await lookupClientsFn(trimmed);
       listAiSearch = aiSearch;
       const clientLookup = aiSearch.lookup;
       clientSearchIntentNote = formatClientSearchIntentForAi(aiSearch.intent);
@@ -1628,16 +1650,21 @@ async function prepareWorkspaceRequest(
       {
         // Agent path returns BEFORE the EvidencePack lock block below.
         // UNIQUE prepare-time resolve must still lock before SSE/model.
-        if (!clientRefFromCaseMemory(caseMemory) && clientContext) {
+        if (clientContext) {
           const fromCtx = clientRefFromResolved(clientContext, "RESOLVED");
-          if (fromCtx) {
-            const committed = commitUniqueClientResolution({
-              memory: caseMemory,
-              ref: fromCtx,
-            });
-            caseMemory = committed.memory;
+          const locked = lockCaseMemoryFromUniqueResolvedClient({
+            memory: caseMemory,
+            ref: fromCtx,
+            previousRef: clientRefFromCaseMemory(caseMemory) ?? lockedClientRef,
+          });
+          if (locked.locked) {
+            caseMemory = locked.memory;
             trace.clientRefPresent = true;
-            trace.notes.push("client_ref_locked_before_agent_exit");
+            trace.notes.push(
+              locked.switched
+                ? "client_ref_switched_before_agent_exit"
+                : "client_ref_locked_before_agent_exit",
+            );
           }
         }
         const lockedAtAgentEntry = clientRefFromCaseMemory(caseMemory);
@@ -1675,7 +1702,7 @@ async function prepareWorkspaceRequest(
   const contextStarted = Date.now();
   let context: Awaited<ReturnType<typeof buildWorkspaceContext>>;
   try {
-    context = await buildWorkspaceContext(trimmed, intent);
+    context = await buildContextFn(trimmed, intent);
   } catch (error) {
     console.error(`[workspace-ai][${requestId}] context build failed`, error);
     context = emptyContextBundle();
@@ -1806,13 +1833,20 @@ async function prepareWorkspaceRequest(
   }
   // Invariant: uniquely resolved ClientRef must be durable conversation state
   // for this request — not only an EvidencePack assembly input.
-  if (activeClientRef && !clientRefFromCaseMemory(caseMemory)) {
-    const committed = commitUniqueClientResolution({
+  {
+    const locked = lockCaseMemoryFromUniqueResolvedClient({
       memory: caseMemory,
       ref: activeClientRef,
+      previousRef: lockedClientRef,
     });
-    caseMemory = committed.memory;
-    trace.notes.push("client_ref_locked_from_active_context");
+    if (locked.locked) {
+      caseMemory = locked.memory;
+      trace.notes.push(
+        locked.switched
+          ? "client_ref_switched_from_active_context"
+          : "client_ref_locked_from_active_context",
+      );
+    }
   }
   {
     const lockedNow = clientRefFromCaseMemory(caseMemory);
@@ -1835,7 +1869,7 @@ async function prepareWorkspaceRequest(
 
   if (migratedClientModelPath && activeClientRef) {
     try {
-      const pack = await assembleEvidencePack({
+      const pack = await assemblePackFn({
         task: currentTask,
         clientRef: activeClientRef,
         freshnessClass:
@@ -2019,6 +2053,30 @@ async function prepareWorkspaceRequest(
   );
   trace.contextCharsEstimate = estimateChars(fillAwareContextBlock);
   trace.latencyMs.prepare = Date.now() - started;
+
+  // Final gate before kind:"ai": unique portal evidence ⇒ ClientRef lock.
+  // Covers any path that attached clientContext/EvidencePack without an earlier commit.
+  {
+    const fromCtx = clientContext
+      ? clientRefFromResolved(clientContext, "RESOLVED")
+      : activeClientRef;
+    const locked = lockCaseMemoryFromUniqueResolvedClient({
+      memory: caseMemory,
+      ref: fromCtx,
+      previousRef: clientRefFromCaseMemory(caseMemory) ?? lockedClientRef,
+    });
+    if (locked.locked) {
+      caseMemory = locked.memory;
+      trace.clientRefPresent = true;
+      if (!trace.notes.includes("client_ref_locked_pre_ai_return")) {
+        trace.notes.push(
+          locked.switched
+            ? "client_ref_switched_pre_ai_return"
+            : "client_ref_locked_pre_ai_return",
+        );
+      }
+    }
+  }
 
   const modelCaseMemory = caseMemoryForModelIngress({
     caseMemory,

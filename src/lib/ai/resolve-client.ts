@@ -125,6 +125,26 @@ export function looksLikePersonName(phrase: string): boolean {
 export function extractExplicitDifferentClientPhrase(
   query: string,
 ): string | null {
+  const strong = extractStrongExplicitClientPhrase(query);
+  if (strong) return strong;
+
+  const extraction = extractClientEntityFromQuery(query);
+  const phrase =
+    extraction?.searchPhrase?.trim() ||
+    extraction?.extractedPhrase?.trim() ||
+    "";
+  if (phrase && looksLikePersonName(phrase)) return phrase;
+  return null;
+}
+
+/**
+ * Strong, deterministic client-identity phrasing (switch / letter / debt name /
+ * «клиенту …»). Excludes weak generic entity extraction — used when the lock
+ * has no displayLabel so we cannot morph-compare same vs different client.
+ */
+export function extractStrongExplicitClientPhrase(
+  query: string,
+): string | null {
   const q = query.trim();
   if (!q) return null;
 
@@ -145,36 +165,42 @@ export function extractExplicitDifferentClientPhrase(
     const match = q.match(pattern);
     const raw = match?.[1]?.trim();
     if (!raw) continue;
-    // Strip leading «клиента/клиенту» if switch pattern captured it.
     const cleaned = raw.replace(/^(?:клиента?|client)\s+/iu, "").trim();
     if (cleaned && looksLikePersonName(cleaned)) return cleaned;
   }
-
-  const extraction = extractClientEntityFromQuery(q);
-  const phrase =
-    extraction?.searchPhrase?.trim() ||
-    extraction?.extractedPhrase?.trim() ||
-    "";
-  if (phrase && looksLikePersonName(phrase)) return phrase;
   return null;
 }
 
 /**
  * Detect whether the user is naming a different client than the lock.
  * Default with a valid lock: reuse. Override only on explicit mismatch.
+ *
+ * Id-only locks (questionnaire UUID without displayLabel) are valid.
+ * Missing displayLabel must NOT make the lock immutable: a strong explicit
+ * client-lookup phrase still allows the resolver to run. Pronoun / weak /
+ * general messages continue to reuse the lock.
  */
 export function querySuggestsDifferentClient(
   query: string,
   locked: ClientRef | null | undefined,
 ): boolean {
-  if (!locked?.displayLabel) return false;
+  if (!locked) return false;
   // Pronoun debt/status follow-ups never name a new client.
   if (isPronounDebtFollowUpQuery(query)) return false;
+
+  const label = locked.displayLabel?.trim() || "";
+  if (!label) {
+    // Cannot morph-compare: only strong client-lookup/switch phrasing may
+    // reopen resolve. Do not use weak entity extraction alone.
+    const strong = extractStrongExplicitClientPhrase(query);
+    return Boolean(strong && strong.length >= 3);
+  }
+
   const phrase = extractExplicitDifferentClientPhrase(query);
   if (!phrase || phrase.length < 3) return false;
   // Same family / morph match → keep lock.
-  if (morphNameMatch(locked.displayLabel, phrase)) return false;
-  if (morphNameMatch(phrase, locked.displayLabel)) return false;
+  if (morphNameMatch(label, phrase)) return false;
+  if (morphNameMatch(phrase, label)) return false;
   return true;
 }
 

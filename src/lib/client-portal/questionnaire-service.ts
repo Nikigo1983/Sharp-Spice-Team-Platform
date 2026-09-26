@@ -44,6 +44,7 @@ import { ingestFormgridExternalFiles } from "./formgrid-file-ingest";
 import {
   buildQuestionnaireWordDoc,
   findQuestionnaireWordDocument,
+  isQuestionnaireWordDocument,
   isQuestionnaireMirroredAttachment,
   questionnaireWordFilename,
   QUESTIONNAIRE_WORD_UPLOADER_ID,
@@ -87,6 +88,9 @@ import {
   readStaffNotes,
   removeStaffDocument,
   removeStaffNote,
+  markStaffDocumentRemoved,
+  markStaffWordDocumentDismissed,
+  isStaffWordDocumentDismissed,
   renameStaffDocument,
   staffDocumentsOwnerKey,
   updateStaffNote,
@@ -858,12 +862,13 @@ export async function ensureQuestionnaireFileDocuments(
 /** Create Word copy of the filled questionnaire in «Документы по клиенту» if missing. */
 export async function ensureQuestionnaireWordDocument(
   id: string,
+  options?: { force?: boolean },
 ): Promise<{
   record: QuestionnaireRecord;
-  document: StaffCaseDocument;
+  document: StaffCaseDocument | null;
   created: boolean;
 }> {
-  const current = await getSubmittedForStaff(id);
+  let current = await getSubmittedForStaff(id);
   if (!current) throw new Error("NOT_FOUND");
 
   const existing = findQuestionnaireWordDocument(
@@ -871,6 +876,21 @@ export async function ensureQuestionnaireWordDocument(
   );
   if (existing) {
     return { record: current, document: existing, created: false };
+  }
+
+  // Staff deleted the Word copy — do not auto-recreate on case open.
+  // Explicit UI action passes force: true to regenerate.
+  if (!options?.force && isStaffWordDocumentDismissed(current.answers)) {
+    return { record: current, document: null, created: false };
+  }
+  if (options?.force && isStaffWordDocumentDismissed(current.answers)) {
+    const now = new Date().toISOString();
+    current = await upsertQuestionnaire({
+      ...current,
+      answers: markStaffWordDocumentDismissed(current.answers, false),
+      updatedAt: now,
+      revision: current.revision + 1,
+    });
   }
 
   const clientName =
@@ -926,10 +946,16 @@ export async function deleteStaffCaseDocument(
       existing.fileName,
     );
   }
+  let answers = removeStaffDocument(current.answers, documentId);
+  // Remember deletion so ensure/remirror on next open does not bring it back.
+  answers = markStaffDocumentRemoved(answers, documentId);
+  if (isQuestionnaireWordDocument(existing)) {
+    answers = markStaffWordDocumentDismissed(answers, true);
+  }
   const now = new Date().toISOString();
   return upsertQuestionnaire({
     ...current,
-    answers: removeStaffDocument(current.answers, documentId),
+    answers,
     updatedAt: now,
     revision: current.revision + 1,
   });

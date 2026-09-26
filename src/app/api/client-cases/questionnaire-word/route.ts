@@ -26,7 +26,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await ensureQuestionnaireWordDocument(questionnaireId);
+    const result = await ensureQuestionnaireWordDocument(questionnaireId, {
+      force: true,
+    });
     return NextResponse.json({
       document: result.document,
       documents: readStaffDocuments(result.record.answers),

@@ -178,6 +178,18 @@ export async function syncFormgridSheetRowToPortal(input: {
       ...(existing.answers.__staff_documents
         ? { __staff_documents: existing.answers.__staff_documents }
         : {}),
+      ...(existing.answers.__staff_documents_removed
+        ? {
+            __staff_documents_removed:
+              existing.answers.__staff_documents_removed,
+          }
+        : {}),
+      ...(existing.answers.__staff_word_document_dismissed
+        ? {
+            __staff_word_document_dismissed:
+              existing.answers.__staff_word_document_dismissed,
+          }
+        : {}),
       ...(existing.answers[FORMGRID_FILES_KEY]
         ? { [FORMGRID_FILES_KEY]: existing.answers[FORMGRID_FILES_KEY] }
         : {}),
@@ -272,7 +284,7 @@ export async function syncFormgridSheetRowToPortal(input: {
     if (word.created) {
       console.info("[formgrid-to-portal] Word questionnaire created", {
         questionnaireId,
-        fileName: word.document.fileName,
+        fileName: word.document?.fileName,
       });
     }
   } catch (error) {

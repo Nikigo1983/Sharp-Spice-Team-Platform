@@ -5,6 +5,7 @@ import {
 } from "@/lib/client-portal/questionnaire-types";
 import {
   appendStaffDocument,
+  readRemovedStaffDocumentIds,
   readStaffDocuments,
 } from "@/lib/client-portal/staff-case-meta";
 import {
@@ -15,7 +16,7 @@ import {
 /**
  * Copy client questionnaire file answers (and Formgrid-stored files) into
  * `__staff_documents` (same file ids, storage stays under the portal user).
- * Idempotent by attachment id.
+ * Idempotent by attachment id. Skips ids staff deleted from the list.
  */
 export function mirrorQuestionnaireFilesIntoStaffDocuments(
   answers: QuestionnaireAnswers,
@@ -26,9 +27,16 @@ export function mirrorQuestionnaireFilesIntoStaffDocuments(
   const existingIds = new Set(
     readStaffDocuments(next).map((doc) => doc.id),
   );
+  const removedIds = new Set(readRemovedStaffDocumentIds(next));
 
   for (const value of Object.values(answers)) {
-    if (!isFileAnswer(value) || existingIds.has(value.id)) continue;
+    if (
+      !isFileAnswer(value) ||
+      existingIds.has(value.id) ||
+      removedIds.has(value.id)
+    ) {
+      continue;
+    }
     next = appendStaffDocument(next, {
       id: value.id,
       fileName: value.fileName,
@@ -43,7 +51,9 @@ export function mirrorQuestionnaireFilesIntoStaffDocuments(
   }
 
   for (const stored of Object.values(readFormgridStoredFiles(answers))) {
-    if (!stored.id || existingIds.has(stored.id)) continue;
+    if (!stored.id || existingIds.has(stored.id) || removedIds.has(stored.id)) {
+      continue;
+    }
     next = appendStaffDocument(next, {
       id: stored.id,
       fileName: stored.fileName,

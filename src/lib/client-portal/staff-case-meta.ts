@@ -18,6 +18,10 @@ export type StaffCaseDocument = {
 
 const NOTES_KEY = "__staff_notes";
 const DOCS_KEY = "__staff_documents";
+/** Staff-deleted attachment ids — skipped by questionnaire/Formgrid remirror. */
+const REMOVED_DOCS_KEY = "__staff_documents_removed";
+/** Staff dismissed auto Word anketa — skip recreate on case open. */
+const WORD_DISMISSED_KEY = "__staff_word_document_dismissed";
 
 function asNote(value: unknown): StaffCaseNote | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -91,6 +95,47 @@ export function appendStaffNote(
     ...answers,
     [NOTES_KEY]: [...readStaffNotes(answers), note],
   };
+}
+
+
+export function readRemovedStaffDocumentIds(
+  answers: Record<string, unknown> | null | undefined,
+): string[] {
+  const raw = answers?.[REMOVED_DOCS_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((id): id is string => typeof id === "string" && Boolean(id.trim()));
+}
+
+export function markStaffDocumentRemoved(
+  answers: Record<string, unknown>,
+  documentId: string,
+): Record<string, unknown> {
+  const id = documentId.trim();
+  if (!id) return answers;
+  const current = readRemovedStaffDocumentIds(answers);
+  if (current.includes(id)) return answers;
+  return {
+    ...answers,
+    [REMOVED_DOCS_KEY]: [...current, id],
+  };
+}
+
+export function isStaffWordDocumentDismissed(
+  answers: Record<string, unknown> | null | undefined,
+): boolean {
+  return answers?.[WORD_DISMISSED_KEY] === true;
+}
+
+export function markStaffWordDocumentDismissed(
+  answers: Record<string, unknown>,
+  dismissed = true,
+): Record<string, unknown> {
+  if (dismissed) {
+    return { ...answers, [WORD_DISMISSED_KEY]: true };
+  }
+  const next = { ...answers };
+  delete next[WORD_DISMISSED_KEY];
+  return next;
 }
 
 export function appendStaffDocument(
